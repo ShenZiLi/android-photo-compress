@@ -62,10 +62,11 @@ object VideoTranscoder {
                 setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
                 if (video.durationUs > 0) setLong(MediaFormat.KEY_DURATION, video.durationUs)
+                // 码率模式：优先 CBR（软件编码器上更接近目标码率）
+                val mode = pickBitrateMode(target.mime)
+                if (mode >= 0) setInteger(MediaFormat.KEY_BITRATE_MODE, mode)
             }
-            if (target.scaled) {
-                Log.i(TAG, "源尺寸 ${video.width}x${video.height} 超出编码器能力，回退到 ${target.width}x${target.height}")
-            }
+            Log.i(TAG, "target=${target.name} mime=${target.mime} ${target.width}x${target.height} bitrate=$targetBitrate fps=$frameRate scaled=${target.scaled}")
 
             encoder = MediaCodec.createEncoderByType(target.mime).apply {
                 configure(encFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -291,14 +292,19 @@ object VideoTranscoder {
         val scaled: Boolean,
     )
 
+    /** 输出容器固定为 MP4；VP9 在部分平台无法封装进 MP4，故不作为输出编码（仅作为源编码可读）。 */
+    private val OUTPUT_CODECS = listOf(
+        MediaClassifierCodec.HEVC,
+        MediaClassifierCodec.AVC,
+        MediaClassifierCodec.AV1,
+    )
+
     /** 选择编码器：优先源编码，其次 HEVC → H.264 → AV1；先找能支持原尺寸的，再考虑缩放。 */
     private fun selectEncoder(video: VideoTrack): TargetEnc? {
         val candidates = buildList {
-            add(video.mime)
-            if (video.mime != MediaClassifierCodec.HEVC) add(MediaClassifierCodec.HEVC)
-            if (video.mime != MediaClassifierCodec.AVC) add(MediaClassifierCodec.AVC)
-            add(MediaClassifierCodec.AV1)
-        }
+            if (video.mime in OUTPUT_CODECS) add(video.mime)
+            addAll(OUTPUT_CODECS)
+        }.distinct()
         // 第一轮：必须支持原始分辨率（保持分辨率不变，满足 F3）
         for (mime in candidates) {
             findEncoderSupporting(mime, video.width, video.height, video.frameRate, allowScale = false)
@@ -385,6 +391,23 @@ object VideoTranscoder {
         val caps = encoderBitrateRange(targetMime)
         if (caps != null) target = target.coerceIn(caps.first, caps.second)
         return target
+    }
+
+    /** 选择码率模式：优先 CBR，其次 VBR；都不支持返回 -1。 */
+    private fun pickBitrateMode(mime: String): Int {
+        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+        for (info in list.codecInfos) {
+            if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
+            val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
+            val ec = caps.encoderCapabilities ?: continue
+            if (runCatching { ec.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) }.getOrDefault(false)) {
+                return MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+            }
+            if (runCatching { ec.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR) }.getOrDefault(false)) {
+                return MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+            }
+        }
+        return -1
     }
 
     private fun encoderBitrateRange(mime: String): Pair<Int, Int>? {
