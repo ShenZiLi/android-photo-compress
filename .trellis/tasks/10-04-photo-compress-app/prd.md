@@ -23,6 +23,7 @@
 - 内嵌视频为 HEVC（`hvc1` / `hvcC`）+ AAC（`mp4a`），品牌 `isom`/`mp42`；MP4 起始偏移约 4,147,824。
 - 由此得出：实况照片压缩必须同时正确处理 **主图 + GainMap + 内嵌 MP4** 三段，并在压缩后重算 XMP 的 `Item:Length`/`Item:Padding`、`OpCamera:VideoLength` 及 MP4 内部偏移，否则相册将无法识别或播放。
 - 本机构建环境：JDK 17、Gradle 8.14.5、Android SDK 位于 `C:\Users\Admin\AppData\Local\Android\Sdk`，已有 `android-36` 平台、build-tools 36.1.0、platform-tools(adb)、NDK 30。项目当前为空目录（仅 Trellis 初始化）。
+- 系统媒体格式调研（2026-10-04）结论见 [research/coloros-media-formats.md](./research/coloros-media-formats.md)：ColorOS 相册自带「截屏录屏」「动图」「最近删除(30 天)」等图集；OPPO 相机照片格式为 JPG/HEIF/RAW。**当前 D6 覆盖不全面**，存在 6 处明确缺口（PNG 截图、GIF/动态 WebP、WebP/BMP、AVIF 图片、RAW/DNG、视频容器）与 4 处风险缺口（普通照片 GainMap/Ultra HDR、人像模式景深信息、10-bit HDR/杜比视界/O-Log、慢动作与延时的播放速率语义）。
 
 ## 已确认决策
 
@@ -31,7 +32,7 @@
 - D3 交互结构：首页总览看板 + 未压缩页 + 已压缩页 + 设置页（含回收站入口），四个主要页面。
 - D4 设置页"压缩比例"= **质量档位**（每类给若干档，默认"肉眼不可见"档），最终体积由算法决定；不采用"目标体积百分比"。
 - D5 去重编号存放：**本地数据库 + 压缩后文件内自有 XMP 元数据标记**（唯一编号 + 压缩器版本 + 时间）。重装或清除应用数据后仍可识别已压缩文件，避免二次压缩。
-- D6 首版格式与编码覆盖：照片 JPEG 与 HEIF/HEIC；实况照片（JPEG 主图 + GainMap + 内嵌视频）；视频 HEVC / H.264 / AV1 / VP9；音频 AAC。
+- D6 首版格式与编码覆盖：照片 JPEG 与 HEIF/HEIC；实况照片（JPEG 主图 + GainMap + 内嵌视频）；视频 HEVC / H.264 / AV1 / VP9；音频 AAC。**⚠️ 2026-10-04 调研发现覆盖不全面，待按 Q9 修订。**
 - D7 实况照片的内嵌视频按"实况照片"质量档位**重编码**（样张中视频约占 2/3 体积，不重编码则收益极小）。
 - D8 界面方向：Jetpack Compose + Material 3 / Material You，跟随系统动态取色与深浅色自适应。
 - D9 文件访问：申请"所有文件访问"(MANAGE_EXTERNAL_STORAGE)，用直接文件读写完成原地改写与时间保留；不计划上架 Google Play（个人侧载使用）。
@@ -95,3 +96,9 @@
 ## 技术说明
 
 技术方案、模块边界、数据模型、原地改写与容器重组流程、以及必须在真机验证的技术未知项见同目录 [design.md](./design.md)；实施顺序与验证命令见 [implement.md](./implement.md)。
+
+系统媒体格式调研见 [research/coloros-media-formats.md](./research/coloros-media-formats.md)。
+
+## 待确认问题（阻塞规划）
+
+- Q9 格式覆盖缺口如何纳入（PNG 截图、GIF/动态 WebP、WebP/BMP、AVIF 图片、RAW/DNG、视频容器，以及普通照片 GainMap、人像景深、10-bit HDR/杜比视界、慢动作速率这 4 处风险缺口）。见本轮提问。
