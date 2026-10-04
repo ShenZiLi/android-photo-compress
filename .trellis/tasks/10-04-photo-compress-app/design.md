@@ -17,7 +17,7 @@
 | 模块 | 职责 |
 |---|---|
 | `data.media` | MediaStore 枚举、媒体分类、文件定位与权限状态 |
-| `core.jpeg` | JPEG 解码 / 按档位重编码、EXIF / XMP / IPTC 搬运与重建 |
+| `core.jpeg` | 静态图解码 / 按档位重编码（JPEG / PNG / WebP / BMP / AVIF）、EXIF / XMP / IPTC 搬运、alpha 保留、动图判别 |
 | `core.heif` | HEIC 解码 / 重编码与 HEIF 元信息（高风险，见 §8 U3） |
 | `core.livephoto` | 实况照片容器解析与重组（主图 / GainMap / MP4 三段） |
 | `core.mp4` | MP4 box 级解析、样本索引重建、重封装、偏移重算 |
@@ -66,12 +66,15 @@
 
 > 与 `MediaStore` 直接 `update` 的取舍：直接改文件字节可完整保留 `birth time` 与媒体库行 ID；`update` 方式会重建文件、丢失创建时间，故不采用。
 
-### 4.2 JPEG 普通照片
+### 4.2 静态图片（JPEG / PNG / WebP / BMP / AVIF）
 
-- 解码 → 按档位重编码 JPEG，保持像素尺寸与色彩空间。
+- 解码 → 按档位重编码，保持像素尺寸与色彩空间。
+- **PNG 带 alpha 时必须保留透明度**；长截屏（最高 1080×100000）需分块解码，避免 OOM。
 - 元信息以原文件为基准整体搬运，只更新必要字段（尺寸等）。
-- 含 GainMap（MPF / Ultra HDR）的图片需同步重编码并按 MPF 规范重建各段偏移。
+- 含 GainMap（MPF / Ultra HDR）的图片需同步重编码并按 MPF 规范重建各段偏移（D10，普通照片同样适用）。
+- **动图判别**：GIF、动态 WebP、动态 AVIF 一律跳过（不在首版范围，AC14）。
 - 若结果体积 ≥ 原体积 → 跳过并记录原因，不改动文件。
+- **未决**：PNG / BMP 是无损格式，要获得有损收益必须改变容器格式（见 §8 U8 与 Q11）。方案确定前不在代码中固化格式转换行为。
 
 ### 4.3 HEIC 普通照片（高风险）
 
@@ -131,6 +134,9 @@
 | U5 | 实况照片重组后相册识别 / 播放 / HDR | AC1 |
 | U6 | 新增自有 XMP 字段是否被相册与其他应用接受 | D5 / F7 |
 | U7 | JPEG 质量档位"肉眼不可见"的阈值标定 | C1 / AC2 |
+| U8 | PNG / BMP 为无损格式，有损压缩需转容器格式（扩展名与 MIME 会变）；AVIF 在 Android 平台**无公开编码器**（`Bitmap.compress` 只支持 JPEG/PNG/WebP） | Q11 / F1 / D6 / AC14 |
+| U9 | 长截屏（超长 PNG）的解码内存与分块策略 | AC14 |
+| U10 | 动图判别（GIF / 动态 WebP / 动态 AVIF）的可靠实现 | AC14 |
 
 验证结论必须落盘到 `research/`（如 `research/device-capability-report.md`），不作为口头结论。
 
