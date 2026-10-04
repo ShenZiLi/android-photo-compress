@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/android/index.md", "reason": "本项目 android 层规范入口与开发前检查清单"}
+{"file": ".trellis/spec/android/git-workflow.md", "reason": "本地 git 提交要求：每个完成的变更单元都要提交"}
