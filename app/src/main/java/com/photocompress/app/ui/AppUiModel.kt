@@ -20,6 +20,8 @@ data class LevelState(
 data class UiState(
     val page: AppPage = AppPage.HOME,
     val scanning: Boolean = false,
+    /** true 表示正在做全量扫描（首次）而非增量同步。 */
+    val fullScan: Boolean = false,
     val scanError: String? = null,
     val scanDone: Int = 0,
     val scanTotal: Int = 0,

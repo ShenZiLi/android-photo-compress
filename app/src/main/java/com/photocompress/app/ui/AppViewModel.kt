@@ -27,10 +27,11 @@ data class BatchState(val label: String, val progress: Float, val done: Int, val
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val mediaRepo = MediaRepository(app)
     private val db = AppDatabase.get(app)
     private val ledgerDao = db.ledgerDao()
     private val settingsDao = db.settingsDao()
+    private val mediaCacheDao = db.mediaCacheDao()
+    private val mediaRepo = MediaRepository(app, mediaCacheDao)
     private val engine = CompressionEngine(app)
 
     private val _ui = MutableStateFlow(UiState(hasAllFilesAccess = StorageAccess.hasAllFilesAccess(app)))
@@ -58,15 +59,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         if (writing) return
         viewModelScope.launch {
-            _ui.update { it.copy(scanning = true, scanError = null, scanDone = 0, scanTotal = 0) }
+            val settings = settingsDao.get() ?: SettingsEntity()
+            // lastScanSec > 0 表示缓存已就绪：只需增量扫描，不再全量枚举
+            val warm = settings.lastScanSec > 0L
+            _ui.update {
+                it.copy(
+                    scanning = true,
+                    fullScan = !warm,
+                    scanError = null,
+                    scanDone = 0,
+                    scanTotal = 0,
+                    lastScanAt = if (it.lastScanAt > 0) it.lastScanAt else settings.lastScanSec * 1000L,
+                )
+            }
             try {
-                val items = mediaRepo.scan { done, total ->
+                val onProgress: (Int, Int) -> Unit = { done, total ->
                     _ui.update { it.copy(scanDone = done, scanTotal = total) }
                 }
+                val items = if (warm) {
+                    mediaRepo.incrementalScan(onProgress)
+                } else {
+                    mediaRepo.fullScan(onProgress)
+                }
                 val ledger = ledgerDao.observeAll().first()
+                // 缓存写入成功后再推进扫描水位；中途退出时水位不变，下次仍会重扫
+                val latest = settingsDao.get() ?: settings
+                settingsDao.upsert(latest.copy(lastScanSec = System.currentTimeMillis() / 1000))
+                android.util.Log.i(TAG, "scan ${if (warm) "incremental" else "full"}: ${items.size} items")
                 _ui.update {
                     it.copy(
                         scanning = false,
+                        fullScan = false,
                         items = items,
                         ledger = ledger,
                         lastScanAt = System.currentTimeMillis(),
@@ -74,9 +97,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (t: Throwable) {
-                _ui.update { it.copy(scanning = false, scanError = t.message ?: "扫描失败") }
+                _ui.update { it.copy(scanning = false, fullScan = false, scanError = t.message ?: "扫描失败") }
             }
         }
+    }
+
+    /**
+     * 本应用原地改写过的文件，其 MediaStore 时间戳可能被还原（mtime 保持不变），
+     * 增量对比无法感知；这里显式失效这些路径的缓存，让下次扫描重新探测。
+     */
+    private suspend fun invalidateCache(paths: Collection<String>) {
+        val list = paths.filter { it.isNotBlank() }.distinct()
+        if (list.isEmpty()) return
+        list.chunked(200).forEach { mediaCacheDao.deleteByPaths(it) }
     }
 
     // ---------------------------------------------------------------- 导航与选择
@@ -150,6 +183,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val targets = summary.todoTargets
         viewModelScope.launch {
             writing = true
+            val touched = LinkedHashSet<String>()
             try {
                 val tiers = _ui.value.settings
                 var done = 0
@@ -165,6 +199,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             ledgerDao.upsert(outcome.record)
                             done++
                             savedBytes += outcome.record.savedBytes
+                            touched += outcome.record.dataPath
+                            if (outcome.record.originalPath.isNotBlank()) touched += outcome.record.originalPath
                             android.util.Log.i(TAG, "${item.displayName}: OK ${outcome.record.originalSize} -> ${outcome.record.compressedSize} (${outcome.record.codecUsed})")
                         }
                         is CompressOutcome.Skipped -> {
@@ -196,6 +232,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 writing = false
                 _batch.value = null
+                invalidateCache(touched)
                 refresh()
             }
         }
@@ -206,6 +243,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val targets = summary.doneTargets
         viewModelScope.launch {
             writing = true
+            val touched = LinkedHashSet<String>()
             try {
                 var done = 0
                 var freedBytes = 0L
@@ -219,6 +257,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             if (dm.record.originalPath.isNotBlank()) {
                                 ledgerDao.deleteByPath(dm.record.originalPath)
                             }
+                            touched += dm.record.dataPath
+                            if (dm.record.originalPath.isNotBlank()) touched += dm.record.originalPath
                             done++
                             freedBytes += dm.compressedSize
                         }
@@ -241,6 +281,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 writing = false
                 _batch.value = null
+                invalidateCache(touched)
                 refresh()
             }
         }

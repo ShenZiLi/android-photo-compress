@@ -11,6 +11,8 @@ import androidx.room.RoomDatabase
 import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.photocompress.app.data.media.CachedMediaEntity
+import com.photocompress.app.data.media.MediaCacheDao
 import kotlinx.coroutines.flow.Flow
 
 /** 压缩账本（design.md §3）。唯一编号同时写入此表与压缩后文件的 XMP 标记（D5）。 */
@@ -65,6 +67,11 @@ data class SettingsEntity(
     val videoTier: String = "BALANCED",
     /** 用户选择排除的图集名，以 `\n` 分隔（这些图集不出现在未压缩/已压缩页）。 */
     val excludedAlbums: String = "",
+    /**
+     * 上次成功扫描媒体库的时间（秒）。> 0 表示缓存已就绪，
+     * 后续启动只需增量扫描，不再做全量扫描。
+     */
+    val lastScanSec: Long = 0L,
 ) {
     val excludedSet: Set<String>
         get() = excludedAlbums.split('\n').filter { it.isNotBlank() }.toSet()
@@ -119,13 +126,14 @@ interface SettingsDao {
 }
 
 @Database(
-    entities = [CompressedItemEntity::class, SettingsEntity::class],
-    version = 2,
+    entities = [CompressedItemEntity::class, SettingsEntity::class, CachedMediaEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun ledgerDao(): LedgerDao
     abstract fun settingsDao(): SettingsDao
+    abstract fun mediaCacheDao(): MediaCacheDao
 
     companion object {
         @Volatile
@@ -139,12 +147,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3：新增媒体扫描缓存表与上次扫描时间（增量扫描用）。 */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN lastScanSec INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `media_cache` (" +
+                        "`key` TEXT NOT NULL, `mediaStoreId` INTEGER NOT NULL, `isVideo` INTEGER NOT NULL, " +
+                        "`dataPath` TEXT NOT NULL, `volumeName` TEXT NOT NULL, `bucketId` INTEGER NOT NULL, " +
+                        "`bucketName` TEXT NOT NULL, `displayName` TEXT NOT NULL, `mimeType` TEXT NOT NULL, " +
+                        "`size` INTEGER NOT NULL, `dateTakenMs` INTEGER NOT NULL, `dateAddedSec` INTEGER NOT NULL, " +
+                        "`dateModifiedSec` INTEGER NOT NULL, `width` INTEGER NOT NULL, `height` INTEGER NOT NULL, " +
+                        "`kind` TEXT NOT NULL, `format` TEXT NOT NULL, `skipReason` TEXT, `motionPhotoOffset` INTEGER, " +
+                        "`videoCodec` TEXT, `xmpCompressId` TEXT, PRIMARY KEY(`key`))",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }

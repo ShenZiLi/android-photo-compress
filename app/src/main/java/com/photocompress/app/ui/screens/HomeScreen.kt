@@ -51,11 +51,15 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(
             title = "照片压缩",
-            subtitle = if (state.scanning) "正在扫描媒体库…" else {
-                val time = if (state.lastScanAt > 0) {
-                    SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(state.lastScanAt))
-                } else "—"
-                "已扫描本机媒体 · $time"
+            subtitle = when {
+                state.fullScan -> "正在扫描媒体库…"
+                state.scanning -> "正在同步媒体变更…"
+                else -> {
+                    val time = if (state.lastScanAt > 0) {
+                        SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(state.lastScanAt))
+                    } else "—"
+                    "已扫描本机媒体 · $time"
+                }
             },
             actions = {
                 IconButton(onClick = onRescan) {
@@ -64,7 +68,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
             },
         )
 
-        if (state.scanning) {
+        if (state.fullScan) {
             ScanProgressCard(state, modifier = Modifier.padding(horizontal = 20.dp))
             Spacer(Modifier.height(14.dp))
         }
