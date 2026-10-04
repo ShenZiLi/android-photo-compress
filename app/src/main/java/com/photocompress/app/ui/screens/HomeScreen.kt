@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.photocompress.app.ui.Totals
 import com.photocompress.app.ui.UiState
+import com.photocompress.app.ui.comparisonRatios
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.CardSurface
 import com.photocompress.app.ui.components.SectionTitle
@@ -81,8 +82,10 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
                     CompareMetric(
                         title = "数量",
                         total = "${formatCount(totals.todoCount + totals.doneCount)} 项",
-                        todoValue = "${formatCount(totals.todoCount)}",
-                        doneValue = "${formatCount(totals.doneCount)}",
+                        todoValue = formatCount(totals.todoCount),
+                        doneValue = formatCount(totals.doneCount),
+                        todoRaw = totals.todoCount.toDouble(),
+                        doneRaw = totals.doneCount.toDouble(),
                     )
                     Spacer(Modifier.height(22.dp))
                     CompareMetric(
@@ -91,6 +94,8 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
                         todoValue = formatSize(totals.todoBytes),
                         doneValue = formatSize(totals.after),
                         doneExtra = "（原 ${formatSize(totals.before)}）",
+                        todoRaw = totals.todoBytes.toDouble(),
+                        doneRaw = totals.after.toDouble(),
                     )
                 }
             }
@@ -256,10 +261,14 @@ private fun CompareMetric(
     total: String,
     todoValue: String,
     doneValue: String,
+    todoRaw: Double,
+    doneRaw: Double,
     doneExtra: String? = null,
 ) {
     val todoColor = MaterialTheme.appColors.dataTodo
     val doneColor = MaterialTheme.appColors.dataDone
+    // 比例必须用原始数值（字节/个数）计算，不能用格式化后的字符串
+    val (todoRatio, doneRatio) = comparisonRatios(todoRaw, doneRaw)
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -270,11 +279,6 @@ private fun CompareMetric(
             Text(total, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
         }
         Spacer(Modifier.height(10.dp))
-        // 比例来自两端数值
-        val todoNum = todoValue.filter { it.isDigit() || it == '.' }.toFloatOrNull() ?: 0f
-        val doneNum = doneValue.filter { it.isDigit() || it == '.' }.toFloatOrNull() ?: 0f
-        val sum = todoNum + doneNum
-        val todoRatio = if (sum > 0) todoNum / sum else 0f
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -283,11 +287,11 @@ private fun CompareMetric(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Box(
-                modifier = Modifier.weight(todoRatio.coerceAtLeast(0.0001f)).fillMaxWidth().height(12.dp)
+                modifier = Modifier.weight(todoRatio).fillMaxWidth().height(12.dp)
                     .background(todoColor),
             )
             Box(
-                modifier = Modifier.weight((1f - todoRatio).coerceAtLeast(0.0001f)).fillMaxWidth().height(12.dp)
+                modifier = Modifier.weight(doneRatio).fillMaxWidth().height(12.dp)
                     .background(doneColor),
             )
         }

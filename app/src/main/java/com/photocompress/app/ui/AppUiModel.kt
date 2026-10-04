@@ -291,3 +291,16 @@ fun enumerateCounts(counts: Map<MediaKind, Int>): String {
     }
     return parts.joinToString("、").ifEmpty { "无" }
 }
+
+/**
+ * 对比条的两段占比。
+ *
+ * 必须用**原始数值**（字节 / 个数）计算：早期实现从格式化字符串里抠数字，
+ * 单位不一致时会得出「301 KB > 67 GB」这类错误比例。
+ */
+fun comparisonRatios(left: Double, right: Double): Pair<Float, Float> {
+    val sum = left + right
+    if (sum <= 0.0 || !left.isFinite() || !right.isFinite()) return 0.5f to 0.5f
+    val leftRatio = (left / sum).toFloat().coerceIn(0.0001f, 0.9999f)
+    return leftRatio to (1f - leftRatio)
+}
