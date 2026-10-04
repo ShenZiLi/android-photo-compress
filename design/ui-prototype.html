@@ -913,8 +913,8 @@ function renderHome(){
   $('kpiDoneSize').textContent  = fmtSize(t.before) + ' → ' + fmtSize(t.after);
 
   $('homeCompare').innerHTML =
-    metric('数量', t.todoN, t.doneN, fmtNum, null) +
-    metric('体积', t.todoMb, t.after, fmtSize, fmtSize(t.before));
+    metric('数量', t.todoN, t.doneN, fmtNum) +
+    metric('体积', t.todoMb, t.after, fmtSize, t.before);
 
   $('todoSub').textContent = `${fmtNum(t.todoN)} 项 · 共 ${fmtSize(t.todoMb)}`;
   $('doneSub').textContent = `${fmtNum(t.doneN)} 项 · ${fmtSize(t.before)} → ${fmtSize(t.after)}`;
@@ -923,8 +923,9 @@ function renderHome(){
   $('homeSub').textContent = '已扫描本机媒体 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
 }
 
-/* 单条对比横条：颜色只是辅助，数值与图例文字是主要通道 */
-function metric(title, todo, done, fmt, beforeMb){
+/* 单条对比横条：颜色只是辅助，数值与图例文字是主要通道
+   todo / done / beforeValue 均为原始数值，由 fmt 统一格式化 */
+function metric(title, todo, done, fmt, beforeValue){
   const total = todo + done;
   const pTodo = total ? (todo / total * 100) : 0;
   const pDone = total ? (done / total * 100) : 0;
@@ -940,7 +941,7 @@ function metric(title, todo, done, fmt, beforeMb){
       </div>
       <div class="legend">
         <span><i class="sw-todo" aria-hidden="true"></i>未压缩 ${fmt(todo)}</span>
-        <span><i class="sw-done" aria-hidden="true"></i>已压缩 ${fmt(done)}${beforeMb ? '（原 ' + fmt(beforeMb) + '）' : ''}</span>
+        <span><i class="sw-done" aria-hidden="true"></i>已压缩 ${fmt(done)}${beforeValue ? '（原 ' + fmt(beforeValue) + '）' : ''}</span>
       </div>
     </div>`;
 }
