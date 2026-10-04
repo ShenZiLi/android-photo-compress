@@ -1,0 +1,31 @@
+# Android and local IDE state
+.gradle/
+.kotlin/
+**/.cxx/
+**/.externalNativeBuild/
+.idea/
+**/build/
+local.properties
+*.iml
+*.apk
+*.aab
+
+# Signing material and environment
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+
+# Personal media, backups and device diagnostics
+local-test-media/
+local-device-reports/
+local-recovery/
+
+# Temporary output
+*.log
+*.tmp
+**/__pycache__/
+**/*.pyc
+.DS_Store
+Thumbs.db
