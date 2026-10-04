@@ -33,7 +33,7 @@
 - D4 设置页"压缩比例"= **质量档位**（每类给若干档，默认"肉眼不可见"档），最终体积由算法决定；不采用"目标体积百分比"。
 - D5 去重编号存放：**本地数据库 + 压缩后文件内自有 XMP 元数据标记**（唯一编号 + 压缩器版本 + 时间）。重装或清除应用数据后仍可识别已压缩文件，避免二次压缩。
 - D6 首版格式与编码覆盖：
-  - 照片：JPEG、HEIF/HEIC、**PNG**、**WebP**、**BMP**、**AVIF**（仅静态图，含 PNG 截图/长截屏；带 alpha 的 PNG 必须保留透明度）
+  - 照片：JPEG、HEIF/HEIC、WebP（静态图）
   - 实况照片：JPEG 主图 + GainMap + 内嵌 MP4
   - 视频：MP4 容器，HEVC / H.264 / AV1 / VP9 编码（10-bit HDR 见 D11）
   - 音频：AAC
@@ -42,6 +42,7 @@
 - D9 文件访问：申请"所有文件访问"(MANAGE_EXTERNAL_STORAGE)，用直接文件读写完成原地改写与时间保留；不计划上架 Google Play（个人侧载使用）。
 - D10 普通照片（非实况）压缩也必须**正确处理并保留 GainMap / Ultra HDR（ProXDR）**，不得只压主图而丢弃增益图。
 - D11 **HDR / 10-bit 视频首版不处理**：识别到杜比视界、HLG/PQ、O-Log 等 10-bit HDR 视频时跳过，不改动原文件。
+- D12 **PNG 与 BMP 不处理**：二者是无损格式，有损压缩必须改变容器格式（扩展名与 MIME 变化）。决定不做格式转换，识别到即跳过，保持文件原样。AVIF 因 Android 平台无公开编码器，若无合规产出路径同样跳过。
 
 ## Requirements
 
@@ -49,7 +50,7 @@
 
 压缩能力：
 
-- F1 普通照片有损压缩：JPEG、HEIF/HEIC、PNG（含截图/长截屏）、WebP、BMP、AVIF（均限静态图）。
+- F1 普通照片有损压缩：JPEG、HEIF/HEIC、WebP（静态）。PNG、BMP 与 AVIF 不压缩，识别后跳过（见 D12）。
 - F2 实况照片整体压缩：主图 + GainMap + 内嵌 MP4（内嵌视频一并重编码）；压缩后仍被 ColorOS 相册识别为实况照片且可正常播放。
 - F3 视频有损压缩：覆盖 HEVC / H.264 / AV1 / VP9。
 - F4 压缩后原地替换（同一存储路径 / 媒体库条目，位置不变）。
@@ -94,7 +95,7 @@
 - [ ] AC11 设置页三类压缩质量档位相互独立，修改后对相应类型生效。
 - [ ] AC12 不满足条件的媒体（如 HEIC 元信息无法保留、设备无对应编码器、RAW/DNG、人像景深无法保留、10-bit HDR 视频）被明确标记为跳过并显示原因，未修改原文件。
 - [ ] AC13 带 GainMap 的普通照片压缩后，相册中 HDR / ProXDR 显示效果与压缩前一致（对比真机观感）。
-- [ ] AC14 新增格式可用：PNG（含长截屏）压缩后透明度与画质正常；BMP/WebP/AVIF 静态图可压缩；动图（GIF / 动态 WebP / 动态 AVIF）与 MOV/MKV/WebM/3GP/TS 视频被识别并跳过且显示原因。
+- [ ] AC14 WebP 静态图可压缩且透明 WebP 保留 alpha；PNG / BMP / AVIF（无编码器时）/ 动图（GIF、动态 WebP、动态 AVIF）/ MOV·MKV·WebM·3GP·TS 视频被识别并跳过且显示原因，文件未被修改。
 
 ## 不在首版范围
 
@@ -102,6 +103,8 @@
 - 自动扫描全库并后台批量压缩（D2）。
 - GIF / 动态 WebP / 动态 AVIF 等动图。
 - MOV / MKV / WebM / 3GP / TS 等 MP4 以外的视频容器。
+- PNG 与 BMP 图片（不处理，见 D12）。
+- AVIF 图片的压缩（平台无公开编码器，识别后跳过）。
 - RAW / DNG 的压缩（仅识别并跳过，见 C5）。
 - 10-bit HDR 视频（D11）。
 - iOS 导入的实况照片（非 oplus 来源）。
@@ -111,8 +114,4 @@
 
 技术方案、模块边界、数据模型、原地改写与容器重组流程、以及必须在真机验证的技术未知项见同目录 [design.md](./design.md)；实施顺序与验证命令见 [implement.md](./implement.md)。
 
-系统媒体格式调研见 [research/coloros-media-formats.md](./research/coloros-media-formats.md)。调研发现的缺口已评审并落到 D6（新增 PNG/WebP/BMP/AVIF、保留含 alpha 的 PNG）、D10、D11、C5 与「不在首版范围」。
-
-## 待确认问题（阻塞规划）
-
-- Q11 PNG / BMP 是**无损格式**，要有损压缩必须改变容器格式（扩展名与 MIME 会变）；AVIF 在 Android 平台无公开编码器。格式转换策略需确认。见本轮提问与 [design.md](./design.md) §8 U8。
+系统媒体格式调研见 [research/coloros-media-formats.md](./research/coloros-media-formats.md)。调研发现的缺口已评审并落到 D6、D10、D11、D12、C5 与「不在首版范围」。
