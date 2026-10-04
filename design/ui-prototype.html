@@ -233,45 +233,50 @@
   .metric .legend .sw-todo{ background:var(--data-todo); }
   .metric .legend .sw-done{ background:var(--data-done); }
 
-  /* ---------- 一级：图集列表 ---------- */
-  .albums{ display:flex; flex-direction:column; gap:var(--space-2); padding:0 var(--space-5) var(--space-4); }
-  .album{ display:flex; align-items:stretch; gap:var(--space-2); }
-  .album-pick{
-    width:44px; flex:0 0 auto; border:0; background:transparent; cursor:pointer;
-    display:grid; place-items:center; border-radius:var(--radius-md);
+  /* ---------- 一级：图集网格 ---------- */
+  .albums{
+    display:grid; grid-template-columns:repeat(2, 1fr);
+    gap:var(--space-4) var(--space-3);
+    padding:0 var(--space-5) var(--space-4);
   }
-  .album-pick:hover{ background:var(--surface-sunken); }
-  .album-pick .box{
-    width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
-    border:2px solid var(--control-border); background:transparent;
-  }
-  .album-pick[aria-pressed="true"] .box{ background:var(--accent); border-color:var(--accent); }
-  .album-pick .box svg{ width:14px; height:14px; color:var(--on-accent); opacity:0; scale:.25; }
-  .album-pick[aria-pressed="true"] .box svg{ opacity:1; scale:1; }
-  @media (prefers-reduced-motion: no-preference){
-    .album-pick .box svg{ transition-property:opacity,scale; transition-duration:var(--dur-fast); transition-timing-function:var(--ease-out); }
-  }
-
+  .album{ position:relative; }
   .album-open{
-    flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:var(--space-3);
-    padding:var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-    border:0; border-radius:var(--radius-md); background:var(--surface-raised);
-    box-shadow:var(--shadow-border); cursor:pointer; text-align:start;
+    display:block; width:100%; padding:0; border:0; background:transparent;
+    text-align:start; cursor:pointer;
   }
-  .album-open:hover{ box-shadow:var(--shadow-raised); }
-  .album[data-picked="1"] .album-open{ box-shadow:inset 0 0 0 2px var(--accent); }
-  .collage{
-    width:56px; height:56px; flex:0 0 auto; border-radius:var(--radius-sm); overflow:hidden;
-    display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:1px;
+  .cover{
+    position:relative; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr;
+    gap:1px; aspect-ratio:1/1; overflow:hidden; border-radius:var(--radius-md);
     background:var(--surface-sunken);
   }
-  .collage img{ width:100%; height:100%; object-fit:cover; }
-  .album-body{ flex:1 1 auto; min-width:0; }
+  .cover img{ width:100%; height:100%; object-fit:cover; outline:1px solid oklch(0 0 0 / .1); outline-offset:-1px; }
+  .theme-dark .cover img{ outline-color:oklch(1 0 0 / .1); }
+  /* 选中环用伪元素，才会画在拼贴图之上 */
+  .album[data-picked="1"] .cover::after{
+    content:""; position:absolute; inset:0; border-radius:var(--radius-md);
+    box-shadow:inset 0 0 0 3px var(--accent);
+  }
+  .album-body{ display:block; margin-top:var(--space-2); min-width:0; }
   .album-body b{ display:block; font-size:var(--text-body); font-weight:600; }
   .album-body span{ display:block; font-size:var(--text-caption); color:var(--on-surface-muted); font-variant-numeric:tabular-nums; }
   .album-body em{ display:block; font-size:var(--text-caption); font-style:normal; color:var(--success); font-weight:600; font-variant-numeric:tabular-nums; }
   .album-body em.warn{ color:var(--danger); }
-  .chev{ flex:0 0 auto; color:var(--on-surface-muted); font-size:var(--text-heading); }
+  /* 勾选框：独立热区（40×40），浮在封面右上角 */
+  .album-pick{
+    position:absolute; top:2px; inset-inline-end:2px;
+    width:40px; height:40px; border:0; background:transparent; cursor:pointer;
+    display:grid; place-items:center; border-radius:var(--radius-full);
+  }
+  .album-pick .box{
+    width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
+    border:2px solid #fff; background:oklch(0 0 0 / .34);
+  }
+  .album-pick[aria-pressed="true"] .box{ background:var(--accent); border-color:var(--accent); }
+  .album-pick .box svg{ width:14px; height:14px; color:#fff; opacity:0; scale:.25; }
+  .album-pick[aria-pressed="true"] .box svg{ opacity:1; scale:1; }
+  @media (prefers-reduced-motion: no-preference){
+    .album-pick .box svg{ transition-property:opacity,scale; transition-duration:var(--dur-fast); transition-timing-function:var(--ease-out); }
+  }
 
   /* 提示条：长按说明 */
   .tip{
@@ -1007,32 +1012,29 @@ function collageFor(albumName, status){
 function albumCard(status, a){
   const t = status === 'todo' ? albumTodoTotals(a) : albumDoneTotals(a);
   const picked = pickAlbums[status].has(a.name);
-  const n = status === 'todo' ? t.n : t.n;
   const line2 = status === 'todo'
     ? `${fmtNum(t.n)} 项 · ${fmtSize(t.mb)}`
     : `${fmtNum(t.n)} 项 · ${fmtSize(t.before)} → ${fmtSize(t.after)}`;
 
-  let line3 = '';
+  let line3;
   if (status === 'todo'){
     line3 = t.compressible > 0 ? `<em>可压缩 ${fmtNum(t.compressible)} 项</em>` : `<em class="warn">无可压缩项</em>`;
   } else {
-    const restoreWord = a.restorable > 0 ? `可还原 ${fmtNum(a.restorable)} 项` : '备份已不可还原';
-    line3 = `<em class="${a.restorable > 0 ? '' : 'warn'}">${restoreWord}</em>`;
+    line3 = a.restorable > 0 ? `<em>可还原 ${fmtNum(a.restorable)} 项</em>` : `<em class="warn">备份已不可还原</em>`;
   }
 
   return `
     <div class="album" data-album="${a.name}" data-picked="${picked ? 1 : 0}">
-      <button class="album-pick" aria-pressed="${picked}" aria-label="勾选「${a.name}」图集，共 ${fmtNum(n)} 项">
-        <span class="box" aria-hidden="true">${CHECK}</span>
-      </button>
-      <button class="album-open" aria-label="打开「${a.name}」图集，${line2.replace(' · ', '，')}">
-        <span class="collage" aria-hidden="true">${collageFor(a.name, status)}</span>
+      <button class="album-open" aria-label="打开「${a.name}」图集，${fmtNum(t.n)} 项">
+        <span class="cover" aria-hidden="true">${collageFor(a.name, status)}</span>
         <span class="album-body">
           <b>${a.name}</b>
           <span>${line2}</span>
           ${line3}
         </span>
-        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <button class="album-pick" aria-pressed="${picked}" aria-label="勾选「${a.name}」图集，共 ${fmtNum(t.n)} 项">
+        <span class="box" aria-hidden="true">${CHECK}</span>
       </button>
     </div>`;
 }
