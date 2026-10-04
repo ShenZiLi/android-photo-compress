@@ -5,568 +5,762 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>照片压缩 · UI 原型</title>
 <style>
+  /* ============================================================
+     1. 设计令牌（语义角色，不按外观命名）
+     ============================================================ */
   :root{
-    --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:20px; --r-xl:28px; --r-full:999px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    /* 尺寸 */
+    --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+    --space-5:20px; --space-6:24px; --space-8:32px;
+
+    /* 圆角：同心 = 内圆角 + 内边距 */
+    --radius-xs:6px; --radius-sm:10px; --radius-md:14px;
+    --radius-lg:18px; --radius-xl:24px; --radius-full:999px;
+
+    /* 字号阶梯 */
+    --text-display:26px; --text-title:22px; --text-heading:17px;
+    --text-body:14px; --text-label:13px; --text-caption:12px; --text-micro:11px;
+
+    --font-sans:-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                "Microsoft YaHei", "Noto Sans SC", sans-serif;
+
+    /* 动效（高频交互短、可中断） */
+    --ease-out:cubic-bezier(0.2, 0, 0, 1);
+    --dur-fast:120ms;
+    --dur-base:180ms;
   }
-  /* ---------- 浅色（Material 3 默认紫色动态取色） ---------- */
+
+  /* 浅色 */
   .theme-light{
     --surface:#f7f8fc;
-    --surface-container:#ffffff;
-    --surface-container-2:#eceef5;
-    --surface-container-3:#e3e6f0;
-    --on-surface:#1a1b21;
-    --on-surface-variant:#575a66;
-    --outline:#c7c9d4;
-    --outline-variant:#e4e6ee;
-    --primary:#4b5da8;
-    --on-primary:#ffffff;
-    --primary-container:#dde1ff;
-    --on-primary-container:#051257;
-    --secondary-container:#e2e1f3;
-    --on-secondary-container:#45465a;
-    --success:#2e7d5b;
-    --success-container:#cdeadd;
-    --warning:#8a5a00;
-    --shadow:0 1px 2px rgba(0,0,0,.10), 0 8px 24px rgba(20,24,60,.08);
-    --scrim:rgba(12,14,26,.42);
+    --surface-raised:#ffffff;
+    --surface-sunken:#eceef5;
+    --on-surface:#191a20;
+    --on-surface-muted:#50535f;        /* 12px 正文亦达 4.5:1 */
+    --divider:#e6e8f0;                 /* 仅用于分隔线 */
+    --control-border:#878b98;          /* 控件描边，达 3:1 */
+    --accent:#3f4fa8;
+    --on-accent:#ffffff;
+    --accent-container:#dfe3ff;
+    --on-accent-container:#0a1560;
+    --neutral-container:#e3e2f2;
+    --on-neutral-container:#3f4152;
+    --success:#1f6b4a;
+    --on-success:#ffffff;
+    --success-container:#cbeadb;
+    --on-success-container:#04301e;
+    --danger:#a8271f;
+    --on-danger:#ffffff;
+    --focus:#1b2a7a;
+    --scrim:rgba(10,12,24,.44);
+    --shadow-border:
+      0 0 0 1px oklch(0 0 0 / .06),
+      0 1px 2px -1px oklch(0 0 0 / .06),
+      0 2px 4px 0 oklch(0 0 0 / .04);
+    --shadow-raised:0 1px 2px -1px oklch(0 0 0 / .08), 0 6px 16px -4px oklch(0 0 0 / .10);
+    --shadow-chrome:0 -2px 12px oklch(0 0 0 / .07);
   }
-  /* ---------- 深色 ---------- */
+  /* 深色 */
   .theme-dark{
     --surface:#111318;
-    --surface-container:#1b1e24;
-    --surface-container-2:#23262e;
-    --surface-container-3:#2b2f38;
-    --on-surface:#e4e5ec;
-    --on-surface-variant:#b9bbc7;
-    --outline:#84878f;
-    --outline-variant:#33363e;
-    --primary:#b6c4ff;
-    --on-primary:#12225e;
-    --primary-container:#33447f;
-    --on-primary-container:#dde1ff;
-    --secondary-container:#3c4155;
-    --on-secondary-container:#dfe0f0;
+    --surface-raised:#1b1e24;
+    --surface-sunken:#23262e;
+    --on-surface:#e5e6ec;
+    --on-surface-muted:#b6b9c5;
+    --divider:#33363e;
+    --control-border:#8b8f99;
+    --accent:#b7c5ff;
+    --on-accent:#111f5c;
+    --accent-container:#33447f;
+    --on-accent-container:#dfe3ff;
+    --neutral-container:#3b4053;
+    --on-neutral-container:#dfe0ee;
     --success:#7fd3ac;
-    --success-container:#1f4a3a;
-    --warning:#e3c37a;
-    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.45);
-    --scrim:rgba(0,0,0,.6);
+    --on-success:#04301e;
+    --success-container:#1c4636;
+    --on-success-container:#d6f3e4;
+    --danger:#ffb4ab;
+    --on-danger:#690005;
+    --focus:#cfd8ff;
+    --scrim:rgba(0,0,0,.62);
+    --shadow-border:0 0 0 1px oklch(1 0 0 / .08);
+    --shadow-raised:0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -4px oklch(0 0 0 / .5);
+    --shadow-chrome:0 -2px 12px oklch(0 0 0 / .4);
   }
-  /* ---------- 强调色（演示 Material You 取色） ---------- */
-  .accent-violet{ --primary:#4b5da8; --primary-container:#dde1ff; --on-primary-container:#051257; }
-  .accent-green { --primary:#2f6d4f; --primary-container:#c9ecd9; --on-primary-container:#00210f; }
-  .accent-amber { --primary:#8a5100; --primary-container:#ffddb3; --on-primary-container:#2b1700; }
 
-  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body{ margin:0; height:100%; }
+  /* Material You 动态取色：仅切换 accent 系 */
+  .accent-violet{ --accent:#3f4fa8; --accent-container:#dfe3ff; --on-accent-container:#0a1560; --focus:#1b2a7a; }
+  .accent-green { --accent:#1f6347; --accent-container:#c6ecd8; --on-accent-container:#00210f; --focus:#0d3b28; }
+  .accent-amber { --accent:#7a4700; --accent-container:#ffdcb4; --on-accent-container:#2a1500; --focus:#4a2a00; }
+  .theme-dark.accent-violet{ --accent:#b7c5ff; --accent-container:#33447f; --on-accent-container:#dfe3ff; --focus:#cfd8ff; }
+  .theme-dark.accent-green { --accent:#84d7ab; --accent-container:#175139; --on-accent-container:#c6ecd8; --focus:#a9e8c6; }
+  .theme-dark.accent-amber { --accent:#e9bd70; --accent-container:#5c3600; --on-accent-container:#ffdcb4; --focus:#f3d59c; }
+
+  /* ============================================================
+     2. 基础
+     ============================================================ */
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; }
   body{
-    font-family:var(--font);
-    background:#0e1015;
-    background-image:radial-gradient(1000px 600px at 20% -10%, #23304f 0%, transparent 60%),
-                     radial-gradient(900px 500px at 100% 100%, #2a2140 0%, transparent 55%);
-    display:flex; align-items:center; justify-content:center; gap:36px;
-    padding:32px; min-height:100vh;
+    font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    background:#0d0f14;
+    background-image:
+      radial-gradient(900px 520px at 18% -10%, #1f2a46 0%, transparent 62%),
+      radial-gradient(820px 460px at 102% 104%, #2a2140 0%, transparent 58%);
+    display:flex; align-items:flex-start; justify-content:center;
+    gap:var(--space-8); padding:var(--space-8);
+  }
+  img{ display:block; max-width:100%; }
+  button{ font:inherit; color:inherit; }
+
+  /* 可见焦点环：2px 实心，跨浅深色与图片均可辨 */
+  :where(button,a,[tabindex]):focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:2px;
+  }
+  .theme-dark :where(button,a,[tabindex]):focus-visible{ outline-color:var(--focus); }
+  .tile:focus-visible{ outline-offset:-2px; }
+
+  @media (prefers-reduced-motion: no-preference){
+    .tile, .chip, .btn, .iconbtn, .navbtn .pill, .card{
+      transition-property:background-color,box-shadow,color,scale,opacity,border-color;
+      transition-duration:var(--dur-base);
+      transition-timing-function:var(--ease-out);
+    }
   }
 
-  /* ---------- 原型外部控制区 ---------- */
-  .controls{ width:224px; color:#cfd3e2; font-size:13px; }
-  .controls h1{ font-size:14px; letter-spacing:.08em; text-transform:uppercase; color:#8d93a8; margin:0 0 18px; font-weight:600; }
-  .controls .group{ margin-bottom:22px; }
-  .controls .group > span{ display:block; margin-bottom:8px; color:#8d93a8; }
-  .controls button{
-    display:block; width:100%; text-align:left; margin-bottom:6px; padding:9px 12px;
-    border-radius:10px; border:1px solid #2b3040; background:#181c26; color:#cfd3e2;
-    font-family:var(--font); font-size:13px; cursor:pointer; transition:.15s;
+  /* ============================================================
+     3. 原型外壳
+     ============================================================ */
+  .controls{
+    width:236px; flex:0 0 auto; color:#c9cedd;
+    position:sticky; top:var(--space-8);
   }
-  .controls button:hover{ background:#20252f; border-color:#3a4155; }
-  .controls button.on{ background:#3a4a86; border-color:#5468b8; color:#fff; }
-  .swatches{ display:flex; gap:8px; }
-  .swatches button{ width:34px; height:34px; padding:0; border-radius:10px; border:2px solid transparent; }
-  .swatches button.on{ border-color:#fff; }
-  .hint{ color:#6b7188; line-height:1.6; font-size:12px; }
+  .controls h1{
+    font-size:var(--text-caption); font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; color:#868da3; margin:0 0 var(--space-5);
+  }
+  .controls .group{ margin-bottom:var(--space-6); }
+  .controls .group > span{
+    display:block; margin-bottom:var(--space-2); font-size:var(--text-caption); color:#868da3;
+  }
+  .controls .nav{
+    display:block; width:100%; text-align:start; margin-bottom:var(--space-1);
+    padding:9px var(--space-3); border-radius:var(--radius-sm);
+    border:1px solid #2b3040; background:#171b24; color:#c9cedd;
+    font-size:var(--text-label); cursor:pointer;
+  }
+  .controls .nav:hover{ background:#1f242f; border-color:#39415280; }
+  .controls .nav[aria-current="page"]{ background:#38477e; border-color:#5568b8; color:#fff; font-weight:600; }
+  .seg-mini{ display:flex; gap:var(--space-1); }
+  .seg-mini button{
+    flex:1; padding:8px var(--space-2); border-radius:var(--radius-sm);
+    border:1px solid #2b3040; background:#171b24; color:#c9cedd;
+    font-size:var(--text-caption); cursor:pointer;
+  }
+  .seg-mini button[aria-pressed="true"]{ background:#38477e; border-color:#5568b8; color:#fff; font-weight:600; }
+  .swatches{ display:flex; gap:var(--space-2); }
+  .swatches button{
+    width:36px; height:36px; padding:0; border-radius:var(--radius-sm);
+    border:2px solid transparent; cursor:pointer;
+  }
+  .swatches button[aria-pressed="true"]{ border-color:#fff; }
+  .hint{ color:#6c7389; font-size:var(--text-caption); line-height:1.6; margin:0; }
+  .hint code{ color:#9aa3bb; }
 
-  /* ---------- 手机外框 ---------- */
+  /* ============================================================
+     4. 手机
+     ============================================================ */
   .phone{
-    width:400px; height:852px; border-radius:42px; background:#000; padding:10px;
-    box-shadow:0 0 0 1px #2c3140, 0 30px 70px rgba(0,0,0,.6);
-    flex:0 0 auto;
+    width:400px; flex:0 0 auto; background:#000; padding:10px;
+    border-radius:44px; box-shadow:0 0 0 1px #2b3040, 0 28px 64px oklch(0 0 0 / .6);
   }
   .viewport{
-    position:relative; width:100%; height:100%; border-radius:34px; overflow:hidden;
+    position:relative; width:100%; height:844px; border-radius:34px; overflow:hidden;
     background:var(--surface); color:var(--on-surface);
-    display:flex; flex-direction:column; font-size:14px;
+    display:flex; flex-direction:column; font-size:var(--text-body);
   }
   .statusbar{
-    height:30px; flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
-    padding:0 20px; font-size:12px; font-weight:600; color:var(--on-surface-variant);
+    flex:0 0 auto; height:28px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 var(--space-5); font-size:var(--text-caption); font-weight:600;
+    color:var(--on-surface-muted); font-variant-numeric:tabular-nums;
   }
-  .screen{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+  .screen{ flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
   .screen::-webkit-scrollbar{ display:none; }
 
-  /* ---------- 通用组件 ---------- */
+  /* ---------- 通用 ---------- */
   .appbar{
     position:sticky; top:0; z-index:5; background:var(--surface);
-    padding:10px 20px 12px; display:flex; align-items:center; gap:12px;
+    padding:var(--space-2) var(--space-5) var(--space-3);
+    display:flex; align-items:center; gap:var(--space-3);
   }
-  .appbar h2{ font-size:24px; font-weight:600; margin:0; letter-spacing:-.01em; }
-  .appbar .sub{ font-size:13px; color:var(--on-surface-variant); margin-top:2px; }
+  .appbar h2{
+    font-size:var(--text-title); font-weight:600; margin:0; letter-spacing:-.015em;
+    text-wrap:balance;
+  }
+  .appbar .sub{ font-size:var(--text-caption); color:var(--on-surface-muted); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .appbar .grow{ flex:1 1 auto; min-width:0; }
+
   .iconbtn{
-    width:40px; height:40px; border-radius:var(--r-full); border:0; background:transparent;
-    color:var(--on-surface-variant); display:grid; place-items:center; cursor:pointer;
+    width:40px; height:40px; flex:0 0 auto; border-radius:var(--radius-full);
+    border:0; background:transparent; color:var(--on-surface-muted);
+    display:grid; place-items:center; cursor:pointer;
   }
-  .iconbtn:hover{ background:var(--surface-container-2); }
+  .iconbtn:hover{ background:var(--surface-sunken); }
   .iconbtn svg{ width:22px; height:22px; }
 
-  .section{ padding:0 20px 20px; }
+  .section{ padding:0 var(--space-5) var(--space-6); }
   .section-title{
-    font-size:12px; font-weight:700; letter-spacing:.06em; color:var(--on-surface-variant);
-    text-transform:uppercase; margin:22px 0 10px;
+    font-size:var(--text-caption); font-weight:700; letter-spacing:.07em;
+    color:var(--on-surface-muted); text-transform:uppercase;
+    margin:var(--space-6) 0 var(--space-3);   /* 组间 24 / 组内 12 */
   }
+  .section-title:first-child{ margin-top:0; }
 
   .card{
-    background:var(--surface-container); border-radius:var(--r-lg); padding:18px;
-    box-shadow:var(--shadow);
+    background:var(--surface-raised); border-radius:var(--radius-lg);
+    padding:var(--space-4); box-shadow:var(--shadow-border);
   }
 
-  /* 节约总览 */
-  .hero{ display:flex; align-items:center; gap:18px; }
+  /* 总览 */
+  .hero{ display:flex; align-items:center; gap:var(--space-4); }
   .ring{
-    --p:16.5;
-    width:104px; height:104px; flex:0 0 auto; border-radius:50%;
-    background:conic-gradient(var(--primary) calc(var(--p)*1%), var(--surface-container-2) 0);
-    display:grid; place-items:center; position:relative;
+    width:100px; height:100px; flex:0 0 auto; border-radius:50%; position:relative;
+    display:grid; place-items:center;
+    background:conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--surface-sunken) 0);
   }
-  .ring::after{
-    content:""; position:absolute; inset:11px; border-radius:50%; background:var(--surface-container);
-  }
-  .ring b{ position:relative; font-size:22px; font-weight:700; letter-spacing:-.02em; }
-  .ring i{ position:relative; font-size:11px; font-style:normal; color:var(--on-surface-variant); display:block; text-align:center; margin-top:1px; }
-  .hero .txt b{ display:block; font-size:26px; font-weight:700; letter-spacing:-.02em; }
-  .hero .txt span{ display:block; color:var(--on-surface-variant); font-size:13px; margin-top:4px; line-height:1.5; }
+  .ring::after{ content:""; position:absolute; inset:10px; border-radius:50%; background:var(--surface-raised); }
+  .ring b{ position:relative; font-size:var(--text-title); font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .ring i{ position:relative; display:block; text-align:center; margin-top:1px; font-size:var(--text-micro); font-style:normal; color:var(--on-surface-muted); }
+  .hero-txt b{ display:block; font-size:var(--text-display); font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .hero-txt span{ display:block; margin-top:var(--space-1); font-size:var(--text-label); line-height:1.55; color:var(--on-surface-muted); text-wrap:pretty; }
 
-  /* 统计网格 */
-  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
-  .stat{ background:var(--surface-container); border-radius:var(--r-md); padding:14px; box-shadow:var(--shadow); }
-  .stat .k{ font-size:12px; color:var(--on-surface-variant); display:flex; align-items:center; gap:6px; }
-  .stat .v{ font-size:20px; font-weight:700; margin-top:6px; letter-spacing:-.02em; }
-  .stat .m{ font-size:12px; color:var(--on-surface-variant); margin-top:2px; }
-  .dot{ width:8px; height:8px; border-radius:50%; background:var(--primary); }
-  .dot.g{ background:var(--success); }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin-top:var(--space-6); }
+  .stat{ background:var(--surface-raised); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:var(--shadow-border); }
+  .stat .k{ display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-caption); color:var(--on-surface-muted); }
+  .stat .v{ margin-top:var(--space-2); font-size:20px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .stat .m{ margin-top:2px; font-size:var(--text-caption); color:var(--on-surface-muted); font-variant-numeric:tabular-nums; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); flex:0 0 auto; }
+  .dot.ok{ background:var(--success); }
 
-  /* 明细行 */
-  .rows{ background:var(--surface-container); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow); }
+  /* 列表 */
+  .rows{ background:var(--surface-raised); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-border); }
   .row{
-    display:flex; align-items:center; gap:12px; padding:14px 16px;
-    border-bottom:1px solid var(--outline-variant);
+    display:flex; align-items:center; gap:var(--space-3); width:100%; text-align:start;
+    padding:var(--space-3) var(--space-4); border:0; background:transparent; cursor:default;
+    border-bottom:1px solid var(--divider); font-size:var(--text-body);
   }
   .row:last-child{ border-bottom:0; }
+  button.row{ cursor:pointer; }
+  button.row:hover{ background:var(--surface-sunken); }
   .row .lead{
-    width:38px; height:38px; border-radius:var(--r-sm); background:var(--secondary-container);
-    color:var(--on-secondary-container); display:grid; place-items:center; flex:0 0 auto;
+    width:40px; height:40px; flex:0 0 auto; border-radius:var(--radius-sm);
+    background:var(--neutral-container); color:var(--on-neutral-container);
+    display:grid; place-items:center; overflow:hidden;
   }
   .row .lead svg{ width:20px; height:20px; }
   .row .body{ flex:1 1 auto; min-width:0; }
-  .row .body b{ font-size:14px; font-weight:600; display:block; }
-  .row .body span{ font-size:12px; color:var(--on-surface-variant); }
-  .row .trail{ font-size:13px; color:var(--on-surface-variant); text-align:right; flex:0 0 auto; }
+  .row .body b{ display:block; font-weight:600; font-size:var(--text-body); }
+  .row .body span{ display:block; font-size:var(--text-caption); color:var(--on-surface-muted); }
+  .row .trail{ flex:0 0 auto; font-size:var(--text-label); color:var(--on-surface-muted); text-align:end; font-variant-numeric:tabular-nums; }
+  .row .trail.warn{ color:var(--danger); font-weight:600; }
+  .row .trail.ok{ color:var(--success); font-weight:600; }
+  .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+  /* 按钮 */
   .btn{
-    border:0; border-radius:var(--r-full); padding:12px 22px; font-family:var(--font);
-    font-size:14px; font-weight:600; cursor:pointer; background:var(--primary); color:var(--on-primary);
+    border:0; border-radius:var(--radius-full); padding:var(--space-3) var(--space-5);
+    font-size:var(--text-body); font-weight:600; cursor:pointer;
+    background:var(--accent); color:var(--on-accent);
   }
-  .btn.tonal{ background:var(--secondary-container); color:var(--on-secondary-container); }
-  .btn.outline{ background:transparent; color:var(--primary); box-shadow:inset 0 0 0 1px var(--outline); }
+  .btn.neutral{ background:var(--neutral-container); color:var(--on-neutral-container); }
+  .btn.outline{ background:transparent; color:var(--accent); box-shadow:inset 0 0 0 1px var(--control-border); }
+  .btn.danger{ background:var(--danger); color:var(--on-danger); }
   .btn.block{ display:block; width:100%; }
+  .btn.small{ padding:var(--space-2) var(--space-4); font-size:var(--text-label); }
   .btn:disabled{ opacity:.45; cursor:not-allowed; }
-  .btn-row{ display:flex; gap:10px; margin-top:16px; }
+  @media (prefers-reduced-motion: no-preference){
+    .btn:active:not(:disabled), .iconbtn:active, .chip:active, .controls button:active{ scale:.96; }
+  }
+  .btn-row{ display:flex; gap:var(--space-3); margin-top:var(--space-6); }
 
   /* 筛选 chips */
-  .chips{ display:flex; gap:8px; padding:0 20px 12px; overflow-x:auto; scrollbar-width:none; }
+  .chips{ display:flex; gap:var(--space-2); padding:0 var(--space-5) var(--space-3); overflow-x:auto; scrollbar-width:none; }
   .chips::-webkit-scrollbar{ display:none; }
   .chip{
-    flex:0 0 auto; border:1px solid var(--outline); background:transparent; color:var(--on-surface-variant);
-    border-radius:var(--r-xs); padding:7px 14px; font-size:13px; font-family:var(--font); cursor:pointer;
+    flex:0 0 auto; padding:7px var(--space-4); border-radius:var(--radius-xs);
+    border:1px solid var(--control-border); background:transparent; color:var(--on-surface-muted);
+    font-size:var(--text-label); cursor:pointer; white-space:nowrap;
   }
-  .chip.on{ background:var(--secondary-container); color:var(--on-secondary-container); border-color:transparent; font-weight:600; }
+  .chip[aria-pressed="true"]{
+    background:var(--neutral-container); color:var(--on-neutral-container);
+    border-color:transparent; font-weight:600;
+  }
+
+  /* 工具条：全选 / 数量 */
+  .toolbar{
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+    padding:0 var(--space-5) var(--space-3); font-size:var(--text-label); color:var(--on-surface-muted);
+  }
 
   /* 媒体网格 */
-  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:0 4px; }
+  .grid{
+    display:grid; grid-template-columns:repeat(3, 1fr);
+    gap:var(--space-1); padding:0 var(--space-3) var(--space-4);
+  }
   .tile{
-    position:relative; aspect-ratio:1/1; border-radius:6px; overflow:hidden; background:var(--surface-container-2);
-    cursor:pointer;
+    position:relative; aspect-ratio:1/1; padding:0; border:0; overflow:hidden;
+    border-radius:var(--radius-sm); background:var(--surface-sunken); cursor:pointer;
+    display:block; width:100%;
   }
-  .tile img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .tile img{ width:100%; height:100%; object-fit:cover; outline:1px solid oklch(0 0 0 / .1); outline-offset:-1px; }
+  .theme-dark .tile img{ outline-color:oklch(1 0 0 / .1); }
+
+  /* App 根容器：真实盒子，保证 inert 在弹窗打开时可靠生效 */
+  .app-root{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+  /* 选中：同时用描边 + 勾选图标 + aria-pressed，不依赖颜色单一通道 */
+  .tile[aria-pressed="true"]::after{
+    content:""; position:absolute; inset:0; border-radius:var(--radius-sm);
+    box-shadow:inset 0 0 0 3px var(--accent);
+  }
   .tile .pick{
-    position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
-    border:2px solid #fff; background:rgba(0,0,0,.28); display:grid; place-items:center;
-    box-shadow:0 1px 4px rgba(0,0,0,.35);
+    position:absolute; top:var(--space-1); inset-inline-end:var(--space-1);
+    width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
+    border:2px solid #fff; background:oklch(0 0 0 / .34);
   }
-  .tile.on .pick{ background:var(--primary); border-color:var(--primary); }
-  .tile .pick svg{ width:14px; height:14px; color:#fff; opacity:0; }
-  .tile.on .pick svg{ opacity:1; }
-  .tile.on::after{ content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 3px var(--primary); border-radius:6px; }
+  .tile[aria-pressed="true"] .pick{ background:var(--accent); border-color:var(--accent); }
+  .tile .pick svg{ width:14px; height:14px; color:#fff; opacity:0; scale:.25; }
+  .tile[aria-pressed="true"] .pick svg{ opacity:1; scale:1; }
+  @media (prefers-reduced-motion: no-preference){
+    .tile .pick svg{ transition-property:opacity,scale; transition-duration:var(--dur-fast); transition-timing-function:var(--ease-out); }
+  }
   .tile .meta{
-    position:absolute; left:0; right:0; bottom:0; padding:14px 6px 5px; font-size:10px; color:#fff;
-    background:linear-gradient(transparent, rgba(0,0,0,.72)); display:flex; justify-content:space-between; gap:4px;
+    position:absolute; inset-inline:0; bottom:0; display:flex; justify-content:space-between; gap:var(--space-1);
+    padding:14px var(--space-2) 5px; font-size:var(--text-micro); color:#fff;
+    background:linear-gradient(transparent, oklch(0 0 0 / .72));
+    font-variant-numeric:tabular-nums;
   }
   .badge{
-    position:absolute; top:6px; left:6px; font-size:9px; font-weight:700; letter-spacing:.02em;
-    padding:3px 6px; border-radius:5px; background:rgba(0,0,0,.55); color:#fff; backdrop-filter:blur(4px);
+    position:absolute; top:var(--space-1); inset-inline-start:var(--space-1);
+    padding:2px 6px; border-radius:5px; font-size:var(--text-micro); font-weight:700;
+    background:oklch(0 0 0 / .62); color:#fff; white-space:nowrap;
   }
-  .badge.done{ background:var(--success); }
-  .badge.locked{ background:rgba(60,60,60,.72); }
-  .tile.locked img{ filter:grayscale(.75) brightness(.7); }
-  .tile.locked{ cursor:not-allowed; }
-  .play{
-    position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
-  }
+  .badge.done{ background:var(--success); color:var(--on-success); }
+  .badge.skip{ background:oklch(0 0 0 / .72); }
+  .tile[data-skip] img{ filter:grayscale(.85) brightness(.62); }
+  .play{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
   .play span{
-    width:34px; height:34px; border-radius:50%; background:rgba(0,0,0,.5); display:grid; place-items:center;
-    backdrop-filter:blur(3px);
+    width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
+    background:oklch(0 0 0 / .52);
   }
-  .play svg{ width:16px; height:16px; color:#fff; }
-
-  /* 底部操作条 */
-  .actionbar{
-    position:sticky; bottom:0; z-index:6; margin-top:12px;
-    background:var(--surface-container); box-shadow:0 -6px 20px rgba(0,0,0,.10);
-    border-radius:var(--r-xl) var(--r-xl) 0 0; padding:14px 20px;
-    display:flex; align-items:center; gap:14px;
-  }
-  .actionbar .info{ flex:1 1 auto; font-size:12px; color:var(--on-surface-variant); line-height:1.5; }
-  .actionbar .info b{ display:block; font-size:14px; color:var(--on-surface); font-weight:600; }
+  .play svg{ width:16px; height:16px; color:#fff; transform:translateX(2px); } /* 三角光心右移 */
 
   /* 空态 */
-  .empty{ text-align:center; padding:56px 24px; color:var(--on-surface-variant); }
-  .empty svg{ width:44px; height:44px; opacity:.5; }
+  .empty{ text-align:center; padding:var(--space-8) var(--space-6); color:var(--on-surface-muted); }
+  .empty svg{ width:40px; height:40px; margin:0 auto var(--space-3); opacity:.55; }
+  .empty b{ display:block; color:var(--on-surface); font-size:var(--text-body); margin-bottom:var(--space-1); }
+  .empty p{ margin:0 0 var(--space-4); font-size:var(--text-label); line-height:1.6; }
 
   /* 分段控件 */
-  .segmented{
-    display:flex; background:var(--surface-container-2); border-radius:var(--r-full); padding:3px; gap:2px;
-  }
+  .segmented{ display:flex; gap:2px; padding:3px; border-radius:var(--radius-full); background:var(--surface-sunken); }
   .segmented button{
-    flex:1 1 0; border:0; background:transparent; color:var(--on-surface-variant); font-family:var(--font);
-    font-size:12px; font-weight:600; padding:9px 4px; border-radius:var(--r-full); cursor:pointer;
+    flex:1 1 0; padding:9px var(--space-1); border:0; border-radius:var(--radius-full);
+    background:transparent; color:var(--on-surface-muted);
+    font-size:var(--text-caption); font-weight:600; cursor:pointer; white-space:nowrap;
   }
-  .segmented button.on{ background:var(--primary); color:var(--on-primary); }
+  .segmented button[aria-pressed="true"]{ background:var(--accent); color:var(--on-accent); }
 
-  .setting{ margin-bottom:14px; }
-  .setting .head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
-  .setting .head b{ font-size:15px; font-weight:600; }
-  .setting .head span{ font-size:12px; color:var(--on-surface-variant); }
-  .setting .note{ font-size:12px; color:var(--on-surface-variant); margin-top:8px; line-height:1.5; }
+  .setting{ margin-bottom:var(--space-6); }   /* 组间 24 */
+  .setting .head{ display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin-bottom:var(--space-3); }
+  .setting .head b{ font-size:var(--text-heading); font-weight:600; }
+  .setting .head span{ font-size:var(--text-caption); color:var(--on-surface-muted); text-align:end; }
+  .setting .note{ margin:var(--space-3) 0 0; font-size:var(--text-caption); line-height:1.6; color:var(--on-surface-muted); text-wrap:pretty; }
+  .save-flag{ font-size:var(--text-caption); color:var(--success); font-weight:600; opacity:0; }
+  @media (prefers-reduced-motion: no-preference){
+    .save-flag{ transition-property:opacity; transition-duration:var(--dur-base); }
+  }
+  .save-flag.on{ opacity:1; }
 
   /* 底部导航 */
   .bottom-nav{
-    flex:0 0 auto; height:76px; background:var(--surface-container); border-top:1px solid var(--outline-variant);
-    display:grid; grid-template-columns:repeat(4,1fr); padding:8px 6px 12px;
+    flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr);
+    padding:var(--space-2) var(--space-2) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    background:var(--surface-raised); border-top:1px solid var(--divider);
   }
-  .bottom-nav button{
-    border:0; background:transparent; color:var(--on-surface-variant); font-family:var(--font);
-    font-size:11px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; padding:0;
+  .navbtn{
+    border:0; background:transparent; color:var(--on-surface-muted); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:var(--space-1);
+    padding:0; font-size:var(--text-micro);
   }
-  .bottom-nav .pill{
-    width:60px; height:30px; border-radius:var(--r-full); display:grid; place-items:center; transition:.18s;
-  }
-  .bottom-nav button svg{ width:21px; height:21px; }
-  .bottom-nav button.on{ color:var(--on-surface); font-weight:700; }
-  .bottom-nav button.on .pill{ background:var(--secondary-container); color:var(--on-secondary-container); }
+  .navbtn .pill{ width:60px; height:30px; border-radius:var(--radius-full); display:grid; place-items:center; }
+  .navbtn svg{ width:21px; height:21px; }
+  .navbtn[aria-current="page"]{ color:var(--on-surface); font-weight:700; }
+  .navbtn[aria-current="page"] .pill{ background:var(--neutral-container); color:var(--on-neutral-container); }
 
-  /* 提示条 */
-  .toast{
-    position:absolute; left:50%; bottom:96px; transform:translate(-50%, 14px);
-    background:var(--on-surface); color:var(--surface); font-size:13px; font-weight:500;
-    padding:11px 18px; border-radius:var(--r-xs); opacity:0; pointer-events:none; transition:.22s; z-index:20;
-    max-width:78%; text-align:center; line-height:1.4;
+  /* 底部操作条（含 safe-area） */
+  .actionbar{
+    position:sticky; bottom:0; z-index:6; margin-top:var(--space-4);
+    background:var(--surface-raised); box-shadow:var(--shadow-chrome);
+    border-radius:var(--radius-xl) var(--radius-xl) 0 0;
+    padding:var(--space-3) var(--space-5) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    display:flex; align-items:center; gap:var(--space-3);
   }
-  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+  .actionbar .info{ flex:1 1 auto; min-width:0; font-size:var(--text-caption); color:var(--on-surface-muted); line-height:1.5; }
+  .actionbar .info b{ display:block; font-size:var(--text-body); color:var(--on-surface); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* 进度条（批量操作的确定性反馈） */
+  .progress{ display:none; align-items:center; gap:var(--space-3); flex:1 1 auto; }
+  .progress.on{ display:flex; }
+  .progress .bar{ flex:1 1 auto; height:6px; border-radius:var(--radius-full); background:var(--surface-sunken); overflow:hidden; }
+  .progress .bar i{ display:block; height:100%; width:0; background:var(--accent); border-radius:inherit; }
+  .progress em{ font-style:normal; font-size:var(--text-caption); color:var(--on-surface-muted); font-variant-numeric:tabular-nums; }
+  @media (prefers-reduced-motion: no-preference){
+    .progress .bar i{ transition-property:width; transition-duration:140ms; transition-timing-function:linear; }
+  }
+
+  /* 提示（live region，先渲染后更新） */
+  .toast{
+    position:absolute; inset-inline:auto; left:50%; bottom:104px;
+    transform:translate(-50%, 12px); opacity:0; pointer-events:none;
+    max-width:82%; padding:var(--space-3) var(--space-4); border-radius:var(--radius-sm);
+    background:var(--on-surface); color:var(--surface);
+    font-size:var(--text-label); font-weight:500; text-align:center; line-height:1.5; z-index:20;
+  }
+  .toast.on{ opacity:1; transform:translate(-50%, 0); }
+  @media (prefers-reduced-motion: no-preference){
+    .toast{ transition-property:opacity,transform; transition-duration:var(--dur-base); transition-timing-function:var(--ease-out); }
+  }
 
   /* 对话框 */
-  .dialog-wrap{
-    position:absolute; inset:0; background:var(--scrim); display:none; place-items:center; z-index:30; padding:28px;
+  .scrim{
+    position:absolute; inset:0; z-index:30; display:none; place-items:center;
+    padding:var(--space-6); background:var(--scrim); overscroll-behavior:contain;
   }
-  .dialog-wrap.show{ display:grid; }
+  .scrim.on{ display:grid; }
   .dialog{
-    background:var(--surface-container); color:var(--on-surface); border-radius:var(--r-xl);
-    padding:22px; width:100%; box-shadow:var(--shadow);
+    width:100%; padding:var(--space-5); border-radius:var(--radius-xl);
+    background:var(--surface-raised); color:var(--on-surface); box-shadow:var(--shadow-raised);
   }
-  .dialog h3{ margin:0 0 8px; font-size:19px; font-weight:600; }
-  .dialog p{ margin:0; font-size:13px; color:var(--on-surface-variant); line-height:1.65; }
-  .dialog .acts{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .dialog h3{ margin:0 0 var(--space-2); font-size:var(--text-heading); font-weight:600; text-wrap:balance; }
+  .dialog p{ margin:0; font-size:var(--text-label); line-height:1.65; color:var(--on-surface-muted); text-wrap:pretty; }
+  .dialog .acts{ display:flex; justify-content:flex-end; gap:var(--space-1); margin-top:var(--space-5); }
   .dialog .acts button{
-    border:0; background:transparent; color:var(--primary); font-family:var(--font); font-size:14px;
-    font-weight:600; padding:10px 14px; border-radius:var(--r-full); cursor:pointer;
+    border:0; background:transparent; color:var(--accent); cursor:pointer;
+    padding:var(--space-3) var(--space-4); border-radius:var(--radius-full);
+    font-size:var(--text-label); font-weight:600;
   }
-  .dialog .acts button.primary{ background:var(--primary); color:var(--on-primary); }
+  .dialog .acts button:hover{ background:var(--surface-sunken); }
+  .dialog .acts button.filled{ background:var(--accent); color:var(--on-accent); }
+  .dialog .acts button.filled.danger{ background:var(--danger); color:var(--on-danger); }
 
   .page{ display:none; }
   .page.on{ display:block; }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+  }
+
+  /* ============================================================
+     5. 自适应：窄屏不再横向溢出
+     ============================================================ */
+  @media (max-width:900px){
+    body{ flex-direction:column; align-items:center; padding:var(--space-5); gap:var(--space-5); }
+    .controls{ position:static; width:min(100%, 420px); }
+    .controls .nav{ display:inline-block; width:auto; margin-inline-end:var(--space-1); }
+  }
+  @media (max-width:460px){
+    .phone{ width:100%; padding:6px; border-radius:34px; }
+    .viewport{ height:min(844px, calc(100dvh - 24px)); border-radius:28px; }
+  }
 </style>
 </head>
 <body>
 
-<!-- ==================== 原型控制区（不属于 App UI） ==================== -->
+<!-- ============ 原型控制区（不属于 App） ============ -->
 <aside class="controls">
   <h1>UI 原型控制</h1>
   <div class="group">
     <span>页面</span>
-    <button data-page="home" class="on">首页 · 总览看板</button>
-    <button data-page="todo">未压缩（批量压缩）</button>
-    <button data-page="done">已压缩（批量还原）</button>
-    <button data-page="trash">回收站</button>
-    <button data-page="settings">设置</button>
+    <button class="nav" data-page="home" aria-current="page">首页 · 总览看板</button>
+    <button class="nav" data-page="todo">未压缩</button>
+    <button class="nav" data-page="done">已压缩</button>
+    <button class="nav" data-page="trash">回收站</button>
+    <button class="nav" data-page="settings">设置</button>
   </div>
   <div class="group">
-    <span>明暗色（Material You）</span>
-    <button id="themeBtn" data-theme="light" class="on">浅色</button>
-    <button data-theme="dark">深色</button>
+    <span>外观</span>
+    <div class="seg-mini" role="group" aria-label="明暗色">
+      <button data-theme="light" aria-pressed="true">浅色</button>
+      <button data-theme="dark" aria-pressed="false">深色</button>
+    </div>
   </div>
   <div class="group">
     <span>动态取色</span>
-    <div class="swatches">
-      <button data-accent="accent-violet" class="on" style="background:#4b5da8" title="默认紫"></button>
-      <button data-accent="accent-green" style="background:#2f6d4f" title="绿"></button>
-      <button data-accent="accent-amber" style="background:#8a5100" title="琥珀"></button>
+    <div class="swatches" role="group" aria-label="强调色">
+      <button data-accent="accent-violet" aria-pressed="true" style="background:#3f4fa8" aria-label="紫色"></button>
+      <button data-accent="accent-green" aria-pressed="false" style="background:#1f6347" aria-label="绿色"></button>
+      <button data-accent="accent-amber" aria-pressed="false" style="background:#7a4700" aria-label="琥珀色"></button>
     </div>
   </div>
-  <p class="hint">这是静态原型，仅用于评估信息结构与视觉。数据为示例值。<br><br>可点击：底部导航、筛选、多选、设置档位、压缩/还原/清理按钮。</p>
+  <p class="hint">静态原型，数据为示例。可点击：底部导航、筛选、全选、多选、压缩/还原/清理、设置档位。<br><br>键盘可用 <code>Tab</code> + <code>Enter</code>；弹窗支持 <code>Esc</code> 关闭。</p>
 </aside>
 
-<!-- ==================== 手机 ==================== -->
+<!-- ============ 手机 ============ -->
 <div class="phone">
   <div class="viewport theme-light accent-violet" id="vp">
-    <div class="statusbar"><span>19:42</span><span>5G ▮▮▮ 86%</span></div>
+    <div id="appRoot" class="app-root">
 
-    <main class="screen" id="screen">
+      <div class="statusbar" aria-hidden="true"><span>19:42</span><span>5G ▮▮▮ 86%</span></div>
 
-      <!-- ========== 首页 ========== -->
-      <section class="page on" id="page-home">
-        <div class="appbar">
-          <div style="flex:1">
-            <h2>照片压缩</h2>
-            <div class="sub">已扫描本机媒体 · 刚刚更新</div>
-          </div>
-          <button class="iconbtn" data-toast="重新扫描媒体库（原型示意）">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 6v3l4-4-4-4v3a7 7 0 1 0 7 7h-2a5 5 0 1 1-5-5Z"/></svg>
-          </button>
-        </div>
+      <main class="screen" id="screen">
 
-        <div class="section">
-          <div class="card hero">
-            <div class="ring" style="--p:16.5">
-              <b>4.2</b><i>GB 已节约</i>
+        <!-- ========== 首页 ========== -->
+        <section class="page on" id="page-home" aria-labelledby="h-home">
+          <div class="appbar">
+            <div class="grow">
+              <h2 id="h-home">照片压缩</h2>
+              <div class="sub" id="homeSub">已扫描本机媒体</div>
             </div>
-            <div class="txt">
-              <b>已节约 4.2 GB</b>
-              <span>占全部媒体原始大小（25.5 GB）的 16.5%<br>已压缩部分压缩率 63%</span>
-            </div>
+            <button class="iconbtn" data-rescan aria-label="重新扫描媒体库">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 6v3l4-4-4-4v3a7 7 0 1 0 7 7h-2a5 5 0 1 1-5-5Z"/></svg>
+            </button>
           </div>
 
-          <div class="stats">
-            <div class="stat">
-              <div class="k"><i class="dot"></i>未压缩</div>
-              <div class="v">1,587 项</div>
-              <div class="m">共 18.8 GB</div>
+          <div class="section">
+            <div class="card hero">
+              <div class="ring" id="ring" style="--p:0"><b id="ringVal">—</b><i>已节约</i></div>
+              <div class="hero-txt">
+                <b id="savedTotal">—</b>
+                <span id="savedNote">正在统计…</span>
+              </div>
             </div>
-            <div class="stat">
-              <div class="k"><i class="dot g"></i>已压缩</div>
-              <div class="v">723 项</div>
-              <div class="m">6.7 GB → 2.5 GB</div>
-            </div>
-          </div>
 
-          <div class="section-title" style="padding:0">分类明细</div>
-          <div class="rows">
-            <div class="row">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg></div>
-              <div class="body"><b>普通照片</b><span>未压缩 1,284 张 · 已压缩 642 张</span></div>
-              <div class="trail">6.8 GB<br>1.1 GB</div>
+            <div class="stats">
+              <div class="stat">
+                <div class="k"><i class="dot"></i>未压缩</div>
+                <div class="v" id="kpiTodoCount">—</div>
+                <div class="m" id="kpiTodoSize">—</div>
+              </div>
+              <div class="stat">
+                <div class="k"><i class="dot ok"></i>已压缩</div>
+                <div class="v" id="kpiDoneCount">—</div>
+                <div class="m" id="kpiDoneSize">—</div>
+              </div>
             </div>
-            <div class="row">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg></div>
-              <div class="body"><b>实况照片</b><span>未压缩 216 张 · 已压缩 58 张</span></div>
-              <div class="trail">2.4 GB<br>0.3 GB</div>
-            </div>
-            <div class="row">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 3.5V7l-4 3.5Z"/></svg></div>
-              <div class="body"><b>视频</b><span>未压缩 87 个 · 已压缩 23 个</span></div>
-              <div class="trail">9.6 GB<br>1.1 GB</div>
+
+            <h3 class="section-title">分类明细</h3>
+            <div class="rows" id="homeRows"></div>
+
+            <div class="btn-row">
+              <button class="btn block" data-go="todo">去压缩</button>
             </div>
           </div>
+        </section>
 
-          <div class="btn-row">
-            <button class="btn block" data-go="todo">开始压缩</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ========== 未压缩页 ========== -->
-      <section class="page" id="page-todo">
-        <div class="appbar">
-          <div style="flex:1">
-            <h2>未压缩</h2>
-            <div class="sub">1,587 项 · 共 18.8 GB</div>
-          </div>
-        </div>
-
-        <div class="chips" id="todoChips">
-          <button class="chip on">全部</button>
-          <button class="chip">照片</button>
-          <button class="chip">实况</button>
-          <button class="chip">视频</button>
-        </div>
-
-        <div class="grid" id="todoGrid"></div>
-
-        <div class="actionbar">
-          <div class="info">
-            <b id="todoCount">未选择</b>
-            <span id="todoSave">勾选后可预估节约空间</span>
-          </div>
-          <button class="btn" id="todoBtn" disabled>压缩所选</button>
-        </div>
-      </section>
-
-      <!-- ========== 已压缩页 ========== -->
-      <section class="page" id="page-done">
-        <div class="appbar">
-          <div style="flex:1">
-            <h2>已压缩</h2>
-            <div class="sub">723 项 · 6.7 GB → 2.5 GB</div>
-          </div>
-        </div>
-
-        <div class="chips" id="doneChips">
-          <button class="chip on">全部</button>
-          <button class="chip">可还原</button>
-          <button class="chip">已超期</button>
-        </div>
-
-        <div class="grid" id="doneGrid"></div>
-
-        <div class="actionbar">
-          <div class="info">
-            <b id="doneCount">未选择</b>
-            <span>仅 30 天内可还原，超期条目已锁定</span>
-          </div>
-          <button class="btn tonal" id="doneBtn" disabled>还原所选</button>
-        </div>
-      </section>
-
-      <!-- ========== 回收站 ========== -->
-      <section class="page" id="page-trash">
-        <div class="appbar">
-          <button class="iconbtn" data-go="settings">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20v-2Z"/></svg>
-          </button>
-          <div style="flex:1">
-            <h2>回收站</h2>
-            <div class="sub">723 份原始文件 · 占用 6.7 GB</div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="card" style="background:var(--secondary-container); color:var(--on-secondary-container); box-shadow:none">
-            <div style="font-size:13px; line-height:1.65">
-              压缩成功后，原文件会保留在这里 <b>30 天</b>，期间可随时还原。超期后自动清理以释放空间。
+        <!-- ========== 未压缩 ========== -->
+        <section class="page" id="page-todo" aria-labelledby="h-todo">
+          <div class="appbar">
+            <div class="grow">
+              <h2 id="h-todo">未压缩</h2>
+              <div class="sub" id="todoSub">—</div>
             </div>
           </div>
 
-          <div class="section-title" style="padding:0">原始文件</div>
-          <div class="rows" id="trashRows"></div>
-
-          <div class="btn-row">
-            <button class="btn outline block" id="trashAll">清理全部（释放 6.7 GB）</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ========== 设置 ========== -->
-      <section class="page" id="page-settings">
-        <div class="appbar">
-          <div style="flex:1">
-            <h2>设置</h2>
-            <div class="sub">压缩质量档位 · 三类独立控制</div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="card setting">
-            <div class="head"><b>普通照片</b><span>JPEG / HEIC</span></div>
-            <div class="segmented" data-seg="photo">
-              <button>高质量</button><button class="on">平衡</button><button>更省空间</button>
-            </div>
-            <div class="note">默认「平衡」为肉眼不可见档。最终体积由算法决定，不设目标体积。</div>
+          <div class="chips" role="group" aria-label="按类型筛选" data-filter="todo">
+            <button class="chip" data-kind="all" aria-pressed="true">全部</button>
+            <button class="chip" data-kind="photo" aria-pressed="false">照片</button>
+            <button class="chip" data-kind="live" aria-pressed="false">实况</button>
+            <button class="chip" data-kind="video" aria-pressed="false">视频</button>
+            <button class="chip" data-kind="skip" aria-pressed="false">不支持</button>
           </div>
 
-          <div class="card setting">
-            <div class="head"><b>实况照片</b><span>主图 + 增益图 + 内嵌视频</span></div>
-            <div class="segmented" data-seg="live">
-              <button>高质量</button><button class="on">平衡</button><button>更省空间</button>
-            </div>
-            <div class="note">内嵌视频一并重编码；压缩后仍可由系统相册识别与播放。</div>
+          <div class="toolbar">
+            <span id="todoFilterNote">共 0 项</span>
+            <button class="btn outline small" id="todoAll">全选可压缩项</button>
           </div>
 
-          <div class="card setting">
-            <div class="head"><b>视频</b><span>HEVC / H.264 / AV1 / VP9</span></div>
-            <div class="segmented" data-seg="video">
-              <button>高质量</button><button class="on">平衡</button><button>更省空间</button>
+          <div class="grid" id="todoGrid"></div>
+
+          <div class="actionbar">
+            <div class="info" id="todoInfo"><b>未选择</b><span>勾选后可预估节约空间</span></div>
+            <div class="progress" id="todoProgress" aria-hidden="true">
+              <span class="bar"><i></i></span><em>0%</em>
             </div>
-            <div class="note">保持分辨率、帧率与时长不变，仅调整编码与码率。</div>
+            <button class="btn" id="todoBtn" disabled>压缩所选</button>
+          </div>
+        </section>
+
+        <!-- ========== 已压缩 ========== -->
+        <section class="page" id="page-done" aria-labelledby="h-done">
+          <div class="appbar">
+            <div class="grow">
+              <h2 id="h-done">已压缩</h2>
+              <div class="sub" id="doneSub">—</div>
+            </div>
+            <button class="iconbtn" data-go="trash" aria-label="打开回收站">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2ZM6 9h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/></svg>
+            </button>
           </div>
 
-          <div class="section-title" style="padding:0">存储与权限</div>
-          <div class="rows">
-            <div class="row" id="trashEntry" style="cursor:pointer">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2ZM6 9h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/></svg></div>
-              <div class="body"><b>回收站</b><span>723 份原始文件 · 6.7 GB</span></div>
-              <div class="trail">›</div>
+          <div class="chips" role="group" aria-label="按还原状态筛选" data-filter="done">
+            <button class="chip" data-state="all" aria-pressed="true">全部</button>
+            <button class="chip" data-state="restorable" aria-pressed="false">可还原</button>
+            <button class="chip" data-state="expired" aria-pressed="false">已超期</button>
+          </div>
+
+          <div class="toolbar">
+            <span id="doneFilterNote">共 0 项</span>
+            <button class="btn outline small" id="doneAll">全选可还原</button>
+          </div>
+
+          <div class="grid" id="doneGrid"></div>
+
+          <div class="actionbar">
+            <div class="info" id="doneInfo"><b>未选择</b><span>仅 30 天内可还原，超期条目已锁定</span></div>
+            <div class="progress" id="doneProgress" aria-hidden="true">
+              <span class="bar"><i></i></span><em>0%</em>
             </div>
-            <div class="row">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm-1 15-4-4 1.4-1.4L11 13.2l6.6-6.6L19 8l-8 8Z"/></svg></div>
-              <div class="body"><b>文件访问权限</b><span>已授予「所有文件访问」</span></div>
-              <div class="trail" style="color:var(--success); font-weight:600">正常</div>
-            </div>
-            <div class="row">
-              <div class="lead"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.8-7.2-.9.9A2 2 0 0 0 13 12v1h-2v-1.3c0-.6.3-1.2.8-1.6l1.1-1.1a1.4 1.4 0 1 0-2.4-1H8.5a3.5 3.5 0 1 1 6.3 2.3Z"/></svg></div>
-              <div class="body"><b>关于</b><span>版本 0.1.0 · 原型</span></div>
-              <div class="trail">›</div>
+            <button class="btn neutral" id="doneBtn" disabled>还原所选</button>
+          </div>
+        </section>
+
+        <!-- ========== 回收站 ========== -->
+        <section class="page" id="page-trash" aria-labelledby="h-trash">
+          <div class="appbar">
+            <button class="iconbtn" data-go="done" aria-label="返回已压缩">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20v-2Z"/></svg>
+            </button>
+            <div class="grow">
+              <h2 id="h-trash">回收站</h2>
+              <div class="sub" id="trashSub">—</div>
             </div>
           </div>
-        </div>
-      </section>
 
-    </main>
+          <div class="section">
+            <div class="card" style="box-shadow:none;background:var(--neutral-container);color:var(--on-neutral-container)">
+              <p style="margin:0;font-size:var(--text-label);line-height:1.65;text-wrap:pretty">
+                压缩成功后原文件会保留在这里 <b>30 天</b>，期间可随时还原。超期后自动清理以释放空间。
+              </p>
+            </div>
 
-    <nav class="bottom-nav" id="nav">
-      <button data-page="home" class="on">
-        <span class="pill"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z"/></svg></span>
-        首页
-      </button>
-      <button data-page="todo">
-        <span class="pill"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg></span>
-        未压缩
-      </button>
-      <button data-page="done">
-        <span class="pill"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.2L6.6 12l1.4-1.4 2.8 2.8 5.6-5.6L17.8 9l-7 7.2Z"/></svg></span>
-        已压缩
-      </button>
-      <button data-page="settings">
-        <span class="pill"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 7h10v2H4V7Zm0 8h16v2H4v-2Zm13-9a3 3 0 0 1 0 6 3 3 0 0 1 0-6Zm-6 8a3 3 0 0 1 0 6 3 3 0 0 1 0-6Z"/></svg></span>
-        设置
-      </button>
-    </nav>
+            <h3 class="section-title">原始文件</h3>
+            <div class="rows" id="trashRows"></div>
 
-    <div class="toast" id="toast"></div>
+            <div class="btn-row">
+              <button class="btn danger block" id="trashPurge">清理全部备份</button>
+            </div>
+          </div>
+        </section>
 
-    <div class="dialog-wrap" id="dialog">
-      <div class="dialog">
+        <!-- ========== 设置 ========== -->
+        <section class="page" id="page-settings" aria-labelledby="h-set">
+          <div class="appbar">
+            <div class="grow">
+              <h2 id="h-set">设置</h2>
+              <div class="sub">压缩质量档位 · 三类独立控制</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="card setting">
+              <div class="head"><b>普通照片</b><span>JPEG / HEIF</span></div>
+              <div class="segmented" role="group" aria-label="普通照片质量档位" data-tier="photo">
+                <button aria-pressed="false">高质量</button>
+                <button aria-pressed="true">平衡</button>
+                <button aria-pressed="false">更省空间</button>
+              </div>
+              <p class="note">「平衡」为默认档，肉眼不可见损失。最终体积由算法决定，不设目标体积。<span class="save-flag" data-flag="photo">已保存</span></p>
+            </div>
+
+            <div class="card setting">
+              <div class="head"><b>实况照片</b><span>主图 + 增益图 + 内嵌视频</span></div>
+              <div class="segmented" role="group" aria-label="实况照片质量档位" data-tier="live">
+                <button aria-pressed="false">高质量</button>
+                <button aria-pressed="true">平衡</button>
+                <button aria-pressed="false">更省空间</button>
+              </div>
+              <p class="note">内嵌视频一并重编码；压缩后仍可由系统相册识别与播放。<span class="save-flag" data-flag="live">已保存</span></p>
+            </div>
+
+            <div class="card setting">
+              <div class="head"><b>视频</b><span>HEVC / H.264 / AV1 / VP9</span></div>
+              <div class="segmented" role="group" aria-label="视频质量档位" data-tier="video">
+                <button aria-pressed="false">高质量</button>
+                <button aria-pressed="true">平衡</button>
+                <button aria-pressed="false">更省空间</button>
+              </div>
+              <p class="note">保持分辨率、帧率与时长不变，仅调整编码与码率。<span class="save-flag" data-flag="video">已保存</span></p>
+            </div>
+
+            <h3 class="section-title">存储与权限</h3>
+            <div class="rows">
+              <button class="row" data-go="trash">
+                <span class="lead" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2ZM6 9h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/></svg>
+                </span>
+                <span class="body">
+                  <b>回收站</b>
+                  <span id="setTrashNote">—</span>
+                </span>
+                <span class="trail" aria-hidden="true">›</span>
+              </button>
+              <div class="row">
+                <span class="lead" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm-1 15-4-4 1.4-1.4L11 13.2l6.6-6.6L19 8l-8 8Z"/></svg>
+                </span>
+                <span class="body">
+                  <b>文件访问权限</b>
+                  <span>已授予「所有文件访问」</span>
+                </span>
+                <span class="trail ok">正常</span>
+              </div>
+              <div class="row">
+                <span class="lead" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.8-7.2-.9.9A2 2 0 0 0 13 12v1h-2v-1.3c0-.6.3-1.2.8-1.6l1.1-1.1a1.4 1.4 0 1 0-2.4-1H8.5a3.5 3.5 0 1 1 6.3 2.3Z"/></svg>
+                </span>
+                <span class="body">
+                  <b>关于</b>
+                  <span>版本 0.1.0 · 原型</span>
+                </span>
+                <span class="trail" aria-hidden="true">›</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <nav class="bottom-nav" id="nav" aria-label="主导航">
+        <button class="navbtn" data-page="home" aria-current="page">
+          <span class="pill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z"/></svg></span>
+          首页
+        </button>
+        <button class="navbtn" data-page="todo" aria-current="false">
+          <span class="pill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg></span>
+          未压缩
+        </button>
+        <button class="navbtn" data-page="done" aria-current="false">
+          <span class="pill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.2L6.6 12l1.4-1.4 2.8 2.8 5.6-5.6L17.8 9l-7 7.2Z"/></svg></span>
+          已压缩
+        </button>
+        <button class="navbtn" data-page="settings" aria-current="false">
+          <span class="pill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 7h10v2H4V7Zm0 8h16v2H4v-2Zm13-9a3 3 0 0 1 0 6 3 3 0 0 1 0-6Zm-6 8a3 3 0 0 1 0 6 3 3 0 0 1 0-6Z"/></svg></span>
+          设置
+        </button>
+      </nav>
+
+    </div><!-- /appRoot -->
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="scrim" id="scrim">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgBody">
         <h3 id="dlgTitle">确认</h3>
         <p id="dlgBody"></p>
         <div class="acts">
           <button id="dlgCancel">取消</button>
-          <button class="primary" id="dlgOk">确定</button>
+          <button id="dlgOk" class="filled">确定</button>
         </div>
       </div>
     </div>
@@ -574,7 +768,9 @@
 </div>
 
 <script>
-/* ---------------- 示例数据 ---------------- */
+/* ============================================================
+   数据：库内基线 + 抽样项，看板由状态计算（单一数据源）
+   ============================================================ */
 const IMG = {
   lake:   "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=photorealistic%20mountain%20lake%20at%20golden%20hour%2C%20calm%20water%2C%20pine%20forest%2C%20high%20detail&image_size=square",
   city:   "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=photorealistic%20city%20street%20at%20night%2C%20neon%20signs%2C%20wet%20asphalt%20reflections%2C%20bokeh&image_size=square",
@@ -586,237 +782,589 @@ const IMG = {
   bike:   "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=photorealistic%20red%20bicycle%20leaning%20on%20a%20coastal%20road%20railing%20at%20sunset&image_size=square"
 };
 
-/* 未压缩：kind = photo | live | video */
-const TODO = [
-  {img:'lake',  kind:'live',  size:'12.5 MB'},
-  {img:'city',  kind:'photo', size:'4.8 MB'},
-  {img:'beach', kind:'video', size:'86.3 MB'},
-  {img:'cat',   kind:'photo', size:'3.2 MB'},
-  {img:'forest',kind:'live',  size:'9.7 MB'},
-  {img:'food',  kind:'photo', size:'5.1 MB'},
-  {img:'snow',  kind:'video', size:'142.6 MB'},
-  {img:'bike',  kind:'photo', size:'2.9 MB'},
-  {img:'city',  kind:'live',  size:'11.2 MB'}
+const KIND = { photo:'照片', live:'实况', video:'视频' };
+const RATIO = 0.63;          // 「平衡」档的经验压缩率
+const RETENTION_DAYS = 30;
+
+/* 库内其余媒体（不再逐条展示，只参与统计） */
+const baseline = {
+  todo: { photo:{n:1280, mb:6800}, live:{n:210, mb:2400}, video:{n:85, mb:9600} },
+  done: { photo:{n:640, before:3400, after:1100}, live:{n:56, before:700, after:300}, video:{n:22, before:2600, after:1100} }
+};
+
+/* 抽样项：status = todo | done */
+let items = [
+  {id:'t1', img:'lake',   kind:'live',  name:'IMG_20261001_072255.jpg', mb:12.5, status:'todo'},
+  {id:'t2', img:'city',   kind:'photo', name:'IMG_20260930_184512.jpg', mb:4.8,  status:'todo'},
+  {id:'t3', img:'beach',  kind:'video', name:'VID_20260929_201133.mp4', mb:86.3, status:'todo'},
+  {id:'t4', img:'cat',    kind:'photo', name:'IMG_20260928_143006.jpg', mb:3.2,  status:'todo'},
+  {id:'t5', img:'forest', kind:'live',  name:'IMG_20260927_090118.jpg', mb:9.7,  status:'todo'},
+  {id:'t6', img:'food',   kind:'photo', name:'IMG_20260926_120744.jpg', mb:5.1,  status:'todo'},
+  {id:'t7', img:'snow',   kind:'video', name:'VID_20260925_180922.mp4', mb:142.6,status:'todo'},
+  {id:'t8', img:'bike',   kind:'photo', name:'IMG_20260924_173300.jpg', mb:2.9,  status:'todo'},
+  {id:'t9', img:'city',   kind:'live',  name:'IMG_20260923_210515.jpg', mb:11.2, status:'todo'},
+  {id:'t10', img:'food',  kind:'photo', name:'Screenshot_20260923.png', mb:6.4, status:'todo', skip:'PNG 是无损格式，本版本不处理'},
+  {id:'t11', img:'bike',  kind:'photo', name:'IMG_wechat_20260922.webp', mb:1.8, status:'todo', skip:'WebP 属第三方来源，本版本不处理'},
+  {id:'t12', img:'snow',  kind:'photo', name:'IMG_20260921_110802.dng',  mb:54.2, status:'todo', skip:'RAW/DNG 保留后期空间，不压缩'},
+
+  {id:'d1', img:'cat',    kind:'photo', name:'IMG_20260922_090210.jpg', mb:4.6,  status:'done', after:1.5, days:28},
+  {id:'d2', img:'lake',   kind:'live',  name:'IMG_20260930_184512.jpg', mb:12.1, status:'done', after:4.2, days:28},
+  {id:'d3', img:'snow',   kind:'video', name:'VID_20260928_201133.mp4', mb:96.4, status:'done', after:38.1, days:27},
+  {id:'d4', img:'forest', kind:'live',  name:'IMG_20261001_072255.jpg', mb:10.4, status:'done', after:3.6, days:3},
+  {id:'d5', img:'beach',  kind:'photo', name:'IMG_20260905_173001.jpg', mb:5.3,  status:'done', after:1.7, days:-4}
 ];
 
-/* 已压缩：days = 剩余可还原天数，<0 表示已超期 */
-const DONE = [
-  {img:'cat',   kind:'photo', before:'4.6 MB', after:'1.5 MB', days:28},
-  {img:'lake',  kind:'live',  before:'12.1 MB',after:'4.2 MB', days:28},
-  {img:'snow',  kind:'video', before:'96.4 MB',after:'38.1 MB',days:27},
-  {img:'food',  kind:'photo', before:'3.8 MB', after:'1.2 MB', days:12},
-  {img:'forest',kind:'live',  before:'10.4 MB',after:'3.6 MB', days:3},
-  {img:'beach', kind:'photo', before:'5.3 MB', after:'1.7 MB', days:-4}
-];
+/* ============================================================
+   工具
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const fmtSize = mb => mb >= 1024 ? (mb/1024).toFixed(1) + ' GB' : mb.toFixed(1) + ' MB';
+const fmtNum  = n => n.toLocaleString('zh-CN');
 
-const TRASH = [
-  {img:'lake', name:'IMG_20260930_184512.jpg', kind:'实况照片', size:'12.1 MB', days:28},
-  {img:'snow', name:'VID_20260928_201133.mp4', kind:'视频',     size:'96.4 MB', days:27},
-  {img:'food', name:'IMG_20260922_090210.jpg', kind:'普通照片', size:'3.8 MB',  days:12},
-  {img:'forest',name:'IMG_20261001_072255.jpg',kind:'实况照片', size:'10.4 MB', days:3},
-  {img:'beach',name:'IMG_20260905_173001.jpg', kind:'普通照片', size:'5.3 MB',  days:-4}
-];
-
-const KIND_LABEL = {photo:'照片', live:'实况', video:'视频'};
-
-/* ---------------- 渲染 ---------------- */
-const checkSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.6 16.2 5.4 12l-1.4 1.4 5.6 5.6L20.4 8.2 19 6.8 9.6 16.2Z"/></svg>';
-const playSvg  = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5Z"/></svg>';
-
-function todoTile(item, i){
-  return `
-    <div class="tile" data-kind="${item.kind}" data-i="${i}" data-size="${item.size}">
-      <img src="${IMG[item.img]}" alt="">
-      ${item.kind === 'video' ? `<div class="play"><span>${playSvg}</span></div>` : ''}
-      ${item.kind === 'live'  ? `<div class="badge">实况</div>` : ''}
-      <div class="pick">${checkSvg}</div>
-      <div class="meta"><span>${KIND_LABEL[item.kind]}</span><span>${item.size}</span></div>
-    </div>`;
+function toast(msg){
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('on'), 2400);
 }
 
-function doneTile(item, i){
-  const locked = item.days < 0;
-  return `
-    <div class="tile ${locked ? 'locked' : ''}" data-i="${i}" data-locked="${locked}">
-      <img src="${IMG[item.img]}" alt="">
-      ${item.kind === 'video' ? `<div class="play"><span>${playSvg}</span></div>` : ''}
-      <div class="badge ${locked ? 'locked' : 'done'}">${locked ? '已超期' : '已压缩'}</div>
-      ${locked ? '' : `<div class="pick">${checkSvg}</div>`}
-      <div class="meta"><span>${item.before}</span><span>${item.after}</span></div>
-    </div>`;
+/* ============================================================
+   看板：全部由 items + baseline 计算
+   ============================================================ */
+function computeTotals(){
+  const todo = {
+    photo:{n:baseline.todo.photo.n, mb:baseline.todo.photo.mb},
+    live: {n:baseline.todo.live.n,  mb:baseline.todo.live.mb},
+    video:{n:baseline.todo.video.n, mb:baseline.todo.video.mb}
+  };
+  const done = {
+    photo:{n:baseline.done.photo.n, before:baseline.done.photo.before, after:baseline.done.photo.after},
+    live: {n:baseline.done.live.n,  before:baseline.done.live.before,  after:baseline.done.live.after},
+    video:{n:baseline.done.video.n, before:baseline.done.video.before, after:baseline.done.video.after}
+  };
+
+  items.forEach(it => {
+    if (it.status === 'todo'){
+      todo[it.kind].n += 1;
+      todo[it.kind].mb += it.mb;
+    } else {
+      done[it.kind].n += 1;
+      done[it.kind].before += it.mb;
+      done[it.kind].after  += it.after;
+    }
+  });
+
+  const todoN = todo.photo.n + todo.live.n + todo.video.n;
+  const todoMb = todo.photo.mb + todo.live.mb + todo.video.mb;
+  const doneN = done.photo.n + done.live.n + done.video.n;
+  const before = done.photo.before + done.live.before + done.video.before;
+  const after  = done.photo.after  + done.live.after  + done.video.after;
+  const saved  = before - after;
+  const pct    = (before + todoMb) > 0 ? (saved / (before + todoMb) * 100) : 0;
+
+  return { todo, done, todoN, todoMb, doneN, before, after, saved, pct };
 }
 
-function trashRow(t, i){
-  const expired = t.days < 0;
-  const remain = expired ? '已超期，不可还原' : `剩余 ${t.days} 天可还原`;
-  return `
+function renderHome(){
+  const t = computeTotals();
+
+  $('ringVal').textContent = (t.saved/1024).toFixed(1) + 'G';
+  $('ring').style.setProperty('--p', t.pct.toFixed(1));
+  $('savedTotal').textContent = '已节约 ' + fmtSize(t.saved);
+  const ratio = t.before > 0 ? ((t.saved / t.before) * 100).toFixed(0) : '0';
+  $('savedNote').textContent =
+    `占全部媒体原始大小（${fmtSize(t.todoMb + t.before)}）的 ${t.pct.toFixed(1)}%，已压缩部分压缩率 ${ratio}%`;
+
+  $('kpiTodoCount').textContent = fmtNum(t.todoN) + ' 项';
+  $('kpiTodoSize').textContent  = '共 ' + fmtSize(t.todoMb);
+  $('kpiDoneCount').textContent = fmtNum(t.doneN) + ' 项';
+  $('kpiDoneSize').textContent  = fmtSize(t.before) + ' → ' + fmtSize(t.after);
+
+  $('homeRows').innerHTML = ['photo','live','video'].map(k => `
     <div class="row">
-      <div class="lead" style="padding:0; overflow:hidden; background:none">
-        <img src="${IMG[t.img]}" alt="" style="width:38px;height:38px;object-fit:cover;border-radius:12px;display:block">
-      </div>
-      <div class="body">
-        <b>${t.name}</b>
-        <span>${t.kind} · ${t.size} · ${remain}</span>
-      </div>
-      <div class="trail" style="color:${expired ? 'var(--warning)' : 'inherit'}">${expired ? '超期' : '可还原'}</div>
-    </div>`;
+      <span class="lead" aria-hidden="true">${KIND_ICON[k]}</span>
+      <span class="body">
+        <b>${KIND_LONG[k]}</b>
+        <span>未压缩 ${fmtNum(t.todo[k].n)} · 已压缩 ${fmtNum(t.done[k].n)}</span>
+      </span>
+      <span class="trail">${fmtSize(t.todo[k].mb)}<br>${fmtSize(t.done[k].after)}</span>
+    </div>`).join('');
+
+  $('todoSub').textContent = `${fmtNum(t.todoN)} 项 · 共 ${fmtSize(t.todoMb)}`;
+  $('doneSub').textContent = `${fmtNum(t.doneN)} 项 · ${fmtSize(t.before)} → ${fmtSize(t.after)}`;
+  $('trashSub').textContent = `${fmtNum(t.doneN)} 份原始文件 · 占用 ${fmtSize(t.before)}`;
+  $('setTrashNote').textContent = `${fmtNum(t.doneN)} 份原始文件 · ${fmtSize(t.before)}`;
+  $('homeSub').textContent = '已扫描本机媒体 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
 }
 
-document.getElementById('todoGrid').innerHTML = TODO.map(todoTile).join('');
-document.getElementById('doneGrid').innerHTML = DONE.map(doneTile).join('');
-document.getElementById('trashRows').innerHTML = TRASH.map(trashRow).join('');
+const KIND_LONG = { photo:'普通照片', live:'实况照片', video:'视频' };
+const KIND_ICON = {
+  photo:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg>',
+  live:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>',
+  video:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 3.5V7l-4 3.5Z"/></svg>'
+};
 
-/* ---------------- 页面切换 ---------------- */
+/* ============================================================
+   列表渲染
+   ============================================================ */
+const CHECK = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.6 16.2 5.4 12l-1.4 1.4 5.6 5.6L20.4 8.2 19 6.8 9.6 16.2Z"/></svg>';
+const PLAY  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>';
+
+const selected = { todo:new Set(), done:new Set() };
+let filter = { todo:'all', done:'all' };
+
+function todoTile(it){
+  const skip = !!it.skip;
+  const label = `${it.name}，${KIND[it.kind]}，${fmtSize(it.mb)}${skip ? '，' + it.skip : ''}`;
+  return `
+    <button class="tile" data-id="${it.id}" data-kind="${it.kind}" data-skip="${skip ? 1 : 0}"
+            aria-pressed="${selected.todo.has(it.id)}" aria-label="${label}" title="${it.name}">
+      <img src="${IMG[it.img]}" alt="">
+      ${it.kind === 'video' ? `<span class="play" aria-hidden="true"><span>${PLAY}</span></span>` : ''}
+      ${skip ? '<span class="badge skip">不支持</span>' : (it.kind === 'live' ? '<span class="badge">实况</span>' : '')}
+      <span class="pick" aria-hidden="true">${skip ? '' : CHECK}</span>
+      <span class="meta" aria-hidden="true"><span>${KIND[it.kind]}</span><span>${skip ? '—' : fmtSize(it.mb)}</span></span>
+    </button>`;
+}
+
+function doneTile(it){
+  const expired = it.days < 0;
+  const label = `${it.name}，${KIND[it.kind]}，${fmtSize(it.mb)} 压缩为 ${fmtSize(it.after)}，${expired ? '已超过 30 天，无法还原' : '剩余 ' + it.days + ' 天可还原'}`;
+  return `
+    <button class="tile" data-id="${it.id}" data-state="${expired ? 'expired' : 'restorable'}"
+            aria-pressed="${!expired && selected.done.has(it.id)}" aria-label="${label}"
+            ${expired ? 'aria-disabled="true"' : ''} title="${it.name}">
+      <img src="${IMG[it.img]}" alt="">
+      ${it.kind === 'video' ? `<span class="play" aria-hidden="true"><span>${PLAY}</span></span>` : ''}
+      <span class="badge ${expired ? 'skip' : 'done'}">${expired ? '已超期' : '已压缩'}</span>
+      <span class="pick" aria-hidden="true">${expired ? '' : CHECK}</span>
+      <span class="meta" aria-hidden="true"><span>${fmtSize(it.mb)}</span><span>${fmtSize(it.after)}</span></span>
+    </button>`;
+}
+
+function renderTodo(){
+  const list = items.filter(i => i.status === 'todo');
+  const shown = list.filter(i => {
+    if (filter.todo === 'all') return true;
+    if (filter.todo === 'skip') return !!i.skip;
+    return !i.skip && i.kind === filter.todo;
+  });
+
+  const compressible = shown.filter(i => !i.skip).length;
+  $('todoFilterNote').textContent = `显示 ${shown.length} 项 · 可压缩 ${compressible} 项`;
+
+  $('todoGrid').innerHTML = shown.length
+    ? shown.map(todoTile).join('')
+    : emptyState('该筛选下没有可压缩项', '换一个类型，或查看「不支持」了解原因');
+  $('todoAll').disabled = compressible === 0;
+  updateTodoBar();
+}
+
+function renderDone(){
+  const list = items.filter(i => i.status === 'done');
+  const shown = list.filter(i => {
+    if (filter.done === 'all') return true;
+    if (filter.done === 'expired') return i.days < 0;
+    return i.days >= 0;
+  });
+
+  const restorable = shown.filter(i => i.days >= 0).length;
+  $('doneFilterNote').textContent = `显示 ${shown.length} 项 · 可还原 ${restorable} 项`;
+
+  $('doneGrid').innerHTML = shown.length
+    ? shown.map(doneTile).join('')
+    : emptyState('该筛选下没有条目', '切换筛选查看其他已压缩媒体');
+  $('doneAll').disabled = restorable === 0;
+  updateDoneBar();
+}
+
+function renderTrash(){
+  const list = items.filter(i => i.status === 'done');
+  $('trashRows').innerHTML = list.length
+    ? list.map(it => {
+        const expired = it.days < 0;
+        return `
+        <div class="row">
+          <span class="lead" aria-hidden="true" style="background:none;padding:0">
+            <img src="${IMG[it.img]}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:var(--radius-sm)">
+          </span>
+          <span class="body">
+            <b class="ellipsis" title="${it.name}">${it.name}</b>
+            <span>${KIND_LONG[it.kind]} · ${fmtSize(it.mb)} · ${expired ? '已超期，等待自动清理' : '剩余 ' + it.days + ' 天可还原'}</span>
+          </span>
+          <span class="trail ${expired ? 'warn' : ''}">${expired ? '超期' : '可还原'}</span>
+        </div>`;
+      }).join('')
+    : emptyState('回收站是空的', '压缩照片后，原文件会保留在这里 30 天');
+
+  $('trashPurge').disabled = list.length === 0;
+  $('trashPurge').textContent = list.length
+    ? `清理全部备份（释放 ${fmtSize(computeTotals().before)}）`
+    : '暂无可清理备份';
+}
+
+function emptyState(title, desc){
+  return `<div class="empty" style="grid-column:1/-1">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg>
+    <b>${title}</b><p>${desc}</p></div>`;
+}
+
+/* ============================================================
+   底部操作条
+   ============================================================ */
+function visibleTodoIds(){
+  return [...$('todoGrid').querySelectorAll('.tile[data-skip="0"]')].map(t => t.dataset.id);
+}
+function visibleDoneIds(){
+  return [...$('doneGrid').querySelectorAll('.tile[data-state="restorable"]')].map(t => t.dataset.id);
+}
+
+function updateTodoBar(){
+  const ids = [...selected.todo].filter(id => {
+    const it = items.find(i => i.id === id);
+    return it && it.status === 'todo' && !it.skip;
+  });
+  const sel = ids.map(id => items.find(i => i.id === id));
+  const mb = sel.reduce((s, i) => s + i.mb, 0);
+
+  $('todoInfo').innerHTML = sel.length
+    ? `<b>已选 ${sel.length} 项 · 共 ${fmtSize(mb)}</b><span>预计可节约约 ${fmtSize(mb * RATIO)}（按平衡档估算）</span>`
+    : `<b>未选择</b><span>勾选后可预估节约空间</span>`;
+
+  $('todoBtn').disabled = sel.length === 0 || busy;
+  $('todoBtn').textContent = sel.length ? `压缩所选（${sel.length}）` : '压缩所选';
+
+  const allIds = visibleTodoIds();
+  const allChosen = allIds.length > 0 && allIds.every(id => selected.todo.has(id));
+  $('todoAll').textContent = allChosen ? '取消全选' : '全选可压缩项';
+}
+
+function updateDoneBar(){
+  const sel = [...selected.done].filter(id => {
+    const it = items.find(i => i.id === id);
+    return it && it.status === 'done' && it.days >= 0;
+  });
+  $('doneInfo').innerHTML = sel.length
+    ? `<b>已选 ${sel.length} 项</b><span>还原后恢复原始画质与体积</span>`
+    : `<b>未选择</b><span>仅 30 天内可还原，超期条目已锁定</span>`;
+
+  $('doneBtn').disabled = sel.length === 0 || busy;
+  $('doneBtn').textContent = sel.length ? `还原所选（${sel.length}）` : '还原所选';
+
+  const allIds = visibleDoneIds();
+  const allChosen = allIds.length > 0 && allIds.every(id => selected.done.has(id));
+  $('doneAll').textContent = allChosen ? '取消全选' : '全选可还原';
+}
+
+/* ============================================================
+   批量操作：确定性进度 + 状态迁移 + 看板联动
+   ============================================================ */
+let busy = false;
+
+function runBatch(barId, label, onDone){
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const box = $(barId);
+  const fill = box.querySelector('i');
+  const text = box.querySelector('em');
+  const info = $(barId === 'todoProgress' ? 'todoInfo' : 'doneInfo');
+
+  busy = true;
+  box.classList.add('on');
+  box.setAttribute('aria-hidden','false');
+  info.style.visibility = 'hidden';
+  updateTodoBar(); updateDoneBar();
+
+  const total = reduced ? 1 : 14;
+  let step = 0;
+  const tick = () => {
+    step++;
+    const p = Math.round(step / total * 100);
+    fill.style.width = p + '%';
+    text.textContent = p + '%';
+    if (step < total){ setTimeout(tick, reduced ? 10 : 60); return; }
+    box.classList.remove('on');
+    box.setAttribute('aria-hidden','true');
+    fill.style.width = '0%'; text.textContent = '0%';
+    info.style.visibility = '';
+    busy = false;
+    onDone();
+  };
+  toast(label);
+  setTimeout(tick, reduced ? 10 : 120);
+}
+
+$('todoBtn').addEventListener('click', () => {
+  const ids = [...selected.todo].filter(id => {
+    const it = items.find(i => i.id === id);
+    return it && it.status === 'todo' && !it.skip;
+  });
+  if (!ids.length) return;
+
+  confirmDialog({
+    title:'压缩所选媒体',
+    body:`将压缩 ${ids.length} 项。原文件会保留在回收站 30 天，期间可随时还原；压缩后存储位置、拍摄时间与元信息保持不变。`,
+    okLabel:`压缩 ${ids.length} 项`,
+    onOk(){
+      runBatch('todoProgress', `正在压缩 ${ids.length} 项…`, () => {
+        ids.forEach(id => {
+          const it = items.find(i => i.id === id);
+          it.status = 'done';
+          it.after = +(it.mb * RATIO).toFixed(1);
+          it.days = RETENTION_DAYS;
+        });
+        selected.todo.clear();
+        renderAll();
+        toast(`已压缩 ${ids.length} 项，节约约 ${fmtSize(ids.reduce((s,id) => s + items.find(i=>i.id===id).mb * RATIO, 0))}`);
+      });
+    }
+  });
+});
+
+$('doneBtn').addEventListener('click', () => {
+  const ids = [...selected.done].filter(id => {
+    const it = items.find(i => i.id === id);
+    return it && it.status === 'done' && it.days >= 0;
+  });
+  if (!ids.length) return;
+
+  confirmDialog({
+    title:'还原原文件',
+    body:`将用回收站中的原始文件还原 ${ids.length} 项，恢复原始画质与体积。还原后备份会被移除。`,
+    okLabel:'还原',
+    onOk(){
+      runBatch('doneProgress', `正在还原 ${ids.length} 项…`, () => {
+        ids.forEach(id => {
+          const it = items.find(i => i.id === id);
+          it.status = 'todo';
+          delete it.after; delete it.days;
+        });
+        selected.done.clear();
+        renderAll();
+        toast(`已还原 ${ids.length} 项`);
+      });
+    }
+  });
+});
+
+$('trashPurge').addEventListener('click', () => {
+  const t = computeTotals();
+  if (!items.some(i => i.status === 'done')) return;
+  confirmDialog({
+    title:'清理回收站',
+    body:`将永久删除回收站中的 ${fmtNum(t.doneN)} 份原始文件，释放 ${fmtSize(t.before)} 空间。此操作不可撤销，删除后这些照片无法再还原。`,
+    okLabel:`永久删除 ${fmtSize(t.before)}`,
+    danger:true,
+    onOk(){
+      items = items.filter(i => i.status !== 'done');
+      selected.done.clear();
+      renderAll();
+      toast(`已清理回收站，释放 ${fmtSize(t.before)}`);
+    }
+  });
+});
+
+/* ============================================================
+   选择交互
+   ============================================================ */
+$('todoGrid').addEventListener('click', e => {
+  const tile = e.target.closest('.tile');
+  if (!tile || busy) return;
+
+  if (tile.dataset.skip === '1'){
+    const it = items.find(i => i.id === tile.dataset.id);
+    toast(it.skip);
+    return;
+  }
+  const id = tile.dataset.id;
+  selected.todo.has(id) ? selected.todo.delete(id) : selected.todo.add(id);
+  tile.setAttribute('aria-pressed', String(selected.todo.has(id)));
+  updateTodoBar();
+});
+
+$('doneGrid').addEventListener('click', e => {
+  const tile = e.target.closest('.tile');
+  if (!tile || busy) return;
+
+  if (tile.dataset.state === 'expired'){
+    toast('该条目已超过 30 天，无法还原。可在回收站清理以释放空间。');
+    return;
+  }
+  const id = tile.dataset.id;
+  selected.done.has(id) ? selected.done.delete(id) : selected.done.add(id);
+  tile.setAttribute('aria-pressed', String(selected.done.has(id)));
+  updateDoneBar();
+});
+
+/* 全选 / 取消全选（只作用于当前筛选下可见且可行的项） */
+$('todoAll').addEventListener('click', () => {
+  const ids = visibleTodoIds();
+  const allChosen = ids.length > 0 && ids.every(id => selected.todo.has(id));
+  ids.forEach(id => allChosen ? selected.todo.delete(id) : selected.todo.add(id));
+  if (!allChosen && ids.length > 9) toast(`已全选 ${ids.length} 项可压缩媒体`);
+  renderTodo();
+});
+
+$('doneAll').addEventListener('click', () => {
+  const ids = visibleDoneIds();
+  const allChosen = ids.length > 0 && ids.every(id => selected.done.has(id));
+  ids.forEach(id => allChosen ? selected.done.delete(id) : selected.done.add(id));
+  renderDone();
+});
+
+/* 筛选：切换时清空选择，避免“已选 N 项”与屏幕不符 */
+document.querySelectorAll('[data-filter]').forEach(group => {
+  const which = group.dataset.filter;
+  group.addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    group.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed','false'));
+    chip.setAttribute('aria-pressed','true');
+
+    const cleared = which === 'todo' ? selected.todo.size : selected.done.size;
+    filter[which] = which === 'todo' ? chip.dataset.kind : chip.dataset.state;
+    (which === 'todo' ? selected.todo : selected.done).clear();
+
+    which === 'todo' ? renderTodo() : renderDone();
+    if (cleared) toast('切换筛选已清空选择');
+  });
+  group.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const chips = [...group.querySelectorAll('.chip')];
+    const i = chips.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = chips[(i + (e.key === 'ArrowRight' ? 1 : chips.length - 1)) % chips.length];
+    next.focus(); next.click();
+  });
+});
+
+/* ============================================================
+   页面切换
+   ============================================================ */
 function go(page){
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + page));
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.page === page));
-  document.querySelectorAll('.controls button[data-page]').forEach(b => b.classList.toggle('on', b.dataset.page === page));
-  document.getElementById('screen').scrollTop = 0;
+  document.querySelectorAll('#nav .navbtn').forEach(b => b.setAttribute('aria-current', String(b.dataset.page === page)));
+  document.querySelectorAll('.controls .nav').forEach(b => b.setAttribute('aria-current', b.dataset.page === page ? 'page' : 'false'));
+  $('screen').scrollTop = 0;
 }
 document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => go(b.dataset.page)));
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
-document.getElementById('trashEntry').addEventListener('click', () => go('trash'));
+document.querySelector('[data-rescan]').addEventListener('click', () => {
+  renderHome();
+  toast('已重新扫描媒体库');
+});
 
-/* ---------------- 明暗色 / 强调色 ---------------- */
+/* ============================================================
+   外观切换
+   ============================================================ */
 document.querySelectorAll('[data-theme]').forEach(btn => btn.addEventListener('click', () => {
-  const vp = document.getElementById('vp');
+  const vp = $('vp');
+  // 主题切换抑制过渡，避免整页交叉淡入
+  const kill = document.createElement('style');
+  kill.textContent = '*,*::before,*::after{transition:none !important}';
+  document.head.appendChild(kill);
   vp.classList.toggle('theme-dark', btn.dataset.theme === 'dark');
   vp.classList.toggle('theme-light', btn.dataset.theme === 'light');
-  document.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('on', b === btn));
+  void vp.offsetHeight;
+  requestAnimationFrame(() => kill.remove());
+  document.querySelectorAll('[data-theme]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
 }));
 document.querySelectorAll('[data-accent]').forEach(btn => btn.addEventListener('click', () => {
-  const vp = document.getElementById('vp');
+  const vp = $('vp');
   vp.classList.remove('accent-violet','accent-green','accent-amber');
   vp.classList.add(btn.dataset.accent);
-  document.querySelectorAll('[data-accent]').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('[data-accent]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
 }));
 
-/* ---------------- 提示与对话框 ---------------- */
-let toastTimer;
-function toast(msg){
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
-}
-document.querySelectorAll('[data-toast]').forEach(b => b.addEventListener('click', () => toast(b.dataset.toast)));
-document.querySelectorAll('.chips').forEach(group => {
-  group.querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
-    group.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
-    chip.classList.add('on');
-    if (group.id === 'todoChips') filterGrid('todoGrid', chip.textContent);
-    if (group.id === 'doneChips') filterGrid('doneGrid', chip.textContent);
-  }));
-});
-function filterGrid(id, label){
-  const grid = document.getElementById(id);
-  grid.querySelectorAll('.tile').forEach(tile => {
-    let show = true;
-    if (label === '照片') show = tile.dataset.kind === 'photo';
-    else if (label === '实况') show = tile.dataset.kind === 'live';
-    else if (label === '视频') show = tile.dataset.kind === 'video';
-    else if (label === '可还原') show = tile.dataset.locked === 'false';
-    else if (label === '已超期') show = tile.dataset.locked === 'true';
-    tile.style.display = show ? '' : 'none';
+/* ============================================================
+   设置：档位（含保存反馈）
+   ============================================================ */
+document.querySelectorAll('[data-tier]').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+    const flag = document.querySelector(`[data-flag="${seg.dataset.tier}"]`);
+    flag.classList.add('on');
+    clearTimeout(flag._t);
+    flag._t = setTimeout(() => flag.classList.remove('on'), 1600);
   });
-}
-
-function dialog(title, body, okText, onOk){
-  const wrap = document.getElementById('dialog');
-  document.getElementById('dlgTitle').textContent = title;
-  document.getElementById('dlgBody').textContent = body;
-  const ok = document.getElementById('dlgOk');
-  ok.textContent = okText;
-  wrap.classList.add('show');
-  ok.onclick = () => { wrap.classList.remove('show'); onOk && onOk(); };
-  document.getElementById('dlgCancel').onclick = () => wrap.classList.remove('show');
-}
-
-/* ---------------- 未压缩页多选 ---------------- */
-const todoGrid = document.getElementById('todoGrid');
-todoGrid.addEventListener('click', e => {
-  const tile = e.target.closest('.tile');
-  if (!tile) return;
-  tile.classList.toggle('on');
-  updateTodoBar();
+  seg.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const items = [...seg.querySelectorAll('button')];
+    const i = items.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = items[(i + (e.key === 'ArrowRight' ? 1 : items.length - 1)) % items.length];
+    next.focus(); next.click();
+  });
 });
-function selectedTodo(){
-  return [...todoGrid.querySelectorAll('.tile.on')];
+
+/* ============================================================
+   对话框：焦点陷阱 + 还原 + Esc
+   ============================================================ */
+const scrim = $('scrim');
+let lastFocus = null;
+
+function confirmDialog({ title, body, okLabel, danger, onOk }){
+  $('dlgTitle').textContent = title;
+  $('dlgBody').textContent = body;
+  const ok = $('dlgOk');
+  ok.textContent = okLabel;
+  ok.className = 'filled' + (danger ? ' danger' : '');
+
+  lastFocus = document.activeElement;
+  scrim.classList.add('on');
+  $('appRoot').inert = true;
+  ok.focus();
+
+  const close = () => {
+    scrim.classList.remove('on');
+    $('appRoot').inert = false;
+    ok.onclick = null;
+    if (lastFocus && lastFocus.isConnected) lastFocus.focus();
+  };
+  ok.onclick = () => { close(); onOk && onOk(); };
+  $('dlgCancel').onclick = close;
+  scrim._close = close;
 }
-function updateTodoBar(){
-  const sel = selectedTodo();
-  const count = document.getElementById('todoCount');
-  const save = document.getElementById('todoSave');
-  const btn = document.getElementById('todoBtn');
-  if (!sel.length){
-    count.textContent = '未选择';
-    save.textContent = '勾选后可预估节约空间';
-    btn.disabled = true;
-    return;
+
+scrim.addEventListener('click', e => { if (e.target === scrim && scrim._close) scrim._close(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && scrim.classList.contains('on') && scrim._close) scrim._close();
+
+  // 焦点陷阱
+  if (e.key === 'Tab' && scrim.classList.contains('on')){
+    const f = [...scrim.querySelectorAll('button:not(:disabled)')];
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
   }
-  const total = sel.reduce((sum, t) => sum + parseFloat(t.dataset.size), 0);
-  count.textContent = `已选 ${sel.length} 项 · 共 ${total.toFixed(1)} MB`;
-  save.textContent = `预计可节约约 ${(total * 0.63).toFixed(1)} MB（按平衡档估算）`;
-  btn.disabled = false;
+});
+
+/* ============================================================
+   渲染入口
+   ============================================================ */
+function renderAll(){
+  renderHome();
+  renderTodo();
+  renderDone();
+  renderTrash();
 }
-document.getElementById('todoBtn').addEventListener('click', () => {
-  const sel = selectedTodo();
-  if (!sel.length) return;
-  dialog('开始压缩', `将压缩所选 ${sel.length} 项媒体。原文件会保留在回收站 30 天，期间可随时还原；压缩后路径与拍摄时间保持不变。`, '开始压缩', () => {
-    toast(`已加入压缩队列：${sel.length} 项（原型示意）`);
-    sel.forEach(t => t.classList.remove('on'));
-    updateTodoBar();
-  });
-});
 
-/* ---------------- 已压缩页多选 ---------------- */
-const doneGrid = document.getElementById('doneGrid');
-doneGrid.addEventListener('click', e => {
-  const tile = e.target.closest('.tile');
-  if (!tile) return;
-  if (tile.dataset.locked === 'true'){ toast('该条目已超过 30 天，无法还原'); return; }
-  tile.classList.toggle('on');
-  updateDoneBar();
-});
-function selectedDone(){ return [...doneGrid.querySelectorAll('.tile.on')]; }
-function updateDoneBar(){
-  const sel = selectedDone();
-  const count = document.getElementById('doneCount');
-  const btn = document.getElementById('doneBtn');
-  if (!sel.length){ count.textContent = '未选择'; btn.disabled = true; return; }
-  count.textContent = `已选 ${sel.length} 项`;
-  btn.disabled = false;
-}
-document.getElementById('doneBtn').addEventListener('click', () => {
-  const sel = selectedDone();
-  if (!sel.length) return;
-  dialog('还原原文件', `将用回收站中的原始文件还原所选 ${sel.length} 项，恢复原始画质与体积。`, '还原', () => {
-    toast(`已开始还原：${sel.length} 项（原型示意）`);
-    sel.forEach(t => { t.classList.remove('on'); t.querySelector('.badge').textContent = '已还原'; });
-    updateDoneBar();
-  });
-});
+// 单项卡片的图片加载失败时给出可辨的占位，而不是空白
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (img.tagName === 'IMG'){
+    img.style.background = 'linear-gradient(135deg, var(--surface-sunken), var(--divider))';
+    img.removeAttribute('src');
+  }
+}, true);
 
-/* ---------------- 回收站 ---------------- */
-document.getElementById('trashAll').addEventListener('click', () => {
-  dialog('清理回收站', '将永久删除回收站中的 723 份原始文件，释放 6.7 GB 空间。此操作不可撤销，删除后这些照片将无法再还原。', '永久清理', () => {
-    toast('已清理回收站，释放 6.7 GB（原型示意）');
-  });
-});
-
-/* ---------------- 设置分段控件 ---------------- */
-document.querySelectorAll('.segmented').forEach(seg => {
-  seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-    seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-    btn.classList.add('on');
-    const label = {photo:'普通照片', live:'实况照片', video:'视频'}[seg.dataset.seg];
-    toast(`${label}质量档位：已切换为「${btn.textContent}」`);
-  }));
-});
-
-/* 初始状态 */
-updateTodoBar();
-updateDoneBar();
+renderAll();
 </script>
 </body>
 </html>
