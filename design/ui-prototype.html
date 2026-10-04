@@ -192,7 +192,7 @@
     padding:0 var(--space-5); font-size:var(--text-caption); font-weight:600;
     color:var(--on-surface-muted); font-variant-numeric:tabular-nums;
   }
-  .screen{ flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+  .screen{ flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
   .screen::-webkit-scrollbar{ display:none; }
 
   /* ---------- 通用 ---------- */
@@ -429,14 +429,15 @@
   .navbtn[aria-current="page"]{ color:var(--on-surface); font-weight:700; }
   .navbtn[aria-current="page"] .pill{ background:var(--neutral-container); color:var(--on-neutral-container); }
 
-  /* 底部操作条（含 safe-area） */
+  /* 底部操作条：固定在底部导航之上，不随内容滚动（safe-area 由导航承载） */
   .actionbar{
-    position:sticky; bottom:0; z-index:6; margin-top:var(--space-4);
+    display:none; flex:0 0 auto; z-index:6;
     background:var(--surface-raised); box-shadow:var(--shadow-chrome);
     border-radius:var(--radius-xl) var(--radius-xl) 0 0;
-    padding:var(--space-3) var(--space-5) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-    display:flex; align-items:center; gap:var(--space-3);
+    padding:var(--space-3) var(--space-5);
+    align-items:center; gap:var(--space-3);
   }
+  .actionbar.on{ display:flex; }
   .actionbar .info{ flex:1 1 auto; min-width:0; font-size:var(--text-caption); color:var(--on-surface-muted); line-height:1.5; }
   .actionbar .info b{ display:block; font-size:var(--text-body); color:var(--on-surface); font-weight:600; font-variant-numeric:tabular-nums; }
 
@@ -459,6 +460,8 @@
     font-size:var(--text-label); font-weight:500; text-align:center; line-height:1.5; z-index:20;
   }
   .toast.on{ opacity:1; transform:translate(-50%, 0); }
+  /* 操作条出现时把提示上移，避免遮挡 */
+  .viewport.with-bar .toast{ bottom:156px; }
   @media (prefers-reduced-motion: no-preference){
     .toast{ transition-property:opacity,transform; transition-duration:var(--dur-base); transition-timing-function:var(--ease-out); }
   }
@@ -608,14 +611,6 @@
           </div>
 
           <div class="grid" id="todoGrid"></div>
-
-          <div class="actionbar">
-            <div class="info" id="todoInfo"><b>未选择</b><span>勾选后可预估节约空间</span></div>
-            <div class="progress" id="todoProgress" aria-hidden="true">
-              <span class="bar"><i></i></span><em>0%</em>
-            </div>
-            <button class="btn" id="todoBtn" disabled>压缩所选</button>
-          </div>
         </section>
 
         <!-- ========== 已压缩 ========== -->
@@ -642,14 +637,6 @@
           </div>
 
           <div class="grid" id="doneGrid"></div>
-
-          <div class="actionbar">
-            <div class="info" id="doneInfo"><b>未选择</b><span>仅 30 天内可还原，超期条目已锁定</span></div>
-            <div class="progress" id="doneProgress" aria-hidden="true">
-              <span class="bar"><i></i></span><em>0%</em>
-            </div>
-            <button class="btn neutral" id="doneBtn" disabled>还原所选</button>
-          </div>
         </section>
 
         <!-- ========== 回收站 ========== -->
@@ -757,6 +744,23 @@
         </section>
 
       </main>
+
+      <!-- 操作条：固定在底部导航之上，不随内容滚动 -->
+      <div class="actionbar" id="barTodo">
+        <div class="info" id="todoInfo"><b>未选择</b><span>勾选后可预估节约空间</span></div>
+        <div class="progress" id="todoProgress" aria-hidden="true">
+          <span class="bar"><i></i></span><em>0%</em>
+        </div>
+        <button class="btn" id="todoBtn" disabled>压缩所选</button>
+      </div>
+
+      <div class="actionbar" id="barDone">
+        <div class="info" id="doneInfo"><b>未选择</b><span>仅 30 天内可还原，超期条目已锁定</span></div>
+        <div class="progress" id="doneProgress" aria-hidden="true">
+          <span class="bar"><i></i></span><em>0%</em>
+        </div>
+        <button class="btn neutral" id="doneBtn" disabled>还原所选</button>
+      </div>
 
       <nav class="bottom-nav" id="nav" aria-label="主导航">
         <button class="navbtn" data-page="home" aria-current="page">
@@ -1284,6 +1288,11 @@ function go(page){
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + page));
   document.querySelectorAll('#nav .navbtn').forEach(b => b.setAttribute('aria-current', String(b.dataset.page === page)));
   document.querySelectorAll('.controls .nav').forEach(b => b.setAttribute('aria-current', b.dataset.page === page ? 'page' : 'false'));
+  // 操作条按页面固定在底部
+  const hasBar = page === 'todo' || page === 'done';
+  $('barTodo').classList.toggle('on', page === 'todo');
+  $('barDone').classList.toggle('on', page === 'done');
+  $('vp').classList.toggle('with-bar', hasBar);
   $('screen').scrollTop = 0;
 }
 document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => go(b.dataset.page)));
