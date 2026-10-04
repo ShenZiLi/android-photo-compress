@@ -79,12 +79,15 @@ class CompressionEngine(private val context: Context) {
         val originalModifiedSec = (file.lastModified() / 1000L).takeIf { it > 0 } ?: item.dateModifiedSec
         val originalSha = FileUtils.sha256(file)
         val id = UUID.randomUUID().toString()
-        val quality = JpegCompressor.qualityFor(tier)
+        // HEIC 的编码效率高于 JPEG：用同等质量转 JPEG 往往会变大，
+        // 因此这里在同档位上再降一档质量，尽量取得体积收益（仍保留「不变小就跳过」的保护）。
+        val quality = (JpegCompressor.qualityFor(tier) - 12).coerceAtLeast(70)
 
         val temp = File(context.cacheDir, "pc_heic_${System.currentTimeMillis()}.jpg")
-        if (!HeicCompressor.convert(file, temp, quality)) {
+        val convertError = HeicCompressor.convert(file, temp, quality)
+        if (convertError != null) {
             temp.delete()
-            return CompressOutcome.Skipped("HEIC 解码失败（设备缺少对应解码器）")
+            return CompressOutcome.Skipped(convertError)
         }
         if (temp.length() >= originalSize) {
             val outSize = temp.length()
@@ -113,6 +116,8 @@ class CompressionEngine(private val context: Context) {
             FileUtils.copy(temp, target)
             target.setLastModified(file.lastModified())
 
+            // 先物理删除原 HEIC，再重建媒体库索引（删除旧行会连带删文件，顺序不能颠倒）
+            file.delete()
             val newUri = MediaStoreUpdater.reindex(context, item.uri, target.absolutePath)
             val newId = newUri?.let { runCatching { android.content.ContentUris.parseId(it) }.getOrNull() } ?: 0L
 
@@ -143,8 +148,6 @@ class CompressionEngine(private val context: Context) {
                 backupSize = backupSize,
                 status = CompressedItemEntity.STATUS_DONE,
             )
-            // 删除原 HEIC（备份已在回收站）
-            file.delete()
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
             runCatching { target.delete() }
@@ -470,9 +473,19 @@ class CompressionEngine(private val context: Context) {
             MarkerStripper.strip(target)
 
             val convertedPath = record.dataPath.takeIf { it != originalPath }
-            if (convertedPath != null) runCatching { File(convertedPath).delete() }
-
-            MediaStoreUpdater.reindex(context, mediaUriOf(record), originalPath)
+            if (convertedPath != null) {
+                // 格式转换（HEIC→JPEG）：删除转换产物与它的媒体库行，再为新路径建索引。
+                // 注意：MediaProvider 删除行时会一并删除磁盘文件，因此这里必须先物理删除，
+                // 且**不能**对原地还原的路径调用 reindex（会误删刚还原的文件）。
+                runCatching { File(convertedPath).delete() }
+                MediaStoreUpdater.reindex(context, mediaUriOf(record), originalPath)
+            } else {
+                // 原地还原：媒体库行仍然有效，只需同步大小与时间字段
+                MediaStoreUpdater.refresh(
+                    context, mediaUriOf(record), originalPath,
+                    record.originalDateTakenMs, record.originalDateAddedSec, record.originalDateModifiedSec,
+                )
+            }
             recycle.delete(backupRel)
             RestoreOutcome.Success(record.id)
         }.getOrElse { t ->

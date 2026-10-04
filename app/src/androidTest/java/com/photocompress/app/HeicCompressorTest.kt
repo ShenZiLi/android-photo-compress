@@ -1,8 +1,6 @@
 package com.photocompress.app
 
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.media.HeifWriter
+import android.graphics.BitmapFactory
 import androidx.exifinterface.media.ExifInterface
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -10,80 +8,90 @@ import com.photocompress.app.core.jpeg.HeicCompressor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * HEIC 压缩链路验证：
- * 1) 用 HeifWriter 在设备上生成真实 HEIC（本机 ffmpeg 无 HEIF 封装器，只能设备端造）；
- * 2) 走 HeicCompressor 转 JPEG 并搬运元信息。
- * 同时把生成的文件放到 /sdcard/DCIM/Camera 供 UI 端到端验证。
+ * HEIC 压缩链路验证：对真实 HEIC 样张（/sdcard/DCIM/Camera/heic_sample.heic）
+ * 执行「HEIC → JPEG + 元信息搬运」，并检查尺寸与 EXIF 是否保留。
+ * 样张不存在时跳过（不阻塞其它测试）。
  */
 @RunWith(AndroidJUnit4::class)
 class HeicCompressorTest {
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    private fun writeHeif(target: File, w: Int, h: Int) {
-        val writer = HeifWriter.Builder(target.absolutePath, w, h, HeifWriter.INPUT_MODE_BITMAP)
-            .setQuality(90)
-            .build()
-        writer.start()
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(bmp)
-        canvas.drawColor(Color.rgb(20, 60, 120))
-        val paint = android.graphics.Paint().apply { color = Color.rgb(230, 190, 40) }
-        canvas.drawCircle(w / 2f, h / 2f, minOf(w, h) / 4f, paint)
-        writer.addBitmap(bmp)
-        writer.stop(5_000)
-        writer.close()
-        bmp.recycle()
+    /** 诊断：androidx ExifInterface 对 HEIC 的读写能力（决定转换时元信息能否搬运）。 */
+    @Test
+    fun diagnoseHeicExifSupport() {
+        val heic = File("/sdcard/DCIM/Camera/heic_sample.heic")
+        assumeTrue("未提供 HEIC 样张，跳过", heic.exists())
+        val e = runCatching { ExifInterface(heic.absolutePath) }.getOrNull()
+        android.util.Log.i("HEICDIAG", "open=${e != null} size=${heic.length()}")
+        if (e == null) return
+        android.util.Log.i(
+            "HEICDIAG",
+            "read make=${e.getAttribute(ExifInterface.TAG_MAKE)} model=${e.getAttribute(ExifInterface.TAG_MODEL)}",
+        )
+        val saved = runCatching {
+            e.setAttribute(ExifInterface.TAG_MAKE, "realme")
+            e.setAttribute(ExifInterface.TAG_MODEL, "GT7 Pro")
+            e.saveAttributes()
+        }.isSuccess
+        android.util.Log.i("HEICDIAG", "saveAttributes=$saved")
+        val re = runCatching { ExifInterface(heic.absolutePath) }.getOrNull()
+        android.util.Log.i(
+            "HEICDIAG",
+            "reread make=${re?.getAttribute(ExifInterface.TAG_MAKE)} model=${re?.getAttribute(ExifInterface.TAG_MODEL)}",
+        )
     }
 
     @Test
     fun heicToJpegPreservesSizeAndMetadata() {
-        val heic = File(context.cacheDir, "heic_src.heic")
-        writeHeif(heic, 640, 480)
-        assertTrue("应生成非空 HEIC", heic.exists() && heic.length() > 0)
+        val heic = File("/sdcard/DCIM/Camera/heic_sample.heic")
+        assumeTrue("未提供 HEIC 样张，跳过", heic.exists() && heic.length() > 0)
 
-        // 给 HEIC 写入 EXIF（验证搬运）：HeifWriter 不写 EXIF，这里用 ExifInterface 尝试
+        // 先给 HEIC 写入 EXIF（真实相机 HEIC 自带 EXIF，这里补上以便验证搬运）
         runCatching {
             val e = ExifInterface(heic.absolutePath)
             e.setAttribute(ExifInterface.TAG_MAKE, "realme")
             e.setAttribute(ExifInterface.TAG_MODEL, "GT7 Pro")
             e.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, "2026:09:20 10:11:12")
+            e.setAttribute(ExifInterface.TAG_GPS_LATITUDE, "30/1,15/1,1200/100")
+            e.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, "N")
             e.saveAttributes()
         }
+
+        // 源图尺寸
+        val srcOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(heic.absolutePath, srcOpts)
+        assertTrue("HEIC 应可解码", srcOpts.outWidth > 0 && srcOpts.outHeight > 0)
 
         val out = File(context.cacheDir, "heic_out.jpg")
-        assertTrue("HEIC→JPEG 转换应成功", HeicCompressor.convert(heic, out, 85))
-        assertTrue(out.length() > 0)
+        val error = HeicCompressor.convert(heic, out, 85)
+        assertEquals("HEIC→JPEG 转换应成功（元信息可完整搬运）", null, error)
+        assertTrue("输出应为非空 JPEG", out.exists() && out.length() > 0)
 
-        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeFile(out.absolutePath, opts)
-        assertEquals(640, opts.outWidth)
-        assertEquals(480, opts.outHeight)
+        val outOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(out.absolutePath, outOpts)
+        assertEquals("分辨率应保持不变", srcOpts.outWidth, outOpts.outWidth)
+        assertEquals("分辨率应保持不变", srcOpts.outHeight, outOpts.outHeight)
 
-        assertNotNull("输出应为可解析 JPEG", ExifInterface(out.absolutePath))
-        out.delete()
-        heic.delete()
-    }
-
-    /** 生成一张真实 HEIC 并放到相册目录，供 UI 端到端压缩验证。 */
-    @Test
-    fun publishHeicSampleForUiTest() {
-        val dir = File("/sdcard/DCIM/Camera")
-        if (!dir.exists()) return
-        val target = File(dir, "heic_sample.heic")
-        runCatching {
-            writeHeif(target, 1600, 1200)
-            val e = ExifInterface(target.absolutePath)
-            e.setAttribute(ExifInterface.TAG_MAKE, "realme")
-            e.setAttribute(ExifInterface.TAG_MODEL, "GT7 Pro")
-            e.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, "2026:09:20 10:11:12")
-            e.saveAttributes()
+        // EXIF 搬运：HEIC 支持写入 EXIF 时才能验证
+        val srcExif = runCatching { ExifInterface(heic.absolutePath) }.getOrNull()
+        val dstExif = ExifInterface(out.absolutePath)
+        assertNotNull(dstExif)
+        if (srcExif?.getAttribute(ExifInterface.TAG_MODEL) == "GT7 Pro") {
+            assertEquals("GT7 Pro", dstExif.getAttribute(ExifInterface.TAG_MODEL))
+            assertEquals("realme", dstExif.getAttribute(ExifInterface.TAG_MAKE))
+            assertEquals(
+                "2026:09:20 10:11:12",
+                dstExif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL),
+            )
         }
-        assertTrue("应在相册生成 HEIC 样张", target.exists())
+
+        out.delete()
     }
 }

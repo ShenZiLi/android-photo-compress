@@ -84,22 +84,69 @@ object HeicCompressor {
         ExifInterface.TAG_GPS_IMG_DIRECTION_REF,
     )
 
-    /** 解码 HEIC 并以 JPEG 写入 [target]，随后搬运元信息。 */
-    fun convert(source: File, target: File, quality: Int): Boolean {
+    /** 判定「元信息是否完整搬运」的关键标签：源里有值、输出里也必须读得到。 */
+    private val CRITICAL_TAGS = listOf(
+        ExifInterface.TAG_MAKE,
+        ExifInterface.TAG_MODEL,
+        ExifInterface.TAG_LENS_MODEL,
+        ExifInterface.TAG_DATETIME_ORIGINAL,
+        ExifInterface.TAG_DATETIME,
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.TAG_EXPOSURE_TIME,
+        ExifInterface.TAG_F_NUMBER,
+        ExifInterface.TAG_ISO_SPEED_RATINGS,
+        ExifInterface.TAG_FOCAL_LENGTH,
+        ExifInterface.TAG_GPS_LATITUDE,
+        ExifInterface.TAG_GPS_LONGITUDE,
+        ExifInterface.TAG_SOFTWARE,
+    )
+
+    /**
+     * 解码 HEIC 并以 JPEG 写入 [target]，随后搬运元信息。
+     *
+     * @return null 表示成功；否则返回应跳过的原因（C4：元信息无法完整保留时宁可不转换）。
+     */
+    fun convert(source: File, target: File, quality: Int): String? {
+        val srcExif = runCatching { ExifInterface(source.absolutePath) }.getOrNull()
+        // 源里实际存在的关键 EXIF 值，转换后必须逐项存在
+        val required = HashMap<String, String>()
+        if (srcExif != null) {
+            for (tag in CRITICAL_TAGS) {
+                srcExif.getAttribute(tag)?.takeIf { it.isNotBlank() }?.let { required[tag] = it }
+            }
+        }
+        val srcXmp = runCatching { srcExif?.getAttributeBytes(ExifInterface.TAG_XMP) }.getOrNull()
+
         val opts = BitmapFactory.Options().apply {
             inPreferredConfig = Bitmap.Config.ARGB_8888
             inSampleSize = 1
         }
-        val bmp = BitmapFactory.decodeFile(source.absolutePath, opts) ?: return false
+        val bmp = BitmapFactory.decodeFile(source.absolutePath, opts)
+            ?: return "HEIC 解码失败（设备缺少对应解码器）"
         try {
             FileOutputStream(target).use { out ->
-                if (!bmp.compress(Bitmap.CompressFormat.JPEG, quality, out)) return false
+                if (!bmp.compress(Bitmap.CompressFormat.JPEG, quality, out)) {
+                    return "HEIC 重编码失败"
+                }
             }
         } finally {
             bmp.recycle()
         }
+
         copyMetadata(source, target)
-        return true
+
+        // 校验元信息完整搬运：源里有的关键字段，输出里必须读得到
+        val dst = runCatching { ExifInterface(target.absolutePath) }.getOrNull()
+            ?: return "输出文件不可读"
+        for ((tag, expected) in required) {
+            if (dst.getAttribute(tag).isNullOrBlank()) {
+                return "HEIC 元信息无法完整搬运（$tag），已放弃压缩"
+            }
+        }
+        if (srcXmp != null && srcXmp.isNotEmpty() && dst.getAttributeBytes(ExifInterface.TAG_XMP) == null) {
+            return "HEIC 的 XMP 无法完整搬运，已放弃压缩"
+        }
+        return null
     }
 
     /** 把源文件的 EXIF / XMP 搬到目标 JPEG；失败不影响图像本身。 */

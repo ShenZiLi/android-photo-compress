@@ -51,8 +51,10 @@ object MediaStoreUpdater {
     }
 
     /**
-     * 路径变化后重建媒体库记录（HEIC→JPEG 转换、还原回原格式）：
-     * 扫描新路径拿到新 uri，删除旧行，并回写新文件大小。
+     * 路径变化后重建媒体库记录（HEIC→JPEG 转换后使用）。
+     *
+     * ⚠️ MediaProvider 删除行时会**连带删除磁盘文件**，因此调用前必须先物理删除旧文件，
+     * 且**绝不能**对「需要保留的文件」调用本方法 —— 原地还原请用 [refresh]。
      */
     suspend fun reindex(context: Context, oldUri: Uri?, newPath: String): Uri? = withContext(Dispatchers.IO) {
         val file = File(newPath)
