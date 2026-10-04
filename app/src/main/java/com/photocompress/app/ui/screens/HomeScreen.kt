@@ -37,7 +37,6 @@ import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.comparisonRatios
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.CardSurface
-import com.photocompress.app.ui.components.SectionTitle
 import com.photocompress.app.ui.formatCount
 import com.photocompress.app.ui.formatSize
 import com.photocompress.app.ui.totals
@@ -75,8 +74,8 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
             StatsRow(totals)
         }
 
-        SectionTitle("数量与体积对比")
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Spacer(Modifier.height(20.dp))
             CardSurface(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     CompareMetric(
@@ -93,7 +92,6 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
                         total = formatSize(totals.todoBytes + totals.after),
                         todoValue = formatSize(totals.todoBytes),
                         doneValue = formatSize(totals.after),
-                        doneExtra = "（原 ${formatSize(totals.before)}）",
                         todoRaw = totals.todoBytes.toDouble(),
                         doneRaw = totals.after.toDouble(),
                     )
@@ -154,15 +152,6 @@ private fun HeroCard(totals: Totals) {
                     "已节约 ${formatSize(totals.saved)}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(4.dp))
-                val allBytes = totals.before + totals.todoBytes
-                val reduced = if (totals.before > 0) totals.saved * 100 / totals.before else 0
-                Text(
-                    "占全部媒体原始大小（${formatSize(allBytes)}）的 ${"%.1f".format(totals.pct)}%，" +
-                        "已压缩部分体积减少 $reduced%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.appColors.onSurfaceMuted,
                 )
             }
         }
@@ -263,7 +252,6 @@ private fun CompareMetric(
     doneValue: String,
     todoRaw: Double,
     doneRaw: Double,
-    doneExtra: String? = null,
 ) {
     val todoColor = MaterialTheme.appColors.dataTodo
     val doneColor = MaterialTheme.appColors.dataDone
@@ -298,7 +286,7 @@ private fun CompareMetric(
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             LegendItem(todoColor, "未压缩 $todoValue")
-            LegendItem(doneColor, "已压缩 $doneValue${doneExtra ?: ""}")
+            LegendItem(doneColor, "已压缩 $doneValue")
         }
     }
 }
