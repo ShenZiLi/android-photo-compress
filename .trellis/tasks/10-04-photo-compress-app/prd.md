@@ -1,0 +1,67 @@
+# 安卓照片压缩 App（普通照片/实况照片/视频）
+
+## Goal
+
+在真我 GT7 Pro / ColorOS 16（Android 16）上，对手机内的普通照片、实况照片、视频执行"肉眼不可见细节损失"的有损压缩，显著减小体积；压缩后就地替换原文件，保持存储位置与创建/修改时间不变，保留地点、相机等扩展信息；每份媒体只处理一次，用唯一编号识别已处理项；界面现代简洁、使用逻辑清晰。
+
+## 用户价值
+
+- 直接释放存储空间，减少手动清理。
+- 不改变相册使用习惯：位置、时间、实况属性保持不变。
+- 避免重复压缩造成画质逐次下降。
+
+## 确认事实（设备与样张证据）
+
+- 目标环境：真我 GT7 Pro（realme），ColorOS 16（用户表述；实际固件/相册版本以真机读取为准），Android 16。
+- 样张 `C:\Users\Admin\Desktop\实况图片.jpg` 实测 12,478,846 字节（约 11.9 MB），为有效 JPEG。
+- 该样张是 OPPO/oplus 实况照片：XMP 位于偏移 23664–25334，声明
+  `GCamera:MotionPhoto="1"`、`GCamera:MotionPhotoVersion="1"`、
+  `GCamera:MotionPhotoPresentationTimestampUs="1220005"`、
+  `OpCamera:MotionPhotoOwner="oplus"`、`OpCamera:OLivePhotoVersion="2"`、
+  `OpCamera:MotionPhotoPrimaryPresentationTimestampUs="1220005"`、
+  `OpCamera:VideoLength="5116097"`。
+- 采用 Google Motion Photo v2 的 `Container:Directory` + `Item` 语义，共三项：
+  1. `Primary` image/jpeg，`Length=0`（主图，长度隐含）；
+  2. `GainMap` image/jpeg，`Length=430057`（HDR 增益图）；
+  3. `MotionPhoto` video/mp4，`Length=8331026`。
+- 内嵌视频为 HEVC（`hvc1` / `hvcC`）+ AAC（`mp4a`），品牌 `isom`/`mp42`；MP4 起始偏移约 4,147,824。
+- 结论：实况照片压缩必须同时正确处理 **主图 + GainMap + 内嵌 MP4** 三段，并在压缩后重算 XMP 的 `Item:Length`/`Item:Padding`、`OpCamera:VideoLength` 及 MP4 内部偏移，否则相册将无法识别或播放。
+
+## Requirements
+
+### 功能
+
+- F1 普通照片有损压缩（JPEG 为主；HEIF/PNG 等是否纳入待定）。
+- F2 实况照片整体压缩：主图 + GainMap + 内嵌 MP4；压缩后仍被 ColorOS 相册识别为实况照片且可正常播放。
+- F3 视频有损压缩。
+- F4 压缩后果原地替换（同一存储路径/媒体库条目，位置不变）。
+- F5 保留扩展信息：EXIF / XMP / IPTC（地点、相机、拍摄参数、时间等）。
+- F6 保留文件创建时间与修改时间（含系统媒体库中的时间字段）。
+- F7 唯一编号去重：已处理媒体不再重复压缩。
+- F8 界面现代简洁、流程清晰易懂。
+
+### 约束
+
+- C1 质量目标：肉眼不可见的细节损失。
+- C2 同一份媒体只压缩一次，不产生二次压缩。
+- C3 目标与验收环境：真我 GT7 Pro / ColorOS 16 / Android 16。
+
+## Acceptance Criteria
+
+- [ ] AC1 对样张类实况照片压缩后，ColorOS 相册仍将其**识别为实况照片**并可播放内嵌视频，HDR/GainMap 表现不被破坏。
+- [ ] AC2 压缩后文件体积显著下降，且抽样对比无肉眼可见画质差异（需定义可复现的判定方法）。
+- [ ] AC3 压缩后 EXIF/XMP/IPTC（含定位、相机信息、拍摄时间）与 TimeUtil 时间字段保持一致（对比压缩前后的读取结果）。
+- [ ] AC4 压缩后文件创建时间与修改时间与压缩前一致；存储路径与相册条目位置不变。
+- [ ] AC5 同一媒体第二次进入处理范围时被识别并跳过，不产生二次压缩。
+- [ ] AC6 处理过程中断（断电/被杀进程）时，原文件不被破坏，可安全重试。
+- [ ] AC7 三类媒体（普通照片、实况照片、视频）在真机上均可完成压缩并进入"已处理"状态。
+
+## 暂定不在范围（待确认）
+
+- 云端上传/同步、跨设备去重。
+- iOS 导入的实况照片（非 oplus 来源）。
+- 非 ColorOS 设备适配。
+
+## 待确认问题（阻塞规划）
+
+- Q1 压缩成功并校验通过后，原文件如何处理？见本轮提问。
