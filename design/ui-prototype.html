@@ -996,7 +996,7 @@ function renderHome(){
   $('savedTotal').textContent = '已节约 ' + fmtSize(t.saved);
   const ratio = t.before > 0 ? ((t.saved / t.before) * 100).toFixed(0) : '0';
   $('savedNote').textContent =
-    `占全部媒体原始大小（${fmtSize(t.todoMb + t.before)}）的 ${t.pct.toFixed(1)}%，已压缩部分压缩率 ${ratio}%`;
+    `占全部媒体原始大小（${fmtSize(t.todoMb + t.before)}）的 ${t.pct.toFixed(1)}%，已压缩部分体积减少 ${ratio}%`;
 
   $('kpiTodoCount').textContent = fmtNum(t.todoN) + ' 项';
   $('kpiTodoSize').textContent  = '共 ' + fmtSize(t.todoMb);
@@ -1057,16 +1057,30 @@ function albumCard(status, a){
 
 function renderAlbums(status){
   const host = $(status === 'todo' ? 'todoAlbums' : 'doneAlbums');
-  // 按图片数量倒序（数量相同时保持图集种子顺序）
-  const list = state
-    .map(a => ({ a, n: status === 'todo' ? albumTodoTotals(a).n : albumDoneTotals(a).n }))
-    .filter(x => x.n > 0)
-    .sort((x, y) => y.n - x.n)
-    .map(x => x.a);
+  const isTodo = status === 'todo';
 
-  host.innerHTML = list.length
-    ? list.map(a => albumCard(status, a)).join('')
-    : emptyState('还没有可处理的图集', status === 'todo' ? '媒体库为空，先拍摄或导入照片' : '压缩完成后会出现在这里');
+  const rows = state
+    .map(a => Object.assign({ a }, isTodo ? albumTodoTotals(a) : albumDoneTotals(a)))
+    .filter(r => r.n > 0);
+
+  // 未压缩页隐藏「无可压缩项」的图集；若它们仍被勾选，一并取消，避免统计虚高
+  let list = rows;
+  if (isTodo){
+    rows.filter(r => r.compressible === 0).forEach(r => pickAlbums.todo.delete(r.a.name));
+    list = rows.filter(r => r.compressible > 0);
+  }
+
+  const sorted = list.sort((x, y) => y.n - x.n).map(r => r.a);
+
+  if (!sorted.length){
+    host.innerHTML = isTodo
+      ? (rows.length
+          ? emptyState('没有可压缩的图集', '剩余媒体是当前不支持的格式（PNG、WebP、AVIF、RAW 等）')
+          : emptyState('没有未压缩的媒体', '本机媒体都已压缩完成，可在「已压缩」页查看'))
+      : emptyState('还没有可处理的图集', '压缩完成后会出现在这里');
+    return;
+  }
+  host.innerHTML = sorted.map(a => albumCard(status, a)).join('');
 }
 
 /* ============================================================
@@ -1381,11 +1395,14 @@ function actionTargets(status){
     const albums = state.filter(a => pickAlbums[status].has(a.name)
       && (status === 'todo' ? albumTodoTotals(a).n : albumDoneTotals(a).n) > 0);
     let n=0, mb=0, before=0, after=0;
+    const counts = emptyCounts();
     albums.forEach(a => {
+      const c = status === 'todo' ? kindCountsTodo(a) : kindCountsDone(a);
+      KINDS.forEach(k => { counts[k] += c[k]; });
       if (status === 'todo'){ const t = albumTodoTotals(a); n += t.compressible; mb += t.compressibleMb; }
       else { const d = albumDoneTotals(a); before += d.before; after += d.after; n += a.restorable; }
     });
-    return { kind:'albums', albums, n, mb, before, after };
+    return { kind:'albums', albums, n, mb, before, after, counts };
   }
   const ids = [...pickItems[status]].filter(id => {
     const it = items.find(i => i.id === id);
@@ -1395,7 +1412,9 @@ function actionTargets(status){
   const list = ids.map(id => items.find(i => i.id === id));
   const mb = list.reduce((s,i) => s + i.mb, 0);
   const after = list.reduce((s,i) => s + (i.after || 0), 0);
-  return { kind:'items', ids, list, n:list.length, mb, after };
+  const counts = emptyCounts();
+  list.forEach(i => { counts[i.kind] += 1; });
+  return { kind:'items', ids, list, n:list.length, mb, after, counts };
 }
 
 function updateBar(status){
@@ -1408,11 +1427,11 @@ function updateBar(status){
   if (isTodo){
     if (level.todo === 1){
       info.innerHTML = has
-        ? `<b>已选 ${t.albums.length} 个图集 · ${fmtNum(t.n)} 项 · ${fmtSize(t.mb)}</b><span>预计可节约约 ${fmtSize(t.mb * RATIO)}（按平衡档估算）</span>`
+        ? `<b>已选 ${t.albums.length} 个图集 · ${fmtNum(t.n)} 项 · ${fmtSize(t.mb)}</b><span>预计可节约约 ${fmtSize(t.mb * (1 - RATIO))}（按平衡档估算）</span>`
         : `<b>未选择</b><span>勾选图集可整册压缩</span>`;
     } else {
       info.innerHTML = has
-        ? `<b>已选 ${t.n} 项 · 共 ${fmtSize(t.mb)}</b><span>预计可节约约 ${fmtSize(t.mb * RATIO)}（按平衡档估算）</span>`
+        ? `<b>已选 ${t.n} 项 · 共 ${fmtSize(t.mb)}</b><span>预计可节约约 ${fmtSize(t.mb * (1 - RATIO))}（按平衡档估算）</span>`
         : `<b>未选择</b><span>勾选图片后开始压缩</span>`;
     }
     btn.textContent = '压缩';
@@ -1459,6 +1478,31 @@ function runBatch(barId, label, onDone){
   };
   toast(label);
   setTimeout(tick, reduced ? 10 : 120);
+}
+
+/* 按类型计数：用于确认框与结果提示 */
+function emptyCounts(){ return { photo:0, live:0, video:0 }; }
+
+function kindCountsTodo(a){
+  const o = emptyCounts();
+  KINDS.forEach(k => { o[k] = Math.max(0, a.todo[k].n - a.todoSkip[k].n); });
+  albumSamples('todo', a.name).filter(i => !i.skip).forEach(i => { o[i.kind] += 1; });
+  return o;
+}
+
+function kindCountsDone(a){
+  const o = emptyCounts();
+  KINDS.forEach(k => { o[k] = a.done[k].n; });
+  albumSamples('done', a.name).filter(i => i.days >= 0 && !i.purged).forEach(i => { o[i.kind] += 1; });
+  return o;
+}
+
+function enumerateCounts(c){
+  const parts = [];
+  if (c.photo) parts.push(`普通图片 ${fmtNum(c.photo)} 张`);
+  if (c.live)  parts.push(`实况照片 ${fmtNum(c.live)} 张`);
+  if (c.video) parts.push(`视频 ${fmtNum(c.video)} 条`);
+  return parts.join('、') || '无';
 }
 
 /* 单张 / 多张压缩 */
@@ -1541,27 +1585,32 @@ function restoreAlbum(name){
 $('todoBtn').addEventListener('click', () => {
   const t = actionTargets('todo');
   if (!t.n) return;
+  const savedMb = t.mb * (1 - RATIO);
+  const body = `压缩${enumerateCounts(t.counts)}。原文件保留 30 天，可随时还原。`;
+
   if (level.todo === 1){
     const names = t.albums.map(a => a.name);
     confirmDialog({
       title:`压缩 ${names.length} 个图集`,
-      body:`将压缩「${names.join('、')}」中的 ${fmtNum(t.n)} 项可压缩媒体（约 ${fmtSize(t.mb)}）。原文件会保留在回收站 30 天，期间可随时还原；压缩后存储位置、拍摄时间与元信息保持不变。`,
-      okLabel:`压缩 ${fmtNum(t.n)} 项`,
+      body,
+      okLabel:'压缩',
       onOk(){ runBatch('todoProgress', `正在压缩 ${names.length} 个图集…`, () => {
         let total = 0; names.forEach(n => total += compressAlbum(n));
         pickAlbums.todo.clear();
-        renderAll(); toast(`已压缩 ${fmtNum(total)} 项，预计节约约 ${fmtSize(t.mb * RATIO)}`);
+        renderAll();
+        toast(`压缩成功 · ${fmtNum(total)} 项 · 节省 ${fmtSize(savedMb)}`);
       });}
     });
   } else {
     const ids = t.ids;
     confirmDialog({
       title:'压缩所选图片',
-      body:`将压缩 ${ids.length} 项。原文件会保留在回收站 30 天，期间可随时还原；压缩后存储位置、拍摄时间与元信息保持不变。`,
-      okLabel:`压缩 ${ids.length} 项`,
+      body,
+      okLabel:'压缩',
       onOk(){ runBatch('todoProgress', `正在压缩 ${ids.length} 项…`, () => {
         compressItems(ids); pickItems.todo.clear();
-        renderAll(); toast(`已压缩 ${ids.length} 项，预计节约约 ${fmtSize(t.mb * RATIO)}`);
+        renderAll();
+        toast(`压缩成功 · ${fmtNum(ids.length)} 项 · 节省 ${fmtSize(savedMb)}`);
       });}
     });
   }
@@ -1570,27 +1619,32 @@ $('todoBtn').addEventListener('click', () => {
 $('doneBtn').addEventListener('click', () => {
   const t = actionTargets('done');
   if (!t.n) return;
+  const body = `还原${enumerateCounts(t.counts)}。`;
+  const gainMb = level.done === 1 ? (t.before - t.after) : t.mb;
+
   if (level.done === 1){
     const names = t.albums.map(a => a.name);
     confirmDialog({
       title:`还原 ${names.length} 个图集`,
-      body:`将还原「${names.join('、')}」中的 ${fmtNum(t.n)} 项，恢复原始画质与体积（${fmtSize(t.before)}）。还原后这些备份会被移除。`,
-      okLabel:`还原 ${fmtNum(t.n)} 项`,
+      body,
+      okLabel:'还原',
       onOk(){ runBatch('doneProgress', `正在还原 ${names.length} 个图集…`, () => {
         let total = 0; names.forEach(n => total += restoreAlbum(n));
         pickAlbums.done.clear();
-        renderAll(); toast(`已还原 ${fmtNum(total)} 项`);
+        renderAll();
+        toast(`还原成功 · ${fmtNum(total)} 项 · 占用 +${fmtSize(gainMb)}`);
       });}
     });
   } else {
     const ids = t.ids;
     confirmDialog({
       title:'还原所选图片',
-      body:`将用回收站中的原始文件还原 ${ids.length} 项，恢复原始画质与体积。`,
-      okLabel:`还原 ${ids.length} 项`,
+      body,
+      okLabel:'还原',
       onOk(){ runBatch('doneProgress', `正在还原 ${ids.length} 项…`, () => {
         restoreItems(ids); pickItems.done.clear();
-        renderAll(); toast(`已还原 ${ids.length} 项`);
+        renderAll();
+        toast(`还原成功 · ${fmtNum(ids.length)} 项 · 占用 +${fmtSize(gainMb)}`);
       });}
     });
   }
