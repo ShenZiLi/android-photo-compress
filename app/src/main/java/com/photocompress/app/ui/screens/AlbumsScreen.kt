@@ -94,13 +94,8 @@ fun TodoLevel1(
                 }
             },
         )
-        if (albums.isEmpty()) {
-            EmptyState(
-                "没有可压缩的图集",
-                "剩余媒体是当前不支持的格式（PNG、WebP、AVIF、RAW 等）",
-            )
-            return
-        }
+        // 无可压缩图集时留空（不再显示占位文案）
+        if (albums.isEmpty()) return
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
@@ -146,10 +141,8 @@ fun DoneLevel1(
                 }
             },
         )
-        if (albums.isEmpty()) {
-            EmptyState("还没有可处理的图集", "压缩完成后会出现在这里")
-            return
-        }
+        // 暂无可处理图集时留空（不再显示占位文案）
+        if (albums.isEmpty()) return
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
