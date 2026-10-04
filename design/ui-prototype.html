@@ -750,13 +750,13 @@
       <div class="actionbar" id="barTodo">
         <div class="info" id="todoInfo"><b>未选择</b><span>勾选图集或图片后开始压缩</span></div>
         <div class="progress" id="todoProgress" aria-hidden="true"><span class="bar"><i></i></span><em>0%</em></div>
-        <button class="btn" id="todoBtn" disabled>压缩所选</button>
+        <button class="btn" id="todoBtn" disabled>压缩</button>
       </div>
 
       <div class="actionbar" id="barDone">
         <div class="info" id="doneInfo"><b>未选择</b><span>勾选图集或图片后可还原</span></div>
         <div class="progress" id="doneProgress" aria-hidden="true"><span class="bar"><i></i></span><em>0%</em></div>
-        <button class="btn neutral" id="doneBtn" disabled>还原所选</button>
+        <button class="btn neutral" id="doneBtn" disabled>还原</button>
       </div>
 
       <nav class="bottom-nav" id="nav" aria-label="主导航">
@@ -1398,7 +1398,7 @@ function updateBar(status){
         ? `<b>已选 ${t.n} 项 · 共 ${fmtSize(t.mb)}</b><span>预计可节约约 ${fmtSize(t.mb * RATIO)}（按平衡档估算）</span>`
         : `<b>未选择</b><span>勾选图片后开始压缩</span>`;
     }
-    btn.textContent = has ? `压缩所选（${t.kind === 'albums' ? t.n + ' 项' : t.n}）` : '压缩所选';
+    btn.textContent = '压缩';
   } else {
     if (level.done === 1){
       info.innerHTML = has
@@ -1409,7 +1409,7 @@ function updateBar(status){
         ? `<b>已选 ${t.n} 项</b><span>将恢复原始画质与体积</span>`
         : `<b>未选择</b><span>仅 30 天内可还原</span>`;
     }
-    btn.textContent = has ? `还原所选（${t.kind === 'albums' ? t.n + ' 项' : t.n}）` : '还原所选';
+    btn.textContent = '还原';
   }
   btn.disabled = !has || busy;
 }
