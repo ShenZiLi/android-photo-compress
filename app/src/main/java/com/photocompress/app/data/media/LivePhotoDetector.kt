@@ -30,9 +30,13 @@ object LivePhotoDetector {
     )
 
     fun detect(file: File): LiveInfo? {
-        val fileLength = file.length()
-        if (fileLength <= 0) return null
         val header = readHeader(file) ?: return null
+        return detectFromHeader(header, file.length(), file)
+    }
+
+    /** 已读入头部字节时复用，避免同一文件读两遍。 */
+    fun detectFromHeader(header: ByteArray, fileLength: Long, file: File? = null): LiveInfo? {
+        if (fileLength <= 0) return null
         val text = String(header, Charsets.ISO_8859_1)
 
         val looksLive = text.contains("MotionPhoto") || text.contains("Container:Directory")
@@ -59,7 +63,7 @@ object LivePhotoDetector {
         }
 
         // v1 兜底：无 Container:Directory，直接在文件中定位 MP4 的 ftyp box。
-        val offset = findMp4Start(file) ?: return null
+        val offset = file?.let { findMp4Start(it) } ?: return null
         return LiveInfo(
             motionPhotoOffset = offset,
             motionPhotoLength = fileLength - offset,
@@ -69,6 +73,9 @@ object LivePhotoDetector {
             videoDurationUs = extractVideoLengthUs(text),
         )
     }
+
+    /** 读取 JPEG 头部字节（用于实况结构解析与自有 XMP 标记读取）。 */
+    fun readHeaderBytes(file: File): ByteArray? = readHeader(file)
 
     fun parseContainerItems(text: String): List<XmpItem> {
         val tagRegex = Regex("<Container:Item\\b([^>]*)/?>")

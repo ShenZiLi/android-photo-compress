@@ -37,6 +37,11 @@ data class UiState(
 data class DoneMedia(
     val record: CompressedItemEntity,
     val item: MediaItem?,
+    /**
+     * true 表示由**文件内 XMP 标记**识别（账本缺失，如重装 / 清数据后）。
+     * 这类条目可识别为「已压缩」以避免二次压缩，但压缩前大小与备份都不可知。
+     */
+    val adopted: Boolean = false,
 ) {
     val bucketName: String get() = item?.bucketName ?: record.bucketName
     val displayName: String get() = item?.displayName ?: record.displayName
@@ -60,10 +65,20 @@ data class AlbumTodoUi(val name: String, val items: List<MediaItem>) {
 
 data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
     val count: Int get() = items.size
+    /** 压缩前大小已知的条目数（由文件标记识别的条目没有该信息）。 */
+    val knownBeforeCount: Int get() = items.count { !it.adopted }
     val before: Long get() = items.sumOf { it.originalSize }
     val after: Long get() = items.sumOf { it.compressedSize }
     val restorableItems: List<DoneMedia> get() = items.filter { it.restorable }
     val restorableCount: Int get() = restorableItems.size
+
+    /** 全部条目都只有标记、压缩前大小未知时只显示当前体积，避免「0 B →」的误导性展示。 */
+    val sizeLine: String
+        get() = if (knownBeforeCount == 0) {
+            "${formatCount(count)} 项 · ${formatSize(after)}"
+        } else {
+            "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}"
+        }
 }
 
 data class Totals(
@@ -153,20 +168,52 @@ fun UiState.doneSelection(): SelectionSummary {
     )
 }
 
-/** 未压缩：媒体库中有、且账本里没有有效压缩记录。 */
+/** 未压缩：媒体库中有、且账本与文件内标记都没有压缩痕迹。 */
 fun UiState.todoItems(): List<MediaItem> {
-    val compressedPaths = ledger.asSequence()
-        .filter { it.status in ACTIVE_STATUSES }
-        .map { it.dataPath }
-        .toHashSet()
+    val compressedPaths = HashSet<String>()
+    ledger.asSequence().filter { it.status in ACTIVE_STATUSES }.forEach { compressedPaths += it.dataPath }
+    // 文件内标记优先：账本丢失（重装 / 清数据）时仍能识别，避免二次压缩（F7 / AC5）
+    items.asSequence().filter { it.xmpCompressId != null }.forEach { compressedPaths += it.dataPath }
     return items.filter { it.dataPath !in compressedPaths }
 }
 
 fun UiState.doneItems(): List<DoneMedia> {
     val byPath = items.associateBy { it.dataPath }
-    return ledger.filter { it.status in ACTIVE_STATUSES }
+    val fromLedger = ledger.filter { it.status in ACTIVE_STATUSES }
         .map { DoneMedia(it, byPath[it.dataPath]) }
+    val known = fromLedger.map { it.dataPath }.toHashSet()
+    val adopted = items
+        .filter { it.xmpCompressId != null && it.dataPath !in known }
+        .map { DoneMedia(adoptedRecord(it), it, adopted = true) }
+    return fromLedger + adopted
 }
+
+/** 仅凭文件内标记识别出的条目：压缩前大小未知，不可还原。 */
+private fun adoptedRecord(item: MediaItem): CompressedItemEntity = CompressedItemEntity(
+    id = item.xmpCompressId ?: "unknown",
+    mediaStoreId = item.id,
+    dataPath = item.dataPath,
+    volumeName = item.volumeName,
+    bucketName = item.bucketName,
+    displayName = item.displayName,
+    mediaKind = item.kind.name,
+    mimeType = item.mimeType,
+    containerFormat = item.format.name,
+    videoCodec = item.videoCodec,
+    originalSize = 0L,
+    compressedSize = item.size,
+    originalSha256 = "",
+    originalDateTakenMs = item.dateTakenMs,
+    originalDateAddedSec = item.dateAddedSec,
+    originalDateModifiedSec = item.dateModifiedSec,
+    qualityTier = QualityTier.BALANCED.name,
+    codecUsed = null,
+    compressedAtMs = 0L,
+    restoreDeadlineMs = 0L,
+    backupRelPath = null,
+    backupSize = 0L,
+    status = CompressedItemEntity.STATUS_PURGED,
+)
 
 fun UiState.albumTodoAll(): List<AlbumTodoUi> =
     todoItems().groupBy { it.bucketName }
@@ -181,10 +228,12 @@ fun UiState.albumDoneAll(): List<AlbumDoneUi> =
 fun UiState.totals(): Totals {
     val todo = todoItems()
     val done = doneItems()
+    // 由文件标记识别（账本已丢失）的条目没有压缩前大小，不计入节省统计，避免出现负值
+    val known = done.filter { !it.adopted }
     val todoBytes = todo.sumOf { it.size }
-    val before = done.sumOf { it.originalSize }
-    val after = done.sumOf { it.compressedSize }
-    val saved = before - after
+    val before = known.sumOf { it.originalSize }
+    val after = known.sumOf { it.compressedSize }
+    val saved = (before - after).coerceAtLeast(0)
     val restorable = done.filter { it.restorable }
     val pct = if (before + todoBytes > 0) saved.toFloat() / (before + todoBytes) * 100f else 0f
     return Totals(

@@ -11,6 +11,7 @@ import com.photocompress.app.core.rewrite.MediaStoreUpdater
 import com.photocompress.app.core.rewrite.RecycleBin
 import com.photocompress.app.core.video.MediaClassifierCodec
 import com.photocompress.app.core.video.VideoTranscoder
+import com.photocompress.app.core.xmp.Mp4XmpMarker
 import com.photocompress.app.core.xmp.PcXmp
 import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.data.media.ContainerFormat
@@ -237,6 +238,8 @@ class CompressionEngine(private val context: Context) {
             dst.delete()
             return CompressOutcome.Skipped(res.reason ?: "转码失败")
         }
+        // 写入文件内自有标记（D5），使账本丢失后仍能识别已压缩（F7 / AC5）
+        Mp4XmpMarker.write(dst, newMarker())
         if (dst.length() >= file.length()) {
             val outSize = dst.length()
             dst.delete()

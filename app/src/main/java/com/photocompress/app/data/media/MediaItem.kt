@@ -25,6 +25,11 @@ data class MediaItem(
     val motionPhotoOffset: Long? = null,
     /** 视频编码名（video 专属）。 */
     val videoCodec: String? = null,
+    /**
+     * 文件内自有 XMP 标记（D5）。非空表示该文件已被本应用压缩过——
+     * 即使账本丢失（重装 / 清数据）也能识别，避免二次压缩（F7 / AC5）。
+     */
+    val xmpCompressId: String? = null,
 ) {
     val compressible: Boolean get() = support is SupportDecision.Supported
     val skipReason: String? get() = (support as? SupportDecision.Skipped)?.reason

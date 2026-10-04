@@ -3,6 +3,9 @@ package com.photocompress.app.data.media
 import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
+import com.photocompress.app.core.jpeg.JpegSegments
+import com.photocompress.app.core.xmp.Mp4XmpMarker
+import com.photocompress.app.core.xmp.PcXmp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -66,8 +69,18 @@ class MediaRepository(private val context: Context) {
                 val format = MediaClassifier.imageFormat(mime, name)
 
                 var liveInfo: LivePhotoDetector.LiveInfo? = null
+                var xmpCompressId: String? = null
                 if (format == ContainerFormat.JPEG) {
-                    liveInfo = runCatching { LivePhotoDetector.detect(File(path)) }.getOrNull()
+                    // 头部只读一次，同时用于实况结构解析与自有 XMP 标记识别（F7 / AC5）
+                    val header = LivePhotoDetector.readHeaderBytes(File(path))
+                    if (header != null) {
+                        liveInfo = runCatching {
+                            LivePhotoDetector.detectFromHeader(header, File(path).length())
+                        }.getOrNull()
+                        xmpCompressId = runCatching {
+                            JpegSegments.xmpTextOf(header)?.let { PcXmp.read(it)?.id }
+                        }.getOrNull()
+                    }
                 }
                 val isLive = liveInfo != null
                 val kind = if (isLive) MediaKind.LIVE_PHOTO else MediaKind.PHOTO
@@ -93,6 +106,7 @@ class MediaRepository(private val context: Context) {
                     format = format,
                     support = support,
                     motionPhotoOffset = liveInfo?.motionPhotoOffset,
+                    xmpCompressId = xmpCompressId,
                 )
             }
         }
@@ -129,6 +143,8 @@ class MediaRepository(private val context: Context) {
                 } else probe
 
                 val support = MediaClassifier.decideVideo(format, effectiveProbe)
+                // 视频的自有标记在 MP4 顶层 uuid box（D5），用于账本丢失后的识别
+                val xmpCompressId = runCatching { Mp4XmpMarker.read(File(path))?.id }.getOrNull()
 
                 out += MediaItem(
                     id = id,
@@ -150,6 +166,7 @@ class MediaRepository(private val context: Context) {
                     format = format,
                     support = support,
                     videoCodec = effectiveProbe.codec,
+                    xmpCompressId = xmpCompressId,
                 )
             }
         }

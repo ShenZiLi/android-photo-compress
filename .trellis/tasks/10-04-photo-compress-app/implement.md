@@ -2,6 +2,9 @@
 
 关联：[prd.md](./prd.md)（需求与验收）、[design.md](./design.md)（技术设计）。
 
+> 实施结果与逐条验收结论见 [research/acceptance-report.md](./research/acceptance-report.md)；
+> 真机/模拟器能力实测见 [research/device-capability-report.md](./research/device-capability-report.md)。
+
 分阶段推进，每个阶段结束都是一个可独立提交、可独立回滚的变更单元（遵守 `spec/android/git-workflow.md`）。
 
 ## 阶段 0：工程脚手架

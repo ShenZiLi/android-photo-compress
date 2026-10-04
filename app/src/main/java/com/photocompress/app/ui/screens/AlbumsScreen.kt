@@ -128,10 +128,12 @@ fun DoneLevel1(
     val count = albums.sumOf { it.count }
     val before = albums.sumOf { it.before }
     val after = albums.sumOf { it.after }
+    val knownBefore = albums.sumOf { it.knownBeforeCount }
     Column(modifier = Modifier.fillMaxSize()) {
         AppBar(
             title = "已压缩",
-            subtitle = "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}",
+            subtitle = if (knownBefore == 0) "${formatCount(count)} 项 · ${formatSize(after)}"
+            else "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}",
             actions = {
                 IconButton(onClick = onOpenTrash) {
                     Icon(Icons.Filled.Delete, contentDescription = "打开回收站")
@@ -153,7 +155,7 @@ fun DoneLevel1(
                 AlbumCard(
                     coverUris = album.items.take(4).mapNotNull { it.item?.uri },
                     name = album.name,
-                    line2 = "${formatCount(album.count)} 项 · ${formatSize(album.before)} → ${formatSize(album.after)}",
+                    line2 = album.sizeLine,
                     line3 = if (album.restorableCount > 0) "可还原 ${formatCount(album.restorableCount)} 项" else "备份已不可还原",
                     line3Warn = album.restorableCount == 0,
                     picked = album.name in state.done.pickedAlbums,
@@ -354,7 +356,7 @@ fun DoneLevel2(
     Column(modifier = Modifier.fillMaxSize()) {
         AppBar(
             title = album.name,
-            subtitle = "${formatCount(album.count)} 项 · ${formatSize(album.before)} → ${formatSize(album.after)}",
+            subtitle = album.sizeLine,
             smallTitle = true,
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
         )
@@ -393,7 +395,7 @@ fun DoneLevel2(
                     },
                     isVideo = dm.kind == MediaKind.VIDEO,
                     grayed = !restorable,
-                    metaLeft = formatSize(dm.originalSize),
+                    metaLeft = if (dm.adopted) "—" else formatSize(dm.originalSize),
                     metaRight = formatSize(dm.compressedSize),
                     onClick = { if (restorable) onToggleItem(dm.record.mediaStoreId) else onShowInfo(dm) },
                     onLongClick = { onShowInfo(dm) },

@@ -105,3 +105,75 @@ ColorOS 相册行为无法在 AOSP 模拟器上验证。容器重组正确性改
 3. **阶段 4/5 编码器**运行时探测选择，模拟器上 HEVC 因 512 尺寸上限回退 H.264。
 4. **HEIC** 按 C4 跳过。
 5. 交付报告须区分「模拟器已验证」与「须真机复验」。
+
+---
+
+## 阶段 3–7 复验与修正（2026-10-04 晚）
+
+在实现压缩/还原/实况照片/视频的过程中，对上面的初步结论做了进一步实测，**修正两处、补充三项**。
+
+### 修正 1：MediaProvider 会静默丢弃时间字段的 update（重要）
+
+初步结论中 `mediaStoreTime ... updatable=true` 具有误导性：`ContentResolver.update()` 返回行数 ≥ 0，但**值被丢弃**。logcat 明确告警：
+
+```
+W MediaProvider: Ignoring mutation of date_modified from com.photocompress.app
+W MediaProvider: Ignoring mutation of datetaken from com.photocompress.app
+W MediaProvider: Ignoring mutation of _size from com.photocompress.app
+W MediaProvider: Ignoring mutation of date_added from com.photocompress.app
+```
+
+Android 11+ 起，非「媒体所有者」应用无法改写这几列。
+
+**修正后的时间保留方案（已实现并验证）**：
+1. 文件系统层：原地写入后用 `setLastModified` 还原 **mtime**（实测有效，`ls -l` 时间与压缩前一致）。
+2. 媒体库层：`_size` 由 MediaProvider 的 FUSE 层在感知文件变化后自行重读，`DATE_MODIFIED` 由 mtime 派生；`DATE_TAKEN` 来自文件内 EXIF（我们逐字节保留 EXIF，因此该值稳定）。
+3. `DATE_ADDED`（加入媒体库时间）无法由应用改写，会随 MediaProvider 的重新索引而变化。**这是平台限制**，须在交付说明中如实标注；不影响拍摄时间与文件时间。
+4. App 自身的「未压缩 / 已压缩」统计不从 MediaStore 的 `_size` 取数，而是直接 `File.length()`，避免媒体库缓存滞后导致看板数字不准（AC9）。
+
+### 修正 2：`OpCamera:VideoLength` 不是内嵌视频时长，必须原样保留
+
+样张 `OpCamera:VideoLength=5116097`，但抽取内嵌 MP4 实测为 **1.73 s / 44 帧 / 1920×1440 HEVC**（`ffprobe`）。二者不符，说明该字段语义未知。早期实现曾按"时长(µs)"改写它，属于**错误假设**，已改为与其它 `OpCamera:*` 字段一样**原样保留、绝不改写**。
+
+### 补充 1：视频编码器分辨率能力（模拟器）
+
+| 编码器 | 宽范围 | 高范围 | 对齐 | 1920×1440 | 1920×1088 | 1280×960 |
+|---|---|---|---|---|---|---|
+| `c2.android.avc.encoder` | 16..2048 | 16..2048 | 2×2 | ✗ | ✓ | ✓ |
+| `c2.android.hevc.encoder` | 2..512 | 2..512 | 2×2 | ✗ | ✗ | ✗ |
+| `c2.android.av1.encoder` | 2..1920 | 2..1920 | 1×1 | ✗ | ✓ | ✓ |
+| `c2.android.vp8.encoder` | 2..2048 | 2..2048 | 1×1 | ✓ | ✓ | ✓ |
+| `c2.android.vp9.encoder` | 2..2048 | 2..2048 | 1×1 | ✗ | ✗ | ✓ |
+
+HEVC 软件编码器上限仅 **512**，模拟器上对 720p/1440p 视频不可用。解码侧 `c2.goldfish.hevc.decoder`（硬件加速）与 `c2.android.hevc.decoder` 均可解 1920×1440。
+
+**处置**：编码器与尺寸完全运行时探测；优先"保持原分辨率"的编码器，只有在设备确实无法编码原尺寸时才按等比**向下**搜索最大可编码尺寸（不放大）。模拟器上 1920×1440 的实况内嵌视频因此回退到 **1650×1238 H.264**；真机（GT7 Pro）具备 HEVC 硬件编码器，预期保持原尺寸原编码。
+
+### 补充 2：VP9 无法用 MediaMuxer 封装进 MP4
+
+以 VP9 为输出编码时 `MediaMuxer.addTrack` 抛 `IllegalStateException: Failed to add the track to the muxer`。因此**输出编码固定为 HEVC / H.264 / AV1**；VP9 仍可作为**输入**被正常读取与转码（实测 VP9 源 201 KB → H.264 143 KB）。
+
+### 补充 3：oplus 实况照片的 MPF 索引本身不自洽，需重建
+
+样张 MPF 声明 2 张图（主图 + 增益图）：
+
+| | 原始文件 | 说明 |
+|---|---|---|
+| image0 | size=3,717,033 offset=0 | 与实测主图长度 3,717,763 差 730 |
+| image1 | size=430,057 offset=3,692,408 | 实测增益图起点为 3,717,763，差 25,355 |
+
+即原始 MPF 的 size/offset 与实际字节布局**并不一致**（XMP `Container:Directory` 的长度才是精确的，与实测完全吻合）。压缩后主图长度变化，若照抄 MPF 会彻底失效。
+
+**处置**：`MpfRewriter` 按 MPEntry 规范**重建** size/offset（主图 0 起，增益图紧随主图），保留 MPF 其余字节。压缩后实测自洽：image0 size=1,186,008 offset=0，image1 size=430,057 offset=1,186,008，与实际拼接完全一致。
+
+### 已实现的实况照片压缩口径（供真机复验）
+
+1. 主图：按质量档位重编码 JPEG，EXIF 段**逐字节保留**（实测压缩前后 EXIF 段 23,654 字节完全相同）。
+2. 增益图：**原样复制**，不重编码（HDR/ProXDR 重建依据，C6 / D10）。
+3. 内嵌视频：重编码（保持时长与帧数；实测 1.73 s / 44 帧 → 1.73 s / 44 帧）。
+4. XMP：重建 `Container:Directory` 的各 `Item:Length`；写入自有命名空间标记；`GCamera:*` / `OpCamera:*` 原样保留。
+5. MPF：重建 MPEntry。
+6. 结构自校验：Container 项齐全且长度非 0、内嵌 MP4 开头为 `ftyp`、解码可解析。
+
+样张实测：**12,478,846 → 2,532,408 字节（-79.7%）**，mtime 保持为 `2026-10-03 08:47`。
+

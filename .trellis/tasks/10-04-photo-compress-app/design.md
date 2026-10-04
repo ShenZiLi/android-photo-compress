@@ -62,12 +62,17 @@
 2. **同目录生成结果**：压缩产物写到同目录临时文件 `<name>.pc.tmp`（同卷，保证后续可原地搬移）。
 3. **校验**：容器可解析、内嵌引用（长度 / 偏移）自洽、元信息字段逐项比对、解码抽样对比；任一项不通过即放弃本次压缩。
 4. **原地写入**：用 `RandomAccessFile("rw")` 打开**原文件本身**并写入压缩字节，再 `truncate()` 到新长度。
-   - 关键点：复用同一 inode，文件系统 `birth time`（创建时间）自然保留——Android Java 层无法直接设置创建时间，这是满足 F6 的唯一可靠手段。
-5. **恢复修改时间**：用 `Os.utime` / `Files.setLastModifiedTime` 写回原 mtime。
-6. **同步媒体库**：`MediaScannerConnection.scanFile` 或按 uri 更新 SIZE / DATE_MODIFIED，使相册立即看到新大小。
+   - 复用同一 inode，避免更换文件对象；但**阶段 1 实测：API 36 的 FUSE 挂载下 `creationTime` 映射到 inode ctime，原地写入后必然变化**，因此 birth time 无法保留（见 `research/device-capability-report.md`）。
+5. **恢复时间**：
+   - 文件系统层：`setLastModified` / `Os.utime` 写回原 **mtime**（实测有效）。
+   - 媒体库层：`_size` 由 MediaProvider 自行重读；`DATE_MODIFIED` 由 mtime 派生；`DATE_TAKEN` 来自文件内 EXIF（EXIF 逐字节保留，故稳定）。
+   - `DATE_ADDED` 无法由非媒体所有者应用改写（MediaProvider 会忽略并告警），属平台限制，如实标注。
+6. **同步媒体库**：按 uri 更新 SIZE 并保持时间字段；不触发全量重扫（重扫会把 `DATE_ADDED` 重置为扫描时刻）。
 7. **失败回滚**：任一步失败 → 从备份恢复原文件（同样原地写回）→ 删除临时文件 → 记录 `FAILED` + 原因。
 
-> 与 `MediaStore` 直接 `update` 的取舍：直接改文件字节可完整保留 `birth time` 与媒体库行 ID；`update` 方式会重建文件、丢失创建时间，故不采用。
+> 与 `MediaStore` 直接 `update` 的取舍：直接改文件字节可保留媒体库行 ID 与 `DATE_TAKEN`；
+> 而 `_size` / `date_modified` / `datetaken` / `date_added` 这几列的 `update` 会被 MediaProvider 静默忽略。
+> App 自身的统计一律直接读 `File.length()`，不依赖媒体库缓存。
 
 ### 4.2 JPEG 普通照片
 
@@ -108,8 +113,10 @@
 
 - 生成 UUID v4 作为唯一编号。
 - 双写：Room 账本 + 压缩后文件内 XMP 自有命名空间字段（编号 + 压缩器版本 + 时间）。
+- 写入方式：androidx ExifInterface 不支持 `XMP-xxx` 形式的 setAttribute（阶段 1 实测写后读回为 null），
+  改为写入**整包 XMP**（`ExifInterface.TAG_XMP`），合并时保留包内其它命名空间
+  （实况照片的 `GCamera:*` / `OpCamera:*` / `Container:Directory` 必须原样留下）。
 - 判定"已压缩"：优先读文件内标记（跨重装有效），其次查账本；两者不一致时以文件内标记为准并记录告警。
-- 依赖真机验证新增 XMP 字段的接受度（U6）。
 
 ## 6. 回收站与还原（F10 / F11 / D1）
 

@@ -384,13 +384,21 @@ private fun DoneMedia.toSheet(): SheetData = SheetData(
         add("文件名" to displayName)
         add("类型" to kind.fullLabel)
         add("所在图集" to bucketName)
-        add("大小" to "${formatSize(originalSize)} → ${formatSize(compressedSize)}")
-        add("已节约" to formatSize(saved))
+        if (adopted) {
+            add("大小" to "${formatSize(compressedSize)}（压缩前大小未知）")
+            add("识别方式" to "由文件内压缩标记识别（账本已丢失）")
+        } else {
+            add("大小" to "${formatSize(originalSize)} → ${formatSize(compressedSize)}")
+            add("已节约" to formatSize(saved))
+        }
         add("拍摄时间" to formatDateTime(dateTakenMs))
-        add("压缩时间" to formatDateTime(record.compressedAtMs))
-        record.codecUsed?.let { add("编码/档位" to "$it · ${qualityTier.label}") }
+        if (!adopted) {
+            add("压缩时间" to formatDateTime(record.compressedAtMs))
+            record.codecUsed?.let { add("编码/档位" to "$it · ${qualityTier.label}") }
+        }
         add(
             "备份状态" to when {
+                adopted -> "无备份（由文件标记识别）"
                 record.status == com.photocompress.app.data.ledger.CompressedItemEntity.STATUS_PURGED -> "已清理，无法还原"
                 !restorable -> "已超期，无法还原"
                 else -> "剩余 ${daysLeft(record.restoreDeadlineMs, System.currentTimeMillis())} 天可还原"
