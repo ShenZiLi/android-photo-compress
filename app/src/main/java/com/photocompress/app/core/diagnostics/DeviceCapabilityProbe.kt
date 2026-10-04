@@ -356,6 +356,45 @@ object DeviceCapabilityProbe {
         return MediaStoreTimeProbe(inserted, addedOk, takenOk, modifiedOk, updatable, note)
     }
 
+    /** 编码器分辨率能力细节：决定“保持分辨率”能否成立、缩放回退该选多大。 */
+    fun probeEncoderSizes() {
+        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+        for (info in list.codecInfos) {
+            if (!info.isEncoder) continue
+            for (mime in info.supportedTypes) {
+                if (!mime.startsWith("video/")) continue
+                val vc = runCatching { info.getCapabilitiesForType(mime).videoCapabilities }.getOrNull() ?: continue
+                val wRange = runCatching { "${vc.supportedWidths.lower}..${vc.supportedWidths.upper}" }.getOrDefault("-")
+                val hRange = runCatching { "${vc.supportedHeights.lower}..${vc.supportedHeights.upper}" }.getOrDefault("-")
+                val wa = runCatching { vc.widthAlignment }.getOrDefault(-1)
+                val ha = runCatching { vc.heightAlignment }.getOrDefault(-1)
+                val tests = listOf(
+                    1920 to 1440, 1920 to 1088, 1920 to 1080, 1450 to 1088,
+                    1280 to 960, 960 to 720, 640 to 480, 512 to 384,
+                )
+                val supported = tests.filter { (w, h) ->
+                    runCatching { vc.isSizeSupported(w, h) }.getOrDefault(false)
+                }.joinToString("|") { "${it.first}x${it.second}" }
+                // 最大可编码尺寸（按高度上限推算）
+                val maxH = runCatching { vc.supportedHeights.upper }.getOrDefault(0)
+                val probeMaxW = if (maxH > 0) {
+                    runCatching { vc.getSupportedWidthsFor(maxH).upper }.getOrDefault(0)
+                } else 0
+                Log.i(TAG, "encsize mime=$mime name=${info.name} w=$wRange h=$hRange align=${wa}x${ha} maxAtH=$probeMaxW x $maxH supported=[$supported]")
+            }
+        }
+        // 解码器：确认能解 HEVC 1920x1440
+        val dec = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+        for (info in dec.codecInfos) {
+            if (info.isEncoder) continue
+            if (info.supportedTypes.any { it.equals("video/hevc", true) }) {
+                val vc = runCatching { info.getCapabilitiesForType("video/hevc").videoCapabilities }.getOrNull()
+                val ok = runCatching { vc?.isSizeSupported(1920, 1440) }.getOrDefault(false)
+                Log.i(TAG, "decsize hevc name=${info.name} hw=${info.isHardwareAccelerated} supports1920x1440=$ok")
+            }
+        }
+    }
+
     /** 供 logcat 抓取：把结论打成可解析的 JSON 行。 */
     fun runAll(context: Context) {
         val sdk = Build.VERSION.SDK_INT
@@ -383,6 +422,8 @@ object DeviceCapabilityProbe {
 
         val heif = probeMuxerHeifSupport()
         Log.i(TAG, "muxerHeif=${heif}")
+
+        probeEncoderSizes()
 
         // 能力矩阵摘要：驱动后续阶段取舍
         val avc = MIME_AVC in supported
