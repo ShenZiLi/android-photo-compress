@@ -94,7 +94,6 @@ fun TodoLevel1(
                 }
             },
         )
-        TipRow("勾选图集可整册压缩；点图集进入查看单张")
         if (albums.isEmpty()) {
             EmptyState(
                 "没有可压缩的图集",
@@ -147,7 +146,6 @@ fun DoneLevel1(
                 }
             },
         )
-        TipRow("勾选图集可整册还原；点图集进入查看单张")
         if (albums.isEmpty()) {
             EmptyState("还没有可处理的图集", "压缩完成后会出现在这里")
             return
@@ -171,27 +169,6 @@ fun DoneLevel1(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun TipRow(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Filled.Info,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.appColors.onSurfaceMuted,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.appColors.onSurfaceMuted,
-        )
     }
 }
 

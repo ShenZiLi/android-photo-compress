@@ -25,10 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,26 +55,23 @@ fun SettingsScreen(
 ) {
     val settings = state.settings
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        AppBar(title = "设置", subtitle = "压缩质量档位 · 三类独立控制")
+        AppBar(title = "设置")
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             TierCard(
                 title = "普通照片",
                 hint = "JPEG / HEIF",
-                note = "「平衡」为默认档，肉眼不可见损失。最终体积由算法决定，不设目标体积。",
                 selected = QualityTier.fromName(settings.photoTier),
                 onSelect = { onSetTier(MediaKind.PHOTO, it) },
             )
             TierCard(
                 title = "实况照片",
                 hint = "主图 + 增益图 + 内嵌视频",
-                note = "内嵌视频一并重编码；压缩后仍可由系统相册识别与播放。",
                 selected = QualityTier.fromName(settings.liveTier),
                 onSelect = { onSetTier(MediaKind.LIVE_PHOTO, it) },
             )
             TierCard(
                 title = "视频",
                 hint = "HEVC / H.264 / AV1 / VP9",
-                note = "保持分辨率、帧率与时长不变，仅调整编码与码率。",
                 selected = QualityTier.fromName(settings.videoTier),
                 onSelect = { onSetTier(MediaKind.VIDEO, it) },
             )
@@ -160,11 +153,9 @@ private fun AlbumFilterCard(state: UiState, onToggle: (String, Boolean) -> Unit)
 private fun TierCard(
     title: String,
     hint: String,
-    note: String,
     selected: QualityTier,
     onSelect: (QualityTier) -> Unit,
 ) {
-    var savedFlash by remember { mutableStateOf(false) }
     CardSurface(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -179,13 +170,8 @@ private fun TierCard(
             SegmentedControl(
                 options = QualityTier.entries.map { it.label },
                 selectedIndex = QualityTier.entries.indexOf(selected),
-                onSelect = {
-                    onSelect(QualityTier.entries[it])
-                    savedFlash = true
-                },
+                onSelect = { onSelect(QualityTier.entries[it]) },
             )
-            Spacer(Modifier.height(10.dp))
-            Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
         }
     }
 }
