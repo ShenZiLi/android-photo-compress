@@ -317,10 +317,10 @@
   .btn-row{ display:flex; gap:var(--space-3); margin-top:var(--space-6); }
 
   /* 筛选 chips */
-  .chips{ display:flex; gap:var(--space-2); padding:0 var(--space-5) var(--space-3); overflow-x:auto; scrollbar-width:none; }
+  .chips{ display:flex; gap:6px; padding:0 var(--space-5) var(--space-2); overflow-x:auto; scrollbar-width:none; }
   .chips::-webkit-scrollbar{ display:none; }
   .chip{
-    flex:0 0 auto; padding:7px var(--space-4); border-radius:var(--radius-xs);
+    flex:0 0 auto; padding:7px var(--space-3); border-radius:var(--radius-xs);
     border:1px solid var(--control-border); background:transparent; color:var(--on-surface-muted);
     font-size:var(--text-label); cursor:pointer; white-space:nowrap;
   }
@@ -329,10 +329,10 @@
     border-color:transparent; font-weight:600;
   }
 
-  /* 工具条：全选 / 数量 */
+  /* 工具条：全选 / 数量。底部留 16px，把筛选区与网格分开 */
   .toolbar{
     display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
-    padding:0 var(--space-5) var(--space-3); font-size:var(--text-label); color:var(--on-surface-muted);
+    padding:0 var(--space-5) var(--space-4); font-size:var(--text-label); color:var(--on-surface-muted);
   }
 
   /* 媒体网格 */
@@ -597,12 +597,20 @@
             </div>
           </div>
 
-          <div class="chips" role="group" aria-label="按类型筛选" data-filter="todo">
-            <button class="chip" data-kind="all" aria-pressed="true">全部</button>
-            <button class="chip" data-kind="photo" aria-pressed="false">照片</button>
-            <button class="chip" data-kind="live" aria-pressed="false">实况</button>
-            <button class="chip" data-kind="video" aria-pressed="false">视频</button>
-            <button class="chip" data-kind="skip" aria-pressed="false">不支持</button>
+          <div class="chips" role="group" aria-label="按类型筛选" data-filter="todo" data-page="todo">
+            <button class="chip" data-value="all" aria-pressed="true">全部</button>
+            <button class="chip" data-value="photo" aria-pressed="false">照片</button>
+            <button class="chip" data-value="live" aria-pressed="false">实况</button>
+            <button class="chip" data-value="video" aria-pressed="false">视频</button>
+            <button class="chip" data-value="skip" aria-pressed="false">不支持</button>
+          </div>
+
+          <div class="chips" role="group" aria-label="按图集筛选" data-filter="albumTodo" data-page="todo">
+            <button class="chip" data-value="all" aria-pressed="true">全部图集</button>
+            <button class="chip" data-value="相机" aria-pressed="false">相机</button>
+            <button class="chip" data-value="截屏录屏" aria-pressed="false">截屏录屏</button>
+            <button class="chip" data-value="微信" aria-pressed="false">微信</button>
+            <button class="chip" data-value="下载" aria-pressed="false">下载</button>
           </div>
 
           <div class="toolbar">
@@ -625,10 +633,18 @@
             </button>
           </div>
 
-          <div class="chips" role="group" aria-label="按还原状态筛选" data-filter="done">
-            <button class="chip" data-state="all" aria-pressed="true">全部</button>
-            <button class="chip" data-state="restorable" aria-pressed="false">可还原</button>
-            <button class="chip" data-state="expired" aria-pressed="false">已超期</button>
+          <div class="chips" role="group" aria-label="按还原状态筛选" data-filter="done" data-page="done">
+            <button class="chip" data-value="all" aria-pressed="true">全部</button>
+            <button class="chip" data-value="restorable" aria-pressed="false">可还原</button>
+            <button class="chip" data-value="expired" aria-pressed="false">已超期</button>
+          </div>
+
+          <div class="chips" role="group" aria-label="按图集筛选" data-filter="albumDone" data-page="done">
+            <button class="chip" data-value="all" aria-pressed="true">全部图集</button>
+            <button class="chip" data-value="相机" aria-pressed="false">相机</button>
+            <button class="chip" data-value="截屏录屏" aria-pressed="false">截屏录屏</button>
+            <button class="chip" data-value="微信" aria-pressed="false">微信</button>
+            <button class="chip" data-value="下载" aria-pressed="false">下载</button>
           </div>
 
           <div class="toolbar">
@@ -823,26 +839,26 @@ const baseline = {
   done: { photo:{n:640, before:3400, after:1100}, live:{n:56, before:700, after:300}, video:{n:22, before:2600, after:1100} }
 };
 
-/* 抽样项：status = todo | done */
+/* 抽样项：status = todo | done；album = 所属图集 */
 let items = [
-  {id:'t1', img:'lake',   kind:'live',  name:'IMG_20261001_072255.jpg', mb:12.5, status:'todo'},
-  {id:'t2', img:'city',   kind:'photo', name:'IMG_20260930_184512.jpg', mb:4.8,  status:'todo'},
-  {id:'t3', img:'beach',  kind:'video', name:'VID_20260929_201133.mp4', mb:86.3, status:'todo'},
-  {id:'t4', img:'cat',    kind:'photo', name:'IMG_20260928_143006.jpg', mb:3.2,  status:'todo'},
-  {id:'t5', img:'forest', kind:'live',  name:'IMG_20260927_090118.jpg', mb:9.7,  status:'todo'},
-  {id:'t6', img:'food',   kind:'photo', name:'IMG_20260926_120744.jpg', mb:5.1,  status:'todo'},
-  {id:'t7', img:'snow',   kind:'video', name:'VID_20260925_180922.mp4', mb:142.6,status:'todo'},
-  {id:'t8', img:'bike',   kind:'photo', name:'IMG_20260924_173300.jpg', mb:2.9,  status:'todo'},
-  {id:'t9', img:'city',   kind:'live',  name:'IMG_20260923_210515.jpg', mb:11.2, status:'todo'},
-  {id:'t10', img:'food',  kind:'photo', name:'Screenshot_20260923.png', mb:6.4, status:'todo', skip:'PNG 是无损格式，本版本不处理'},
-  {id:'t11', img:'bike',  kind:'photo', name:'IMG_wechat_20260922.webp', mb:1.8, status:'todo', skip:'WebP 属第三方来源，本版本不处理'},
-  {id:'t12', img:'snow',  kind:'photo', name:'IMG_20260921_110802.dng',  mb:54.2, status:'todo', skip:'RAW/DNG 保留后期空间，不压缩'},
+  {id:'t1', img:'lake',   kind:'live',  album:'相机',    name:'IMG_20261001_072255.jpg', mb:12.5, status:'todo'},
+  {id:'t2', img:'city',   kind:'photo', album:'相机',    name:'IMG_20260930_184512.jpg', mb:4.8,  status:'todo'},
+  {id:'t3', img:'beach',  kind:'video', album:'相机',    name:'VID_20260929_201133.mp4', mb:86.3, status:'todo'},
+  {id:'t4', img:'cat',    kind:'photo', album:'微信',    name:'IMG_20260928_143006.jpg', mb:3.2,  status:'todo'},
+  {id:'t5', img:'forest', kind:'live',  album:'相机',    name:'IMG_20260927_090118.jpg', mb:9.7,  status:'todo'},
+  {id:'t6', img:'food',   kind:'photo', album:'下载',    name:'IMG_20260926_120744.jpg', mb:5.1,  status:'todo'},
+  {id:'t7', img:'snow',   kind:'video', album:'相机',    name:'VID_20260925_180922.mp4', mb:142.6,status:'todo'},
+  {id:'t8', img:'bike',   kind:'photo', album:'微信',    name:'IMG_20260924_173300.jpg', mb:2.9,  status:'todo'},
+  {id:'t9', img:'city',   kind:'live',  album:'相机',    name:'IMG_20260923_210515.jpg', mb:11.2, status:'todo'},
+  {id:'t10', img:'food',  kind:'photo', album:'截屏录屏', name:'Screenshot_20260923.png', mb:6.4, status:'todo', skip:'PNG 是无损格式，本版本不处理'},
+  {id:'t11', img:'bike',  kind:'photo', album:'微信',    name:'IMG_wechat_20260922.webp', mb:1.8, status:'todo', skip:'WebP 属第三方来源，本版本不处理'},
+  {id:'t12', img:'snow',  kind:'photo', album:'相机',    name:'IMG_20260921_110802.dng',  mb:54.2, status:'todo', skip:'RAW/DNG 保留后期空间，不压缩'},
 
-  {id:'d1', img:'cat',    kind:'photo', name:'IMG_20260922_090210.jpg', mb:4.6,  status:'done', after:1.5, days:28},
-  {id:'d2', img:'lake',   kind:'live',  name:'IMG_20260930_184512.jpg', mb:12.1, status:'done', after:4.2, days:28},
-  {id:'d3', img:'snow',   kind:'video', name:'VID_20260928_201133.mp4', mb:96.4, status:'done', after:38.1, days:27},
-  {id:'d4', img:'forest', kind:'live',  name:'IMG_20261001_072255.jpg', mb:10.4, status:'done', after:3.6, days:3},
-  {id:'d5', img:'beach',  kind:'photo', name:'IMG_20260905_173001.jpg', mb:5.3,  status:'done', after:1.7, days:-4}
+  {id:'d1', img:'cat',    kind:'photo', album:'微信',    name:'IMG_20260922_090210.jpg', mb:4.6,  status:'done', after:1.5, days:28},
+  {id:'d2', img:'lake',   kind:'live',  album:'相机',    name:'IMG_20260930_184512.jpg', mb:12.1, status:'done', after:4.2, days:28},
+  {id:'d3', img:'snow',   kind:'video', album:'相机',    name:'VID_20260928_201133.mp4', mb:96.4, status:'done', after:38.1, days:27},
+  {id:'d4', img:'forest', kind:'live',  album:'相机',    name:'IMG_20261001_072255.jpg', mb:10.4, status:'done', after:3.6, days:3},
+  {id:'d5', img:'beach',  kind:'photo', album:'下载',    name:'IMG_20260905_173001.jpg', mb:5.3,  status:'done', after:1.7, days:-4}
 ];
 
 /* ============================================================
@@ -955,11 +971,11 @@ const CHECK = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><
 const PLAY  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>';
 
 const selected = { todo:new Set(), done:new Set() };
-let filter = { todo:'all', done:'all' };
+let filter = { todo:'all', albumTodo:'all', done:'all', albumDone:'all' };
 
 function todoTile(it){
   const skip = !!it.skip;
-  const label = `${it.name}，${KIND[it.kind]}，${fmtSize(it.mb)}${skip ? '，' + it.skip : ''}`;
+  const label = `${it.name}，${it.album}图集，${KIND[it.kind]}，${fmtSize(it.mb)}${skip ? '，' + it.skip : ''}`;
   return `
     <button class="tile" data-id="${it.id}" data-kind="${it.kind}" data-skip="${skip ? 1 : 0}"
             aria-pressed="${selected.todo.has(it.id)}" aria-label="${label}" title="${it.name}">
@@ -973,7 +989,7 @@ function todoTile(it){
 
 function doneTile(it){
   const expired = it.days < 0;
-  const label = `${it.name}，${KIND[it.kind]}，${fmtSize(it.mb)} 压缩为 ${fmtSize(it.after)}，${expired ? '已超过 30 天，无法还原' : '剩余 ' + it.days + ' 天可还原'}`;
+  const label = `${it.name}，${it.album}图集，${KIND[it.kind]}，${fmtSize(it.mb)} 压缩为 ${fmtSize(it.after)}，${expired ? '已超过 30 天，无法还原' : '剩余 ' + it.days + ' 天可还原'}`;
   return `
     <button class="tile" data-id="${it.id}" data-state="${expired ? 'expired' : 'restorable'}"
             aria-pressed="${!expired && selected.done.has(it.id)}" aria-label="${label}"
@@ -989,6 +1005,7 @@ function doneTile(it){
 function renderTodo(){
   const list = items.filter(i => i.status === 'todo');
   const shown = list.filter(i => {
+    if (filter.albumTodo !== 'all' && i.album !== filter.albumTodo) return false;
     if (filter.todo === 'all') return true;
     if (filter.todo === 'skip') return !!i.skip;
     return !i.skip && i.kind === filter.todo;
@@ -999,7 +1016,7 @@ function renderTodo(){
 
   $('todoGrid').innerHTML = shown.length
     ? shown.map(todoTile).join('')
-    : emptyState('该筛选下没有可压缩项', '换一个类型，或查看「不支持」了解原因');
+    : emptyState('该筛选下没有可压缩项', '换一个类型或图集，或查看「不支持」了解原因');
   $('todoAll').disabled = compressible === 0;
   updateTodoBar();
 }
@@ -1007,6 +1024,7 @@ function renderTodo(){
 function renderDone(){
   const list = items.filter(i => i.status === 'done');
   const shown = list.filter(i => {
+    if (filter.albumDone !== 'all' && i.album !== filter.albumDone) return false;
     if (filter.done === 'all') return true;
     if (filter.done === 'expired') return i.days < 0;
     return i.days >= 0;
@@ -1017,7 +1035,7 @@ function renderDone(){
 
   $('doneGrid').innerHTML = shown.length
     ? shown.map(doneTile).join('')
-    : emptyState('该筛选下没有条目', '切换筛选查看其他已压缩媒体');
+    : emptyState('该筛选下没有条目', '换一个状态或图集看看');
   $('doneAll').disabled = restorable === 0;
   updateDoneBar();
 }
@@ -1255,22 +1273,26 @@ $('doneAll').addEventListener('click', () => {
   renderDone();
 });
 
-/* 筛选：切换时清空选择，避免“已选 N 项”与屏幕不符 */
+/* 筛选：类型与图集两行同时生效；切换任一行都清空选择，
+   避免「已选 N 项」与屏幕上可见的项不符 */
 document.querySelectorAll('[data-filter]').forEach(group => {
-  const which = group.dataset.filter;
+  const key = group.dataset.filter;   // todo | albumTodo | done | albumDone
+  const pg  = group.dataset.page;     // todo | done
+
   group.addEventListener('click', e => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
     group.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed','false'));
     chip.setAttribute('aria-pressed','true');
+    if (filter[key] === chip.dataset.value) return;
+    filter[key] = chip.dataset.value;
 
-    const cleared = which === 'todo' ? selected.todo.size : selected.done.size;
-    filter[which] = which === 'todo' ? chip.dataset.kind : chip.dataset.state;
-    (which === 'todo' ? selected.todo : selected.done).clear();
-
-    which === 'todo' ? renderTodo() : renderDone();
+    const cleared = selected[pg].size;
+    selected[pg].clear();
+    pg === 'todo' ? renderTodo() : renderDone();
     if (cleared) toast('切换筛选已清空选择');
   });
+
   group.addEventListener('keydown', e => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const chips = [...group.querySelectorAll('.chip')];
