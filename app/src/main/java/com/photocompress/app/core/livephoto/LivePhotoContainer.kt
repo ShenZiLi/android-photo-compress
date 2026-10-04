@@ -1,6 +1,5 @@
 package com.photocompress.app.core.livephoto
 
-import com.photocompress.app.core.xmp.PcXmp
 import com.photocompress.app.data.media.LivePhotoDetector
 import java.io.File
 
@@ -11,9 +10,6 @@ import java.io.File
  * 每段长度由 XMP 声明，重组后必须重算（design.md §4.4）。
  */
 object LivePhotoContainer {
-
-    private const val NS_CONTAINER = "http://ns.google.com/photos/1.0/container/"
-    private const val NS_ITEM = "http://ns.google.com/photos/1.0/container/item/"
 
     data class Plan(
         val hasGainMap: Boolean,
@@ -59,50 +55,75 @@ object LivePhotoContainer {
     }
 
     /**
-     * 重建 XMP：重算 Container:Directory 各段长度，并合并自有标记。
+     * 只在原 XMP 上**就地改写** `Item:Length` 的数值，不重建 `Container:Directory`、
+     * 不新增 `rdf:Description`、不改变元素顺序与空白。
      *
-     * 注意：`OpCamera:*` 为 oplus 私有字段，语义未知（实测 `VideoLength` 与内嵌视频
-     * 真实时长/大小都不吻合），一律**原样保留**，不改写，避免破坏相册识别。
+     * 实机验证教训：oplus 相册对 XMP 结构敏感，结构一变实况照片就无法播放。
+     * 因此这里只替换数字，其余字节保持原样。
      */
-    fun rebuildXmp(
-        originalXmp: String?,
-        hasGainMap: Boolean,
-        gainMapLength: Long,
-        gainMapPadding: Long,
-        hasMotion: Boolean,
-        motionLength: Long,
-        motionPadding: Long,
-        marker: PcXmp.Marker,
-    ): String {
-        val base = (originalXmp ?: "")
-            .replace(Regex("<Container:Directory>[\\s\\S]*?</Container:Directory>"), "")
-
-        val dir = buildString {
-            append("<rdf:Description rdf:about=\"\"")
-            append(" xmlns:Container=\"").append(NS_CONTAINER).append("\"")
-            append(" xmlns:Item=\"").append(NS_ITEM).append("\">\n")
-            append("  <Container:Directory>\n    <rdf:Seq>\n")
-            append("      <rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"Primary\" Item:Length=\"0\" Item:Padding=\"0\"/></rdf:li>\n")
-            if (hasGainMap) {
-                append("      <rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"GainMap\" Item:Length=\"")
-                append(gainMapLength).append("\" Item:Padding=\"").append(gainMapPadding)
-                append("\"/></rdf:li>\n")
-            }
-            if (hasMotion) {
-                append("      <rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"video/mp4\" Item:Semantic=\"MotionPhoto\" Item:Length=\"")
-                append(motionLength).append("\" Item:Padding=\"").append(motionPadding)
-                append("\"/></rdf:li>\n")
-            }
-            append("    </rdf:Seq>\n  </Container:Directory>\n</rdf:Description>")
-        }
-
-        val merged = if (base.contains("</rdf:RDF>")) {
-            base.replace("</rdf:RDF>", "$dir\n</rdf:RDF>")
-        } else {
-            base
-        }
-        return PcXmp.mergeInto(merged, marker)
+    fun rewriteItemLengths(xmp: String, newLengths: Map<String, Long>): String {
+        var out = xmp
+        for ((semantic, length) in newLengths) out = rewriteOne(out, semantic, length)
+        return out
     }
+
+    private fun rewriteOne(xmp: String, semantic: String, length: Long): String {
+        val semanticIdx = xmp.indexOf("Item:Semantic=\"$semantic\"")
+        if (semanticIdx < 0) return xmp
+        val itemStart = xmp.lastIndexOf("<Container:Item", semanticIdx).let { if (it < 0) return xmp else it }
+        val closeIdx = xmp.indexOf("/>", semanticIdx).let { if (it < 0) return xmp else it }
+        val block = xmp.substring(itemStart, closeIdx)
+        val replaced = if (block.contains("Item:Length=")) {
+            Regex("""Item:Length="\d*"""").replace(block, "Item:Length=\"$length\"")
+        } else {
+            block.replace(
+                "Item:Semantic=\"$semantic\"",
+                "Item:Semantic=\"$semantic\" Item:Length=\"$length\"",
+            )
+        }
+        return xmp.substring(0, itemStart) + replaced + xmp.substring(closeIdx)
+    }
+
+    /**
+     * 判断内嵌尾段是否为「单个普通 MP4」。
+     *
+     * oplus/realme 的实况照片尾段常是厂商私有复合结构
+     * （MP4 #1 + 私有块 + MP4 #2，见 research/acceptance-report.md），
+     * 只有普通 MP4 才能安全地整段重编码；否则必须原样保留。
+     */
+    fun isPlainMp4(bytes: ByteArray): Boolean {
+        if (bytes.size < 12) return false
+        var i = 0
+        var sawFtyp = false
+        var sawMoov = false
+        var sawMdat = false
+        while (i + 8 <= bytes.size) {
+            val type = String(bytes, i + 4, 4, Charsets.ISO_8859_1)
+            if (!type.all { it.code in 32..126 }) return false
+            var size = beInt(bytes, i).toLong() and 0xFFFFFFFFL
+            if (size == 1L) {
+                if (i + 16 > bytes.size) return false
+                size = ((bytes[i + 8].toLong() and 0xFF) shl 56) or ((bytes[i + 9].toLong() and 0xFF) shl 48) or
+                    ((bytes[i + 10].toLong() and 0xFF) shl 40) or ((bytes[i + 11].toLong() and 0xFF) shl 32) or
+                    ((bytes[i + 12].toLong() and 0xFF) shl 24) or ((bytes[i + 13].toLong() and 0xFF) shl 16) or
+                    ((bytes[i + 14].toLong() and 0xFF) shl 8) or (bytes[i + 15].toLong() and 0xFF)
+            } else if (size == 0L) {
+                size = (bytes.size - i).toLong()
+            }
+            if (size < 8 || i + size > bytes.size) return false
+            when (type) {
+                "ftyp" -> sawFtyp = true
+                "moov" -> sawMoov = true
+                "mdat" -> sawMdat = true
+            }
+            i += size.toInt()
+        }
+        return sawFtyp && sawMoov && sawMdat && i == bytes.size
+    }
+
+    private fun beInt(b: ByteArray, off: Int): Int =
+        ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
+            ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
 
     /** 重组后自校验：XMP 声明的长度与真实拼接长度一致。 */
     fun verify(assembled: ByteArray): String? {

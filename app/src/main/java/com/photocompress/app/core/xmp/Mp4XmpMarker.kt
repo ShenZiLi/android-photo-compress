@@ -24,7 +24,7 @@ object Mp4XmpMarker {
 
     /** 把自有 XMP 标记追加为顶层 uuid box。返回是否成功。 */
     fun write(file: File, marker: PcXmp.Marker, existingXmp: String? = null): Boolean = runCatching {
-        val packet = PcXmp.mergeInto(existingXmp, marker).toByteArray(Charsets.UTF_8)
+        val packet = PcXmp.injectAttributes(existingXmp, marker).toByteArray(Charsets.UTF_8)
         val boxSize = 4 + 4 + XMP_UUID.size + packet.size
         RandomAccessFile(file, "rw").use { raf ->
             raf.seek(raf.length())

@@ -7,7 +7,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** JPEG 段级搬运与 MPF 索引重建的单元测试（implement.md 验证清单）。 */
+/** JPEG 段级重组与 MPF 索引重建（implement.md 验证清单）。 */
 class JpegSegmentsTest {
 
     private fun seg(marker: Int, payload: ByteArray): ByteArray {
@@ -22,13 +22,18 @@ class JpegSegmentsTest {
     private val eoi = byteArrayOf(0xFF.toByte(), 0xD9.toByte())
     private val sos = byteArrayOf(0xFF.toByte(), 0xDA.toByte(), 0x00, 0x02)
 
-    private fun exifSegment(payloadTail: ByteArray): ByteArray =
-        seg(0xE1, "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1) + payloadTail)
+    private fun exifSegment(tail: ByteArray): ByteArray =
+        seg(0xE1, "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1) + tail)
 
     private fun xmpSegment(text: String): ByteArray =
         seg(0xE1, "http://ns.adobe.com/xap/1.0/\u0000".toByteArray(Charsets.ISO_8859_1) + text.toByteArray())
 
     private fun jfifSegment(): ByteArray = seg(0xE0, "JFIF\u0000".toByteArray(Charsets.ISO_8859_1) + ByteArray(9))
+
+    private fun iccSegment(): ByteArray =
+        seg(0xE2, "ICC_PROFILE\u0000".toByteArray(Charsets.ISO_8859_1) + ByteArray(20))
+
+    private fun vendorSegment(): ByteArray = seg(0xE4, "QTI Debug\u0000".toByteArray(Charsets.ISO_8859_1) + ByteArray(8))
 
     @Test
     fun `split 保留 SOI 之后的段并把熵数据放进 tail`() {
@@ -36,40 +41,53 @@ class JpegSegmentsTest {
         val split = JpegSegments.split(jpeg)
         assertEquals(1, split.segments.size)
         assertTrue(JpegSegments.isExif(split.segments[0]))
-        // SOS 及其后原样保留
         assertEquals(4 + 3 + 2, split.tail.size)
     }
 
     @Test
-    fun `transplantMetadata 用原图元信息段替换编码结果且保留编码段`() {
-        val original = soi + jfifSegment() + exifSegment(ByteArray(24) { 7 }) + xmpSegment("<xmp>orig</xmp>") + sos + byteArrayOf(1, 2, 3) + eoi
+    fun `rebuildWithMetadata 保留原图全部元信息段并替换 XMP`() {
+        val original = soi + jfifSegment() + exifSegment(ByteArray(24) { 7 }) +
+            xmpSegment("<old/>") + iccSegment() + vendorSegment() +
+            seg(0xFE, "comment".toByteArray()) + sos + byteArrayOf(1, 2, 3) + eoi
 
-        // 编码结果：只有 JFIF + DQT
+        // 编码结果：自带 JFIF + DQT，图像数据应被采用
         val encoded = soi + jfifSegment() +
             seg(0xDB, ByteArray(8) { 5 }) + sos + byteArrayOf(4, 5, 6, 7) + eoi
 
-        val out = JpegSegments.transplantMetadata(encoded, original, null)
-        val segments = JpegSegments.split(out).segments
+        val out = JpegSegments.rebuildWithMetadata(encoded, original, "<new/>")
+        val segs = JpegSegments.split(out).segments
 
-        assertTrue("应保留原图 EXIF", segments.any { JpegSegments.isExif(it) })
-        assertTrue("应保留原图 XMP", segments.any { JpegSegments.isXmp(it) })
-        assertTrue("应保留编码结果的 DQT", segments.any { it.marker == 0xDB })
-        // tail = SOS 段(4) + 熵数据(4) + EOI(2)
-        assertEquals("取自编码结果的熵数据", 10, JpegSegments.split(out).tail.size)
+        assertTrue("EXIF 应保留", segs.any { JpegSegments.isExif(it) })
+        assertTrue("ICC_PROFILE 应保留（曾因丢段导致色彩/兼容问题）", segs.any { JpegSegments.isIcc(it) })
+        assertTrue("厂商私有 APP4 应保留", segs.any { it.marker == 0xE4 })
+        assertTrue("COM 段应保留", segs.any { it.marker == 0xFE })
+        assertTrue("编码结果的 DQT 应被采用", segs.any { it.marker == 0xDB })
+        assertEquals("XMP 应被替换", "<new/>", JpegSegments.xmpTextOf(out))
+        assertEquals("熵数据取自编码结果", 10, JpegSegments.split(out).tail.size)
 
         // EXIF 逐字节一致
-        val origExif = JpegSegments.split(original).segments.first { JpegSegments.isExif(it) }.payload
-        val outExif = segments.first { JpegSegments.isExif(it) }.payload
-        assertArrayEquals(origExif, outExif)
+        assertArrayEquals(
+            JpegSegments.split(original).segments.first { JpegSegments.isExif(it) }.payload,
+            segs.first { JpegSegments.isExif(it) }.payload,
+        )
+        // 原图的 JFIF 只保留一份（不叠加编码器的）
+        assertEquals(1, segs.count { JpegSegments.isJfif(it) })
     }
 
     @Test
-    fun `transplantMetadata 的 xmpOverride 生效`() {
-        val original = soi + exifSegment(ByteArray(8)) + xmpSegment("<old/>") + sos + eoi
+    fun `rebuildWithMetadata 的 xmpOverride 为 null 时保留原 XMP`() {
+        val original = soi + exifSegment(ByteArray(8)) + xmpSegment("<keep/>") + sos + eoi
         val encoded = soi + seg(0xDB, ByteArray(4)) + sos + eoi
-        val out = JpegSegments.transplantMetadata(encoded, original, "<new/>")
-        val xmp = JpegSegments.xmpTextOf(out)
-        assertEquals("<new/>", xmp)
+        val out = JpegSegments.rebuildWithMetadata(encoded, original, null)
+        assertEquals("<keep/>", JpegSegments.xmpTextOf(out))
+    }
+
+    @Test
+    fun `rebuildWithMetadata 在原图无 XMP 时可写入新 XMP`() {
+        val original = soi + exifSegment(ByteArray(8)) + sos + eoi
+        val encoded = soi + seg(0xDB, ByteArray(4)) + sos + eoi
+        val out = JpegSegments.rebuildWithMetadata(encoded, original, "<added/>")
+        assertEquals("<added/>", JpegSegments.xmpTextOf(out))
     }
 
     @Test
@@ -80,32 +98,26 @@ class JpegSegmentsTest {
 
     // ------------------------------------------------------------ MPF
 
-    /** 构造一个 2 图的 MP/Q 索引段（MM 字节序）。 */
     private fun buildMpfEntry(count: Int, sizes: List<Long>, offsets: List<Long>): ByteArray {
         val mpf = java.io.ByteArrayOutputStream()
         mpf.write("MPF\u0000".toByteArray(Charsets.ISO_8859_1))
-        // TIFF 头：MM, 0x002A, 第一 IFD 偏移 = 8
         mpf.write(byteArrayOf(0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x08))
-        // IFD: 2 条目
-        val entryDataOffset = 8 + 2 + 3 * 12 + 4 // 50
+        val entryDataOffset = 8 + 2 + 3 * 12 + 4
         fun be32(v: Long) = byteArrayOf(
             ((v shr 24) and 0xFF).toByte(), ((v shr 16) and 0xFF).toByte(),
             ((v shr 8) and 0xFF).toByte(), (v and 0xFF).toByte(),
         )
-        mpf.write(byteArrayOf(0x00, 0x03)) // 3 条目
-        // 0xB000 MPFVersion
+        mpf.write(byteArrayOf(0x00, 0x03))
         mpf.write(byteArrayOf(0xB0.toByte(), 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x04)); mpf.write("0100".toByteArray())
-        // 0xB001 NumberOfImages
         mpf.write(byteArrayOf(0xB0.toByte(), 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01)); mpf.write(be32(count.toLong()))
-        // 0xB002 MPEntry -> 指向 entryDataOffset
         mpf.write(byteArrayOf(0xB0.toByte(), 0x02, 0x00, 0x07, 0x00, 0x00, 0x00, (count * 16).toByte()))
         mpf.write(be32(entryDataOffset.toLong()))
-        mpf.write(byteArrayOf(0x00, 0x00, 0x00, 0x00)) // next IFD = 0
+        mpf.write(byteArrayOf(0x00, 0x00, 0x00, 0x00))
         for (i in 0 until count) {
-            mpf.write(be32(0x00030000L)) // attribute
+            mpf.write(be32(0x00030000L))
             mpf.write(be32(sizes[i]))
             mpf.write(be32(offsets[i]))
-            mpf.write(byteArrayOf(0, 0, 0, 0)) // dependants
+            mpf.write(byteArrayOf(0, 0, 0, 0))
         }
         return mpf.toByteArray()
     }
@@ -118,14 +130,8 @@ class JpegSegmentsTest {
         val updated = MpfRewriter.updateEntries(payload, longArrayOf(1234L, 567L), longArrayOf(0L, 1234L))
         assertNotNull(updated)
         assertEquals("改写为定长", payload.size, updated!!.size)
-
-        // 重新解析验证
-        val text = String(updated, Charsets.ISO_8859_1)
-        assertTrue(text.contains("MPF"))
-        // 通过再次读取确认张数未变
         assertEquals(2, MpfRewriter.numberOfImages(updated))
 
-        // 手动检查 MPEntry 数据区
         val entryBase = 4 + 8 + 2 + 3 * 12 + 4
         fun be32at(off: Int): Long =
             ((updated[off].toLong() and 0xFF) shl 24) or ((updated[off + 1].toLong() and 0xFF) shl 16) or
@@ -146,8 +152,6 @@ class JpegSegmentsTest {
     fun `mpfPayloadOf 能取出 APP2 MPF 段`() {
         val payload = buildMpfEntry(1, listOf(10L), listOf(0L))
         val jpeg = soi + seg(0xE2, payload) + sos + eoi
-        val got = JpegSegments.mpfPayloadOf(jpeg)
-        assertNotNull(got)
-        assertArrayEquals(payload, got)
+        assertArrayEquals(payload, JpegSegments.mpfPayloadOf(jpeg))
     }
 }

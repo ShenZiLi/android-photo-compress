@@ -16,6 +16,8 @@ object JpegSegments {
     const val MARKER_APP0 = 0xE0
     const val MARKER_APP1 = 0xE1
     const val MARKER_APP2 = 0xE2
+    const val MARKER_APP15 = 0xEF
+    const val MARKER_COM = 0xFE
 
     val EXIF_PREFIX = "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1)
     val XMP_PREFIX = "http://ns.adobe.com/xap/1.0/\u0000".toByteArray(Charsets.ISO_8859_1)
@@ -76,6 +78,7 @@ object JpegSegments {
     fun isXmp(s: Segment) = s.marker == MARKER_APP1 && startWith(s.payload, XMP_PREFIX)
     fun isMpf(s: Segment) = s.marker == MARKER_APP2 && startWith(s.payload, MPF_PREFIX)
     fun isJfif(s: Segment) = s.marker == MARKER_APP0 && startWith(s.payload, "JFIF\u0000".toByteArray(Charsets.ISO_8859_1))
+    fun isIcc(s: Segment) = s.marker == MARKER_APP2 && startWith(s.payload, "ICC_PROFILE\u0000".toByteArray(Charsets.ISO_8859_1))
 
     fun xmpText(s: Segment): String? =
         if (isXmp(s)) String(s.payload, XMP_PREFIX.size, s.payload.size - XMP_PREFIX.size, Charsets.UTF_8) else null
@@ -92,11 +95,13 @@ object JpegSegments {
         split(bytes).segments.firstOrNull { isXmp(it) }?.let { xmpText(it) }
 
     /**
-     * 用原图的元信息段（APP0/APP1/APP2 中的 JFIF / EXIF / XMP / MPF）
-     * 替换编码结果的对应段，其余保留编码结果的。
-     * [mpfOverride] 非空时用其替换原 MPF（用于 MPEntry 偏移重算）。
+     * 以**原图的全部元信息段为骨架**（保持原始顺序与内容），
+     * 仅把 XMP / MPF 两个段的 payload 换成给定值；图像数据（DQT/SOF/DHT/熵）取自编码结果。
+     *
+     * 之所以保留全部 APPn：相机 JPEG 常带 ICC_PROFILE(APP2)、厂商私有段(APP4) 等，
+     * 丢掉它们会改变色彩/兼容性。实机验证发现丢段会导致相册异常，故一律原样保留。
      */
-    fun transplantMetadata(
+    fun rebuildWithMetadata(
         encoded: ByteArray,
         original: ByteArray,
         xmpOverride: String?,
@@ -105,25 +110,26 @@ object JpegSegments {
         val enc = split(encoded)
         val orig = split(original)
 
-        val keep = ArrayList<Segment>()
-        // 编码器默认的 JFIF 段：若原图有则用原图的
-        val origJfif = orig.segments.firstOrNull { isJfif(it) }
-        if (origJfif != null) keep += origJfif
-
-        val origExif = orig.segments.firstOrNull { isExif(it) }
-        if (origExif != null) keep += origExif
-
-        val mpf = mpfOverride ?: orig.segments.firstOrNull { isMpf(it) }?.payload
-        if (mpf != null) keep += Segment(MARKER_APP2, mpf)
-
-        val xmp = xmpOverride ?: orig.segments.firstOrNull { isXmp(it) }?.let { xmpText(it) }
-        if (xmp != null) keep += xmpSegment(xmp)
-
-        // 其余非元信息段（DQT/DHT/SOF 等）来自编码结果，去掉它自带的 APP0/APP1
-        val encRest = enc.segments.filter {
-            it.marker != MARKER_APP0 && it.marker != MARKER_APP1 && it.marker != MARKER_APP2
+        val meta = ArrayList<Segment>(orig.segments.size + 2)
+        for (s in orig.segments) {
+            val isMetadata = (s.marker in MARKER_APP0..MARKER_APP15) || s.marker == MARKER_COM
+            if (!isMetadata) continue
+            when {
+                isXmp(s) -> {
+                    val text = xmpOverride ?: xmpText(s) ?: continue
+                    meta += xmpSegment(text)
+                }
+                isMpf(s) -> meta += Segment(MARKER_APP2, mpfOverride ?: s.payload)
+                else -> meta += s
+            }
         }
-        return assemble(keep + encRest, enc.tail)
+        if (xmpOverride != null && meta.none { isXmp(it) }) meta += xmpSegment(xmpOverride)
+        if (mpfOverride != null && meta.none { isMpf(it) }) meta += Segment(MARKER_APP2, mpfOverride)
+
+        val encRest = enc.segments.filter {
+            it.marker !in MARKER_APP0..MARKER_APP15 && it.marker != MARKER_COM
+        }
+        return assemble(meta + encRest, enc.tail)
     }
 
     /** 取原图 MPF 段 payload（含 "MPF\0" 前缀）。 */

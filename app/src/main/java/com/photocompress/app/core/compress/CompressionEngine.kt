@@ -87,15 +87,20 @@ class CompressionEngine(private val context: Context) {
         val encoded = JpegCompressor.compressJpeg(original, quality)
             ?: return CompressOutcome.Failed("JPEG 解码失败")
 
-        val marker = newMarker()
-        val mergedXmp = PcXmp.mergeInto(xmp, marker)
-        val pass1 = JpegSegments.transplantMetadata(encoded, original, mergedXmp)
+        // 自有标记以属性形式并入原 XMP，尽量不改动文档结构（D5）
+        val xmpOut = PcXmp.injectAttributes(xmp, newMarker())
+
+        val pass1 = JpegSegments.rebuildWithMetadata(encoded, original, xmpOut)
         // MPF 的 size 字段是文件总长，需要回填（改写为定长，不影响总长）
         val finalBytes = if (mpfPayload != null) {
             val patched = MpfRewriter.updateEntries(
                 mpfPayload, longArrayOf(pass1.size.toLong()), longArrayOf(0L),
             )
-            if (patched != null) JpegSegments.transplantMetadata(encoded, original, mergedXmp, patched) else pass1
+            if (patched != null) {
+                JpegSegments.rebuildWithMetadata(encoded, original, xmpOut, patched)
+            } else {
+                pass1
+            }
         } else {
             pass1
         }
@@ -148,41 +153,45 @@ class CompressionEngine(private val context: Context) {
         val encodedPrimary = JpegCompressor.compressJpeg(primaryBytes, quality)
             ?: return CompressOutcome.Failed("主图解码失败")
 
-        // 2) 内嵌视频重编码
+        // 2) 内嵌视频：**只有「单个普通 MP4」才重编码**。
+        //    oplus/realme 的尾段常是厂商私有复合结构（MP4 + 私有块 + MP4），
+        //    整段替换会让相册无法播放（实机验证），故此类一律原样保留。
+        val canReencode = plan.hasMotion && motionBytes != null && LivePhotoContainer.isPlainMp4(motionBytes)
         var newMotionFile: File? = null
-        if (plan.hasMotion && motionBytes != null) {
+        var motionNote: String = when {
+            !plan.hasMotion -> "无内嵌视频"
+            !canReencode -> "内嵌视频原样保留（厂商私有封装）"
+            else -> "内嵌视频重编码"
+        }
+        if (canReencode) {
             val srcMotion = File(context.cacheDir, "pc_motion_src_${System.currentTimeMillis()}.mp4")
-            srcMotion.writeBytes(motionBytes)
+            srcMotion.writeBytes(motionBytes!!)
             val dstMotion = File(context.cacheDir, "pc_motion_dst_${System.currentTimeMillis()}.mp4")
             val res = VideoTranscoder.transcode(srcMotion, dstMotion, tier)
             srcMotion.delete()
-            if (!res.success || !dstMotion.exists()) {
+            if (res.success && dstMotion.exists() && dstMotion.length() < motionBytes.size) {
+                newMotionFile = dstMotion
+            } else {
+                // 转码失败或没变小：退回「原样保留」，不影响主图收益
                 dstMotion.delete()
-                return CompressOutcome.Skipped("内嵌视频重编码失败：${res.reason ?: "未知"}")
+                motionNote = "内嵌视频原样保留（重编码未获益：${res.reason ?: "体积未减小"}）"
             }
-            newMotionFile = dstMotion
         }
 
         try {
             // 增益图**原样保留**：它是 HDR/ProXDR 重建的依据，重编码会引入偏差（C6 / D10）
             val gainLen = gainBytes?.size?.toLong() ?: 0L
-            val newMotionLen = newMotionFile?.length() ?: 0L
+            val motionLen = newMotionFile?.length() ?: (motionBytes?.size?.toLong() ?: 0L)
 
-            // 4) 重建 XMP（重算各段长度），并回填 MPF 的多图偏移
-            val marker = newMarker()
-            val rebuiltXmp = LivePhotoContainer.rebuildXmp(
-                originalXmp = xmp,
-                hasGainMap = gainBytes != null,
-                gainMapLength = gainLen,
-                gainMapPadding = 0L,
-                hasMotion = plan.hasMotion,
-                motionLength = newMotionLen,
-                motionPadding = 0L,
-                marker = marker,
-            )
+            // 3) XMP：只在长度真的变化时就地改写数字，并注入自有标记（不改结构）
+            val changed = HashMap<String, Long>()
+            if (gainBytes != null && gainLen != plan.gainMapLength) changed["GainMap"] = gainLen
+            if (newMotionFile != null && motionLen != plan.motionLength) changed["MotionPhoto"] = motionLen
+            var xmpOut = if (changed.isEmpty()) xmp else LivePhotoContainer.rewriteItemLengths(xmp, changed)
+            xmpOut = PcXmp.injectAttributes(xmpOut, newMarker())
 
             fun assemblePrimary(mpf: ByteArray?): ByteArray =
-                JpegSegments.transplantMetadata(encodedPrimary, primaryBytes, rebuiltXmp, mpf)
+                JpegSegments.rebuildWithMetadata(encodedPrimary, primaryBytes, xmpOut, mpf)
 
             var finalPrimary = assemblePrimary(mpfPayload)
             if (mpfPayload != null && gainBytes != null) {
@@ -195,20 +204,20 @@ class CompressionEngine(private val context: Context) {
                 if (patched != null) finalPrimary = assemblePrimary(patched)
             }
 
-            // 5) 拼接：主图 + 增益图 + 内嵌视频
+            // 4) 拼接：主图 + 增益图 + 内嵌视频
             val out = java.io.ByteArrayOutputStream(
-                finalPrimary.size + gainLen.toInt() + newMotionLen.toInt() + 4096
+                finalPrimary.size + gainLen.toInt() + motionLen.toInt() + 4096
             )
             out.write(finalPrimary)
             gainBytes?.let { out.write(it) }
-            newMotionFile?.let { out.write(it.readBytes()) }
+            newMotionFile?.let { out.write(it.readBytes()) } ?: motionBytes?.let { out.write(it) }
             val assembled = out.toByteArray()
 
             LivePhotoContainer.verify(assembled)?.let {
                 return CompressOutcome.Skipped("重组校验失败：$it")
             }
             if (plan.hasMotion) {
-                val mp4Start = assembled.size - newMotionLen.toInt()
+                val mp4Start = assembled.size - motionLen.toInt()
                 val magic = String(assembled, mp4Start + 4, 4, Charsets.US_ASCII)
                 if (magic != "ftyp") return CompressOutcome.Skipped("内嵌视频定位校验失败")
             }
@@ -218,7 +227,7 @@ class CompressionEngine(private val context: Context) {
 
             val temp = File(context.cacheDir, "pc_live_${System.currentTimeMillis()}.jpg")
             temp.writeBytes(assembled)
-            return commit(item, temp, tier, codecUsed = "JPEG q=$quality + 增益图原样 + 内嵌视频重编码")
+            return commit(item, temp, tier, codecUsed = "JPEG q=$quality + 增益图原样 + $motionNote")
         } finally {
             newMotionFile?.delete()
         }
