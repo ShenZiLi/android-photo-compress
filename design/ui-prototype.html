@@ -1041,7 +1041,13 @@ function albumCard(status, a){
 
 function renderAlbums(status){
   const host = $(status === 'todo' ? 'todoAlbums' : 'doneAlbums');
-  const list = state.filter(a => (status === 'todo' ? albumTodoTotals(a).n : albumDoneTotals(a).n) > 0);
+  // 按图片数量倒序（数量相同时保持图集种子顺序）
+  const list = state
+    .map(a => ({ a, n: status === 'todo' ? albumTodoTotals(a).n : albumDoneTotals(a).n }))
+    .filter(x => x.n > 0)
+    .sort((x, y) => y.n - x.n)
+    .map(x => x.a);
+
   host.innerHTML = list.length
     ? list.map(a => albumCard(status, a)).join('')
     : emptyState('还没有可处理的图集', status === 'todo' ? '媒体库为空，先拍摄或导入照片' : '压缩完成后会出现在这里');
