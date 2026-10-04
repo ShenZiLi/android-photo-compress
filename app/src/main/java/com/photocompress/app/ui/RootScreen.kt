@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.ui.components.KeyValueRow
 import com.photocompress.app.ui.components.ThumbImage
+import com.photocompress.app.ui.screens.AlbumFilterScreen
 import com.photocompress.app.ui.screens.DoneLevel1
 import com.photocompress.app.ui.screens.DoneLevel2
 import com.photocompress.app.ui.screens.HomeScreen
@@ -127,10 +128,11 @@ fun AppRoot(vm: AppViewModel) {
                     )
                 }
                 NavigationBar {
-                    NavItem(AppPage.HOME, "首页", state.page) { vm.go(it) }
-                    NavItem(AppPage.TODO, "未压缩", state.page) { vm.go(it) }
-                    NavItem(AppPage.DONE, "已压缩", state.page) { vm.go(it) }
-                    NavItem(AppPage.SETTINGS, "设置", state.page) { vm.go(it) }
+                    val navPage = if (state.page == AppPage.ALBUM_FILTER) AppPage.SETTINGS else state.page
+                    NavItem(AppPage.HOME, "首页", navPage) { vm.go(it) }
+                    NavItem(AppPage.TODO, "未压缩", navPage) { vm.go(it) }
+                    NavItem(AppPage.DONE, "已压缩", navPage) { vm.go(it) }
+                    NavItem(AppPage.SETTINGS, "设置", navPage) { vm.go(it) }
                 }
             }
         },
@@ -195,7 +197,13 @@ fun AppRoot(vm: AppViewModel) {
                     state = state,
                     onOpenTrash = { vm.go(AppPage.TRASH) },
                     onSetTier = { kind, tier -> vm.setTier(kind, tier) },
-                    onToggleAlbumExcluded = { name, excluded -> vm.setAlbumExcluded(name, excluded) },
+                    onOpenAlbumFilter = { vm.go(AppPage.ALBUM_FILTER) },
+                )
+
+                AppPage.ALBUM_FILTER -> AlbumFilterScreen(
+                    state = state,
+                    onBack = { vm.go(AppPage.SETTINGS) },
+                    onToggle = { name, excluded -> vm.setAlbumExcluded(name, excluded) },
                 )
             }
 
