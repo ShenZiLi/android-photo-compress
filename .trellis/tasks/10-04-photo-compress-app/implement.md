@@ -48,8 +48,7 @@
 
 ## 阶段 6：扩展格式（按阶段 1 与 U3 / U4 / U8 / U9 结论决定是否纳入）
 
-- [ ] WebP：静态 WebP 按档位重编码，带 alpha 时保留透明度。
-- [ ] 跳过判别：PNG、BMP、AVIF（无编码器）、GIF / 动态 WebP / 动态 AVIF、MOV/MKV/WebM/3GP/TS 视频识别并跳过，并显示原因。
+- [ ] 跳过判别：PNG、BMP、WebP、AVIF、GIF / 动态 WebP / 动态 AVIF、MOV/MKV/WebM/3GP/TS 视频识别并跳过，并显示原因。
 - [ ] HEIC：验证 HEIF 内 EXIF / XMP 是否可保留；不可保留则按 C4 跳过。
 - [ ] AV1 / VP9 视频：有硬编码器才启用，否则跳过并说明。
 - [ ] 验证：AC12 / AC14 通过（跳过项不改动原文件且有原因）。
@@ -77,7 +76,7 @@ gradle :app:testDebugUnitTest
 - MP4 box 解析与样本索引重建（`core.mp4`）。
 - XMP `Container:Directory` 深度解析与 `Item:Length` / `Padding` 重算（`core.livephoto`）。
 - JPEG EXIF / XMP 搬运的字段级一致性与 MPF 偏移重建（`core.jpeg`）。
-- 静态图判类：WebP 透明保留、PNG/BMP/AVIF 与动图（GIF / 动态 WebP）识别并跳过。
+- 静态图判类：JPEG/HEIC 之外（PNG、BMP、WebP、AVIF、GIF / 动态 WebP）识别并跳过。
 - 原地改写的中断回滚（备份 → 写入 → 模拟中断 → 恢复）。
 
 ## 风险文件与回滚点
