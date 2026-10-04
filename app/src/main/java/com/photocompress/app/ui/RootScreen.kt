@@ -195,6 +195,7 @@ fun AppRoot(vm: AppViewModel) {
                     state = state,
                     onOpenTrash = { vm.go(AppPage.TRASH) },
                     onSetTier = { kind, tier -> vm.setTier(kind, tier) },
+                    onToggleAlbumExcluded = { name, excluded -> vm.setAlbumExcluded(name, excluded) },
                 )
             }
 

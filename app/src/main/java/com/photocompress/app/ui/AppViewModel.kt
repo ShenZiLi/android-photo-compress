@@ -58,9 +58,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         if (writing) return
         viewModelScope.launch {
-            _ui.update { it.copy(scanning = true, scanError = null) }
+            _ui.update { it.copy(scanning = true, scanError = null, scanDone = 0, scanTotal = 0) }
             try {
-                val items = mediaRepo.scan()
+                val items = mediaRepo.scan { done, total ->
+                    _ui.update { it.copy(scanDone = done, scanTotal = total) }
+                }
                 val ledger = ledgerDao.observeAll().first()
                 _ui.update {
                     it.copy(
@@ -212,7 +214,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 for ((index, dm) in targets.withIndex()) {
                     when (val outcome = engine.restore(dm.record)) {
                         is RestoreOutcome.Success -> {
+                            ledgerDao.deleteById(dm.record.id)
                             ledgerDao.deleteByPath(dm.record.dataPath)
+                            if (dm.record.originalPath.isNotBlank()) {
+                                ledgerDao.deleteByPath(dm.record.originalPath)
+                            }
                             done++
                             freedBytes += dm.compressedSize
                         }
@@ -295,6 +301,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         MediaKind.PHOTO -> QualityTier.fromName(s.photoTier)
         MediaKind.LIVE_PHOTO -> QualityTier.fromName(s.liveTier)
         MediaKind.VIDEO -> QualityTier.fromName(s.videoTier)
+    }
+
+    /** 图集过滤（F9/F10 的补充）：被排除的图集不出现在未压缩 / 已压缩页。 */
+    fun setAlbumExcluded(name: String, excluded: Boolean) {
+        viewModelScope.launch {
+            val current = settingsDao.get() ?: SettingsEntity()
+            val set = current.excludedSet.toMutableSet()
+            if (excluded) set += name else set -= name
+            settingsDao.upsert(current.copy(excludedAlbums = set.sorted().joinToString("\n")))
+            _messages.trySend(if (excluded) "已排除图集「$name」" else "已恢复显示图集「$name」")
+        }
     }
 
     // ---------------------------------------------------------------- 内部

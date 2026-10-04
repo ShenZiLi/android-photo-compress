@@ -76,6 +76,15 @@ object PcXmp {
         return out
     }
 
+    /** 对外暴露的「移除自有标记」，供还原时清除文件内痕迹。 */
+    fun removeOwn(xmp: String): String {
+        var out = stripOwn(xmp)
+        // 也可能存在元素形式（新建包时使用）
+        out = Regex("<rdf:Description[^>]*xmlns:$NS_PREFIX=[^>]*/>").replace(out, "")
+        out = Regex("<rdf:Description[^>]*xmlns:$NS_PREFIX=[^>]*>[\\s\\S]*?</rdf:Description>").replace(out, "")
+        return out
+    }
+
     /** 找到开始标签的 `>`，跳过引号内的字符。 */
     private fun findTagEnd(text: String, from: Int): Int {
         var inQuote = false

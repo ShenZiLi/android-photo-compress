@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +64,10 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
             },
         )
 
+        if (state.scanning) {
+            ScanProgressCard(state, modifier = Modifier.padding(horizontal = 20.dp))
+            Spacer(Modifier.height(14.dp))
+        }
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             HeroCard(totals)
             Spacer(Modifier.height(14.dp))
@@ -90,6 +95,42 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** 首次扫描进度：给出可见进度条与已扫描数量，避免长时间只显示「正在扫描媒体库…」。 */
+@Composable
+private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
+    CardSurface(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("正在扫描媒体库", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.scanTotal > 0) "${state.scanDone} / ${state.scanTotal}" else "统计中…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.appColors.onSurfaceMuted,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            if (state.scanTotal > 0) {
+                LinearProgressIndicator(
+                    progress = { state.scanProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "首次扫描需要读取每个文件的元信息，完成后会缓存结果",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.appColors.onSurfaceMuted,
+            )
         }
     }
 }

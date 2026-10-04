@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +39,7 @@ import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
 import com.photocompress.app.ui.UiState
+import com.photocompress.app.ui.allAlbumNames
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.CardSurface
 import com.photocompress.app.ui.components.EmptyState
@@ -53,6 +55,7 @@ fun SettingsScreen(
     state: UiState,
     onOpenTrash: () -> Unit,
     onSetTier: (MediaKind, QualityTier) -> Unit,
+    onToggleAlbumExcluded: (String, Boolean) -> Unit,
 ) {
     val settings = state.settings
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
@@ -79,6 +82,9 @@ fun SettingsScreen(
                 selected = QualityTier.fromName(settings.videoTier),
                 onSelect = { onSetTier(MediaKind.VIDEO, it) },
             )
+
+            SectionTitle("图集过滤", modifier = Modifier.padding(horizontal = 0.dp))
+            AlbumFilterCard(state, onToggleAlbumExcluded)
 
             SectionTitle("存储与权限", modifier = Modifier.padding(horizontal = 0.dp))
             CardSurface(modifier = Modifier.fillMaxWidth()) {
@@ -110,6 +116,45 @@ fun SettingsScreen(
 
 private fun UiState.restorableCount(): Int =
     ledger.count { it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null }
+
+/** 图集过滤：被排除的图集不出现在未压缩 / 已压缩页。 */
+@Composable
+private fun AlbumFilterCard(state: UiState, onToggle: (String, Boolean) -> Unit) {
+    val albums = state.allAlbumNames()
+    CardSurface(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Text(
+                "被排除的图集不会出现在「未压缩」和「已压缩」页面。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.appColors.onSurfaceMuted,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+            )
+            if (albums.isEmpty()) {
+                EmptyState("暂无可配置的图集", "扫描完成后这里会列出本机图集")
+            } else {
+                albums.forEach { (name, count) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "$count 项",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.appColors.onSurfaceMuted,
+                            )
+                        }
+                        Switch(
+                            checked = name in state.excludedAlbums,
+                            onCheckedChange = { onToggle(name, it) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun TierCard(

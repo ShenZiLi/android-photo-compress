@@ -1,16 +1,19 @@
 package com.photocompress.app.core.compress
 
 import android.content.Context
+import com.photocompress.app.core.jpeg.HeicCompressor
 import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
 import com.photocompress.app.core.livephoto.LivePhotoContainer
+import com.photocompress.app.core.mp4.Mp4Metadata
 import com.photocompress.app.core.rewrite.FileUtils
 import com.photocompress.app.core.rewrite.InPlaceRewriter
 import com.photocompress.app.core.rewrite.MediaStoreUpdater
 import com.photocompress.app.core.rewrite.RecycleBin
 import com.photocompress.app.core.video.MediaClassifierCodec
 import com.photocompress.app.core.video.VideoTranscoder
+import com.photocompress.app.core.xmp.MarkerStripper
 import com.photocompress.app.core.xmp.Mp4XmpMarker
 import com.photocompress.app.core.xmp.PcXmp
 import com.photocompress.app.data.ledger.CompressedItemEntity
@@ -50,12 +53,105 @@ class CompressionEngine(private val context: Context) {
     suspend fun compress(item: MediaItem, tier: QualityTier): CompressOutcome = withContext(Dispatchers.IO) {
         runCatching {
             when (item.kind) {
-                MediaKind.PHOTO -> compressPhoto(item, tier)
+                MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
+                    compressHeic(item, tier)
+                } else {
+                    compressPhoto(item, tier)
+                }
                 MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier)
                 MediaKind.VIDEO -> compressVideo(item, tier)
             }
         }.getOrElse { t ->
             CompressOutcome.Failed("异常 ${t.javaClass.simpleName}: ${t.message}")
+        }
+    }
+
+    // ---------------------------------------------------------------- HEIC（格式转换）
+
+    /**
+     * HEIC/HEIF 压缩：平台无法把元信息写回 HEIF 容器，因此只能**转为 JPEG**。
+     * 同目录、同图集，文件名扩展名由 .heic 变为 .jpg；原文件进回收站，还原时按原路径写回。
+     */
+    private suspend fun compressHeic(item: MediaItem, tier: QualityTier): CompressOutcome {
+        val file = File(item.dataPath)
+        if (!file.exists()) return CompressOutcome.Failed("文件不存在")
+        val originalSize = file.length()
+        val originalModifiedSec = (file.lastModified() / 1000L).takeIf { it > 0 } ?: item.dateModifiedSec
+        val originalSha = FileUtils.sha256(file)
+        val id = UUID.randomUUID().toString()
+        val quality = JpegCompressor.qualityFor(tier)
+
+        val temp = File(context.cacheDir, "pc_heic_${System.currentTimeMillis()}.jpg")
+        if (!HeicCompressor.convert(file, temp, quality)) {
+            temp.delete()
+            return CompressOutcome.Skipped("HEIC 解码失败（设备缺少对应解码器）")
+        }
+        if (temp.length() >= originalSize) {
+            val outSize = temp.length()
+            temp.delete()
+            return CompressOutcome.Skipped("压缩后体积未减小（$originalSize → $outSize）")
+        }
+        // 注入自有标记（转换后的 JPEG 通过 ExifInterface 写整包 XMP）
+        runCatching {
+            val exif = androidx.exifinterface.media.ExifInterface(temp.absolutePath)
+            val xmp = runCatching {
+                exif.getAttributeBytes(androidx.exifinterface.media.ExifInterface.TAG_XMP)
+            }.getOrNull()?.toString(Charsets.UTF_8)
+            exif.setAttribute(
+                androidx.exifinterface.media.ExifInterface.TAG_XMP,
+                PcXmp.injectAttributes(xmp, newMarker()),
+            )
+            exif.saveAttributes()
+        }
+
+        val target = HeicCompressor.uniqueSibling(file, ".jpg")
+        var backupRel: String? = null
+        return try {
+            backupRel = recycle.backup(id, file)
+            val backupSize = recycle.fileOf(backupRel).length()
+
+            FileUtils.copy(temp, target)
+            target.setLastModified(file.lastModified())
+
+            val newUri = MediaStoreUpdater.reindex(context, item.uri, target.absolutePath)
+            val newId = newUri?.let { runCatching { android.content.ContentUris.parseId(it) }.getOrNull() } ?: 0L
+
+            val now = System.currentTimeMillis()
+            val record = CompressedItemEntity(
+                id = id,
+                mediaStoreId = newId,
+                dataPath = target.absolutePath,
+                originalPath = item.dataPath,
+                volumeName = item.volumeName,
+                bucketName = item.bucketName,
+                displayName = target.name,
+                mediaKind = MediaKind.PHOTO.name,
+                mimeType = "image/jpeg",
+                containerFormat = ContainerFormat.JPEG.name,
+                videoCodec = null,
+                originalSize = originalSize,
+                compressedSize = target.length(),
+                originalSha256 = originalSha,
+                originalDateTakenMs = item.dateTakenMs,
+                originalDateAddedSec = item.dateAddedSec,
+                originalDateModifiedSec = originalModifiedSec,
+                qualityTier = tier.name,
+                codecUsed = "HEIC→JPEG q=$quality",
+                compressedAtMs = now,
+                restoreDeadlineMs = now + TimeUnit.DAYS.toMillis(RETENTION_DAYS),
+                backupRelPath = backupRel,
+                backupSize = backupSize,
+                status = CompressedItemEntity.STATUS_DONE,
+            )
+            // 删除原 HEIC（备份已在回收站）
+            file.delete()
+            CompressOutcome.Success(record)
+        } catch (t: Throwable) {
+            runCatching { target.delete() }
+            runCatching { MediaStoreUpdater.reindex(context, null, item.dataPath) }
+            CompressOutcome.Failed("HEIC 转换失败：${t.javaClass.simpleName}: ${t.message}")
+        } finally {
+            temp.delete()
         }
     }
 
@@ -168,14 +264,16 @@ class CompressionEngine(private val context: Context) {
             srcMotion.writeBytes(motionBytes!!)
             val dstMotion = File(context.cacheDir, "pc_motion_dst_${System.currentTimeMillis()}.mp4")
             val res = VideoTranscoder.transcode(srcMotion, dstMotion, tier)
-            srcMotion.delete()
             if (res.success && dstMotion.exists() && dstMotion.length() < motionBytes.size) {
+                // 内嵌视频也要保住原有元数据（相机信息等）
+                Mp4Metadata.inject(dstMotion, srcMotion)
                 newMotionFile = dstMotion
             } else {
                 // 转码失败或没变小：退回「原样保留」，不影响主图收益
                 dstMotion.delete()
                 motionNote = "内嵌视频原样保留（重编码未获益：${res.reason ?: "体积未减小"}）"
             }
+            srcMotion.delete()
         }
 
         try {
@@ -249,6 +347,8 @@ class CompressionEngine(private val context: Context) {
         }
         // 写入文件内自有标记（D5），使账本丢失后仍能识别已压缩（F7 / AC5）
         Mp4XmpMarker.write(dst, newMarker())
+        // 搬运源文件的 moov 元数据（相机信息 / 拍摄时间），并修正 chunk 偏移
+        Mp4Metadata.inject(dst, file)
         if (dst.length() >= file.length()) {
             val outSize = dst.length()
             dst.delete()
@@ -302,6 +402,7 @@ class CompressionEngine(private val context: Context) {
                 id = id,
                 mediaStoreId = item.id,
                 dataPath = item.dataPath,
+                originalPath = item.dataPath,
                 volumeName = item.volumeName,
                 bucketName = item.bucketName,
                 displayName = item.displayName,
@@ -350,21 +451,28 @@ class CompressionEngine(private val context: Context) {
             val backup = recycle.fileOf(backupRel)
             if (!backup.exists()) return@runCatching RestoreOutcome.Failed("备份文件缺失，无法还原")
 
-            val target = File(record.dataPath)
+            // 格式转换（HEIC→JPEG）时需写回原路径，并删除转换产物
+            val originalPath = record.originalPath.ifBlank { record.dataPath }
+            val target = File(originalPath)
             target.parentFile?.mkdirs()
             val mtimeMs = record.originalDateModifiedSec * 1000L
 
             InPlaceRewriter.writeFrom(target, backup, mtimeMs)
 
-            val sha = FileUtils.sha256(target)
-            if (record.originalSha256.isNotBlank() && sha != record.originalSha256) {
+            // 以备份自身为校验基准：备份就是压缩前的原文件
+            val backupSha = FileUtils.sha256(backup)
+            val restoredSha = FileUtils.sha256(target)
+            if (backupSha != restoredSha) {
                 return@runCatching RestoreOutcome.Failed("还原校验失败，文件与备份不一致")
             }
+            // 防御：历史版本可能把自有标记写进了备份，还原后必须清掉，
+            // 否则该照片会被误判为「已压缩」而回不到未压缩页
+            MarkerStripper.strip(target)
 
-            MediaStoreUpdater.refresh(
-                context, mediaUriOf(record), record.dataPath,
-                record.originalDateTakenMs, record.originalDateAddedSec, record.originalDateModifiedSec,
-            )
+            val convertedPath = record.dataPath.takeIf { it != originalPath }
+            if (convertedPath != null) runCatching { File(convertedPath).delete() }
+
+            MediaStoreUpdater.reindex(context, mediaUriOf(record), originalPath)
             recycle.delete(backupRel)
             RestoreOutcome.Success(record.id)
         }.getOrElse { t ->

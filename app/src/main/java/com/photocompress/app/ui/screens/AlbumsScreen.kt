@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -279,8 +280,10 @@ fun TodoLevel2(
     onToggleItem: (Long) -> Unit,
     onShowInfo: (MediaItem) -> Unit,
 ) {
-    val album: AlbumTodoUi = state.albumTodoAll().firstOrNull { it.name == level.album } ?: run {
-        EmptyState("图集已不存在", "请返回上一级")
+    val album: AlbumTodoUi? = state.albumTodoAll().firstOrNull { it.name == level.album }
+    if (album == null) {
+        // 图集已被清空（例如整册压缩后隐藏）时自动退回一级，避免卡在空页面
+        LaunchedEffect(level.album) { onBack() }
         return
     }
     val filtered = album.items.applyTodoFilter(level.filter)
@@ -350,8 +353,9 @@ fun DoneLevel2(
     onToggleItem: (Long) -> Unit,
     onShowInfo: (DoneMedia) -> Unit,
 ) {
-    val album: AlbumDoneUi = state.albumDoneAll().firstOrNull { it.name == level.album } ?: run {
-        EmptyState("图集已不存在", "请返回上一级")
+    val album: AlbumDoneUi? = state.albumDoneAll().firstOrNull { it.name == level.album }
+    if (album == null) {
+        LaunchedEffect(level.album) { onBack() }
         return
     }
     val filtered = album.items.applyDoneFilter(level.filter)
@@ -395,6 +399,7 @@ fun DoneLevel2(
                     picked = dm.record.mediaStoreId in level.pickedItems,
                     selectable = restorable,
                     badge = when {
+                        dm.adopted -> "已压缩" to Color(0x9E000000)
                         dm.record.status == CompressedItemEntity.STATUS_PURGED -> "已清理" to Color(0xB8000000)
                         days < 0 -> "已超期" to Color(0xB8000000)
                         else -> "已压缩" to MaterialTheme.appColors.success

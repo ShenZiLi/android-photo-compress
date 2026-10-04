@@ -45,14 +45,25 @@ class MediaRepository(private val context: Context) {
         MediaStore.MediaColumns.HEIGHT,
     )
 
-    suspend fun scan(): List<MediaItem> = withContext(Dispatchers.IO) {
-        val result = ArrayList<MediaItem>(256)
-        queryImages(result)
-        queryVideos(result)
+    suspend fun scan(onProgress: (Int, Int) -> Unit = { _, _ -> }): List<MediaItem> = withContext(Dispatchers.IO) {
+        val imageCount = countOf(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        val videoCount = countOf(MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+        val total = imageCount + videoCount
+        var done = 0
+        onProgress(0, total)
+        val result = ArrayList<MediaItem>(total.coerceAtMost(8192))
+        queryImages(result) { done++; onProgress(done, total) }
+        queryVideos(result) { done++; onProgress(done, total) }
         result
     }
 
-    private fun queryImages(out: MutableList<MediaItem>) {
+    private fun countOf(uri: android.net.Uri): Int =
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), null, null, null)
+                ?.use { it.count } ?: 0
+        }.getOrDefault(0)
+
+    private fun queryImages(out: MutableList<MediaItem>, onRow: () -> Unit) {
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             imageProjection, null, null,
@@ -108,11 +119,12 @@ class MediaRepository(private val context: Context) {
                     motionPhotoOffset = liveInfo?.motionPhotoOffset,
                     xmpCompressId = xmpCompressId,
                 )
+                onRow()
             }
         }
     }
 
-    private fun queryVideos(out: MutableList<MediaItem>) {
+    private fun queryVideos(out: MutableList<MediaItem>, onRow: () -> Unit) {
         context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             videoProjection, null, null,
@@ -168,6 +180,7 @@ class MediaRepository(private val context: Context) {
                     videoCodec = effectiveProbe.codec,
                     xmpCompressId = xmpCompressId,
                 )
+                onRow()
             }
         }
     }

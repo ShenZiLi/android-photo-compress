@@ -21,6 +21,8 @@ data class UiState(
     val page: AppPage = AppPage.HOME,
     val scanning: Boolean = false,
     val scanError: String? = null,
+    val scanDone: Int = 0,
+    val scanTotal: Int = 0,
     val lastScanAt: Long = 0L,
     val hasAllFilesAccess: Boolean = false,
     val items: List<MediaItem> = emptyList(),
@@ -31,7 +33,14 @@ data class UiState(
     val busy: Boolean = false,
     val progress: Float = 0f,
     val progressLabel: String? = null,
-)
+) {
+    /** 首次扫描进度（0~1）；总数未知时为 0。 */
+    val scanProgress: Float
+        get() = if (scanTotal > 0) scanDone.toFloat() / scanTotal else 0f
+
+    /** 用户在设置页排除的图集，这些图集不出现在未压缩 / 已压缩页。 */
+    val excludedAlbums: Set<String> get() = settings.excludedSet
+}
 
 /** 已压缩条目：账本记录 +（若仍在媒体库中的）媒体条目。 */
 data class DoneMedia(
@@ -168,25 +177,34 @@ fun UiState.doneSelection(): SelectionSummary {
     )
 }
 
-/** 未压缩：媒体库中有、且账本与文件内标记都没有压缩痕迹。 */
+/** 未压缩：媒体库中有、且账本与文件内标记都没有压缩痕迹；排除用户屏蔽的图集。 */
 fun UiState.todoItems(): List<MediaItem> {
+    val excluded = excludedAlbums
     val compressedPaths = HashSet<String>()
     ledger.asSequence().filter { it.status in ACTIVE_STATUSES }.forEach { compressedPaths += it.dataPath }
     // 文件内标记优先：账本丢失（重装 / 清数据）时仍能识别，避免二次压缩（F7 / AC5）
     items.asSequence().filter { it.xmpCompressId != null }.forEach { compressedPaths += it.dataPath }
-    return items.filter { it.dataPath !in compressedPaths }
+    return items.filter { it.dataPath !in compressedPaths && it.bucketName !in excluded }
 }
 
 fun UiState.doneItems(): List<DoneMedia> {
+    val excluded = excludedAlbums
     val byPath = items.associateBy { it.dataPath }
     val fromLedger = ledger.filter { it.status in ACTIVE_STATUSES }
         .map { DoneMedia(it, byPath[it.dataPath]) }
+        .filter { it.bucketName !in excluded }
     val known = fromLedger.map { it.dataPath }.toHashSet()
     val adopted = items
-        .filter { it.xmpCompressId != null && it.dataPath !in known }
+        .filter { it.xmpCompressId != null && it.dataPath !in known && it.bucketName !in excluded }
         .map { DoneMedia(adoptedRecord(it), it, adopted = true) }
     return fromLedger + adopted
 }
+
+/** 媒体库中出现过的全部图集（设置页用于配置过滤，不排除任何项）。 */
+fun UiState.allAlbumNames(): List<Pair<String, Int>> =
+    items.groupBy { it.bucketName }
+        .map { (name, list) -> name to list.size }
+        .sortedByDescending { it.second }
 
 /** 仅凭文件内标记识别出的条目：压缩前大小未知，不可还原。 */
 private fun adoptedRecord(item: MediaItem): CompressedItemEntity = CompressedItemEntity(
@@ -212,7 +230,7 @@ private fun adoptedRecord(item: MediaItem): CompressedItemEntity = CompressedIte
     restoreDeadlineMs = 0L,
     backupRelPath = null,
     backupSize = 0L,
-    status = CompressedItemEntity.STATUS_PURGED,
+    status = CompressedItemEntity.STATUS_DONE,
 )
 
 fun UiState.albumTodoAll(): List<AlbumTodoUi> =

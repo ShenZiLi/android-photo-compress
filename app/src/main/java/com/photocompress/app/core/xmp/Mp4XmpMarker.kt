@@ -39,6 +39,19 @@ object Mp4XmpMarker {
 
     /** 读取文件末尾的自有标记；不存在返回 null。 */
     fun read(file: File): PcXmp.Marker? = runCatching {
+        val range = trailingBoxRange(file) ?: return null
+        val size = (range.last - range.first + 1).toInt()
+        if (size <= 20) return null
+        val packet = ByteArray(size - 20)
+        RandomAccessFile(file, "r").use { raf ->
+            raf.seek(range.first + 20)
+            raf.readFully(packet)
+        }
+        PcXmp.read(String(packet, Charsets.UTF_8))
+    }.getOrNull()
+
+    /** 末尾自有标记 box 的字节范围（闭区间）；不存在返回 null。 */
+    fun trailingBoxRange(file: File): LongRange? = runCatching {
         val length = file.length()
         if (length < 32) return null
         val window = minOf(TAIL_SCAN.toLong(), length).toInt()
@@ -50,14 +63,21 @@ object Mp4XmpMarker {
         }
         val uuidAt = indexOf(buf, XMP_UUID)
         if (uuidAt < 8) return null
-        // box 头在 UUID 之前 8 字节
         val size = beInt(buf, uuidAt - 8)
         val type = String(buf, uuidAt - 4, 4, Charsets.US_ASCII)
         if (type != "uuid" || size <= 20) return null
-        val textEnd = minOf(uuidAt + XMP_UUID.size + (size - 20), buf.size)
-        val xmp = String(buf, uuidAt + XMP_UUID.size, textEnd - uuidAt - XMP_UUID.size, Charsets.UTF_8)
-        PcXmp.read(xmp)
+        val boxStart = start + (uuidAt - 8)
+        // 只在 box 正好位于文件末尾时才认为是本应用追加的标记
+        if (boxStart + size != length) return null
+        boxStart until (boxStart + size)
     }.getOrNull()
+
+    /** 移除末尾的自有标记 box；返回是否发生了修改。 */
+    fun removeTrailing(file: File): Boolean = runCatching {
+        val range = trailingBoxRange(file) ?: return false
+        RandomAccessFile(file, "rw").use { it.setLength(range.first) }
+        true
+    }.getOrDefault(false)
 
     private fun intToBytes(v: Int) = byteArrayOf(
         ((v ushr 24) and 0xFF).toByte(),

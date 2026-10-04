@@ -9,6 +9,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** 压缩账本（design.md §3）。唯一编号同时写入此表与压缩后文件的 XMP 标记（D5）。 */
@@ -16,7 +18,10 @@ import kotlinx.coroutines.flow.Flow
 data class CompressedItemEntity(
     @PrimaryKey val id: String,
     val mediaStoreId: Long,
+    /** 当前媒体文件路径（HEIC→JPEG 转换后为新的 .jpg 路径）。 */
     val dataPath: String,
+    /** 压缩前的原始路径；与 [dataPath] 不同时表示发生了格式转换，还原需写回该路径。 */
+    val originalPath: String = "",
     val volumeName: String,
     val bucketName: String,
     val displayName: String,
@@ -58,7 +63,12 @@ data class SettingsEntity(
     val photoTier: String = "BALANCED",
     val liveTier: String = "BALANCED",
     val videoTier: String = "BALANCED",
-)
+    /** 用户选择排除的图集名，以 `\n` 分隔（这些图集不出现在未压缩/已压缩页）。 */
+    val excludedAlbums: String = "",
+) {
+    val excludedSet: Set<String>
+        get() = excludedAlbums.split('\n').filter { it.isNotBlank() }.toSet()
+}
 
 @Dao
 interface LedgerDao {
@@ -67,6 +77,9 @@ interface LedgerDao {
 
     @Query("SELECT * FROM compressed_item WHERE dataPath = :path LIMIT 1")
     suspend fun findByPath(path: String): CompressedItemEntity?
+
+    @Query("SELECT * FROM compressed_item WHERE originalPath = :path LIMIT 1")
+    suspend fun findByOriginalPath(path: String): CompressedItemEntity?
 
     @Query("SELECT * FROM compressed_item WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CompressedItemEntity?
@@ -82,6 +95,9 @@ interface LedgerDao {
 
     @Query("DELETE FROM compressed_item WHERE dataPath = :path")
     suspend fun deleteByPath(path: String)
+
+    @Query("DELETE FROM compressed_item WHERE id = :id")
+    suspend fun deleteById(id: String)
 
     @Query("UPDATE compressed_item SET status = :status, backupRelPath = NULL, backupSize = 0 WHERE dataPath = :path")
     suspend fun markBackupGone(path: String, status: String)
@@ -104,7 +120,7 @@ interface SettingsDao {
 
 @Database(
     entities = [CompressedItemEntity::class, SettingsEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -115,12 +131,20 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var instance: AppDatabase? = null
 
+        /** v1 → v2：新增 originalPath（HEIC 转换还原用）与 excludedAlbums（图集排除）。 */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE compressed_item ADD COLUMN originalPath TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN excludedAlbums TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
         }
     }
 }

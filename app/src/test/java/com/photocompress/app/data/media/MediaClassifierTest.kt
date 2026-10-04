@@ -15,11 +15,12 @@ class MediaClassifierTest {
     }
 
     @Test
-    fun `HEIF 因元信息无法保留而跳过`() {
+    fun `HEIF 转为 JPEG 压缩（元信息搬运）`() {
         assertEquals(ContainerFormat.HEIC, MediaClassifier.imageFormat("image/heic", "IMG_0002.heic"))
-        val decision = MediaClassifier.decideImage(ContainerFormat.HEIC, false)
-        assertTrue(decision is SupportDecision.Skipped)
-        assertTrue((decision as SupportDecision.Skipped).reason.contains("HEIF"))
+        assertTrue(
+            "HEIC 通过转 JPEG 的方式支持压缩",
+            MediaClassifier.decideImage(ContainerFormat.HEIC, false) is SupportDecision.Supported,
+        )
     }
 
     @Test

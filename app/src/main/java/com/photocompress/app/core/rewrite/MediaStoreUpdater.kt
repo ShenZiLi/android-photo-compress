@@ -2,11 +2,14 @@ package com.photocompress.app.core.rewrite
 
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * 原地改写后的媒体库同步。
@@ -46,4 +49,30 @@ object MediaStoreUpdater {
     fun notifyDeleted(context: Context, uri: Uri) {
         runCatching { context.contentResolver.delete(uri, null, null) }
     }
+
+    /**
+     * 路径变化后重建媒体库记录（HEIC→JPEG 转换、还原回原格式）：
+     * 扫描新路径拿到新 uri，删除旧行，并回写新文件大小。
+     */
+    suspend fun reindex(context: Context, oldUri: Uri?, newPath: String): Uri? = withContext(Dispatchers.IO) {
+        val file = File(newPath)
+        val newUri = scanFileForUri(context, newPath)
+        if (newUri != null && file.exists()) {
+            val values = ContentValues().apply { put(MediaStore.MediaColumns.SIZE, file.length()) }
+            runCatching { context.contentResolver.update(newUri, values, null, null) }
+        }
+        if (oldUri != null && oldUri != newUri) {
+            runCatching { context.contentResolver.delete(oldUri, null, null) }
+        }
+        newUri
+    }
+
+    private suspend fun scanFileForUri(context: Context, path: String): Uri? =
+        suspendCancellableCoroutine { cont ->
+            runCatching {
+                MediaScannerConnection.scanFile(context, arrayOf(path), null) { _, uri ->
+                    if (cont.isActive) cont.resume(uri)
+                }
+            }.onFailure { if (cont.isActive) cont.resume(null) }
+        }
 }
