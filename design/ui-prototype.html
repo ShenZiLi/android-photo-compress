@@ -52,6 +52,9 @@
     --danger:#a8271f;
     --on-danger:#ffffff;
     --focus:#1b2a7a;
+    /* 数据可视化：固定蓝/绿，不随动态取色变化 */
+    --data-todo:#2f6bd8;
+    --data-done:#1f9e6b;
     --scrim:rgba(10,12,24,.44);
     --shadow-border:
       0 0 0 1px oklch(0 0 0 / .06),
@@ -82,6 +85,9 @@
     --danger:#ffb4ab;
     --on-danger:#690005;
     --focus:#cfd8ff;
+    /* 数据可视化：固定蓝/绿，不随动态取色变化 */
+    --data-todo:#7fa8ff;
+    --data-done:#5fd0a0;
     --scrim:rgba(0,0,0,.62);
     --shadow-border:0 0 0 1px oklch(1 0 0 / .08);
     --shadow-raised:0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -4px oklch(0 0 0 / .5);
@@ -243,6 +249,31 @@
   .stat .m{ margin-top:2px; font-size:var(--text-caption); color:var(--on-surface-muted); font-variant-numeric:tabular-nums; }
   .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); flex:0 0 auto; }
   .dot.ok{ background:var(--success); }
+
+  /* 对比横条（数量 / 体积） */
+  .compare{ display:flex; flex-direction:column; gap:var(--space-6); }
+  .metric-head{ display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-3); margin-bottom:var(--space-3); }
+  .metric-head b{ font-size:var(--text-label); font-weight:600; }
+  .metric-head span{ font-size:var(--text-caption); color:var(--on-surface-muted); font-variant-numeric:tabular-nums; }
+  .metric .bar{
+    display:flex; gap:2px; height:12px; overflow:hidden;
+    border-radius:var(--radius-full); background:var(--surface-sunken);
+  }
+  .metric .bar i{ display:block; height:100%; }
+  .metric .bar .seg-todo{ background:var(--data-todo); }
+  .metric .bar .seg-done{ background:var(--data-done); }
+  .metric .legend{
+    display:flex; flex-wrap:wrap; gap:var(--space-1) var(--space-4);
+    margin-top:var(--space-3);
+  }
+  .metric .legend span{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:var(--text-caption); color:var(--on-surface-muted);
+    font-variant-numeric:tabular-nums;
+  }
+  .metric .legend i{ width:8px; height:8px; border-radius:2px; flex:0 0 auto; }
+  .metric .legend .sw-todo{ background:var(--data-todo); }
+  .metric .legend .sw-done{ background:var(--data-done); }
 
   /* 列表 */
   .rows{ background:var(--surface-raised); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-border); }
@@ -549,12 +580,8 @@
               </div>
             </div>
 
-            <h3 class="section-title">分类明细</h3>
-            <div class="rows" id="homeRows"></div>
-
-            <div class="btn-row">
-              <button class="btn block" data-go="todo">去压缩</button>
-            </div>
+            <h3 class="section-title">数量与体积对比</h3>
+            <div class="card compare" id="homeCompare"></div>
           </div>
         </section>
 
@@ -577,7 +604,7 @@
 
           <div class="toolbar">
             <span id="todoFilterNote">共 0 项</span>
-            <button class="btn outline small" id="todoAll">全选可压缩项</button>
+            <button class="btn outline small" id="todoAll">全选</button>
           </div>
 
           <div class="grid" id="todoGrid"></div>
@@ -611,7 +638,7 @@
 
           <div class="toolbar">
             <span id="doneFilterNote">共 0 项</span>
-            <button class="btn outline small" id="doneAll">全选可还原</button>
+            <button class="btn outline small" id="doneAll">全选</button>
           </div>
 
           <div class="grid" id="doneGrid"></div>
@@ -881,15 +908,9 @@ function renderHome(){
   $('kpiDoneCount').textContent = fmtNum(t.doneN) + ' 项';
   $('kpiDoneSize').textContent  = fmtSize(t.before) + ' → ' + fmtSize(t.after);
 
-  $('homeRows').innerHTML = ['photo','live','video'].map(k => `
-    <div class="row">
-      <span class="lead" aria-hidden="true">${KIND_ICON[k]}</span>
-      <span class="body">
-        <b>${KIND_LONG[k]}</b>
-        <span>未压缩 ${fmtNum(t.todo[k].n)} · 已压缩 ${fmtNum(t.done[k].n)}</span>
-      </span>
-      <span class="trail">${fmtSize(t.todo[k].mb)}<br>${fmtSize(t.done[k].after)}</span>
-    </div>`).join('');
+  $('homeCompare').innerHTML =
+    metric('数量', t.todoN, t.doneN, fmtNum, null) +
+    metric('体积', t.todoMb, t.after, fmtSize, fmtSize(t.before));
 
   $('todoSub').textContent = `${fmtNum(t.todoN)} 项 · 共 ${fmtSize(t.todoMb)}`;
   $('doneSub').textContent = `${fmtNum(t.doneN)} 项 · ${fmtSize(t.before)} → ${fmtSize(t.after)}`;
@@ -898,12 +919,29 @@ function renderHome(){
   $('homeSub').textContent = '已扫描本机媒体 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
 }
 
+/* 单条对比横条：颜色只是辅助，数值与图例文字是主要通道 */
+function metric(title, todo, done, fmt, beforeMb){
+  const total = todo + done;
+  const pTodo = total ? (todo / total * 100) : 0;
+  const pDone = total ? (done / total * 100) : 0;
+  return `
+    <div class="metric">
+      <div class="metric-head">
+        <b>${title}对比</b>
+        <span>共 ${fmt(total)}${title === '数量' ? ' 项' : ''}</span>
+      </div>
+      <div class="bar" aria-hidden="true">
+        <i class="seg-todo" style="width:${pTodo.toFixed(2)}%"></i>
+        <i class="seg-done" style="width:${pDone.toFixed(2)}%"></i>
+      </div>
+      <div class="legend">
+        <span><i class="sw-todo" aria-hidden="true"></i>未压缩 ${fmt(todo)}</span>
+        <span><i class="sw-done" aria-hidden="true"></i>已压缩 ${fmt(done)}${beforeMb ? '（原 ' + fmt(beforeMb) + '）' : ''}</span>
+      </div>
+    </div>`;
+}
+
 const KIND_LONG = { photo:'普通照片', live:'实况照片', video:'视频' };
-const KIND_ICON = {
-  photo:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5l3.5-4.5 2.5 3L14.5 13 19 19Z"/></svg>',
-  live:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>',
-  video:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 3.5V7l-4 3.5Z"/></svg>'
-};
 
 /* ============================================================
    列表渲染
@@ -1037,7 +1075,7 @@ function updateTodoBar(){
 
   const allIds = visibleTodoIds();
   const allChosen = allIds.length > 0 && allIds.every(id => selected.todo.has(id));
-  $('todoAll').textContent = allChosen ? '取消全选' : '全选可压缩项';
+  $('todoAll').textContent = allChosen ? '取消全选' : '全选';
 }
 
 function updateDoneBar(){
@@ -1054,7 +1092,7 @@ function updateDoneBar(){
 
   const allIds = visibleDoneIds();
   const allChosen = allIds.length > 0 && allIds.every(id => selected.done.has(id));
-  $('doneAll').textContent = allChosen ? '取消全选' : '全选可还原';
+  $('doneAll').textContent = allChosen ? '取消全选' : '全选';
 }
 
 /* ============================================================
