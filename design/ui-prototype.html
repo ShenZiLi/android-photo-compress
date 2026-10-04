@@ -831,15 +831,20 @@ const RATIO = 0.63;
 const RETENTION = 30;
 
 /* 图集基线（不含抽样项，代表该图集中未被逐张展示的其余媒体）
-   字段：todo[类型] = {n, mb}；done[类型] = {n, before, after} */
+   字段：todo[类型] = {n, mb}；done[类型] = {n, before, after}
+   todoSkip[类型] = {n, mb} 为该图集中不受支持的媒体（占用空间，但不参与压缩） */
 const ALBUM_SEED = [
   { name:'相机',     todo:{ photo:{n:1180,mb:6200}, live:{n:200,mb:2300}, video:{n:78,mb:9200} },
+                     todoSkip:{ photo:{n:12,mb:620} },
                      done:{ photo:{n:600,before:3100,after:1010}, live:{n:48,before:600,after:260}, video:{n:20,before:2400,after:1010} } },
   { name:'截屏录屏', todo:{ photo:{n:60,mb:400}, live:{n:0,mb:0}, video:{n:0,mb:0} },
+                     todoSkip:{ photo:{n:24,mb:180} },
                      done:{ photo:{n:20,before:120,after:40}, live:{n:0,before:0,after:0}, video:{n:0,before:0,after:0} } },
   { name:'微信',     todo:{ photo:{n:120,mb:520}, live:{n:8,mb:70}, video:{n:4,mb:180} },
+                     todoSkip:{ photo:{n:36,mb:210} },
                      done:{ photo:{n:30,before:140,after:50}, live:{n:6,before:70,after:28}, video:{n:1,before:90,after:35} } },
   { name:'下载',     todo:{ photo:{n:35,mb:180}, live:{n:2,mb:30}, video:{n:3,mb:220} },
+                     todoSkip:{ photo:{n:6,mb:40} },
                      done:{ photo:{n:22,before:100,after:35}, live:{n:2,before:30,after:12}, video:{n:1,before:110,after:45} } }
 ];
 
@@ -865,11 +870,15 @@ let items = [
   {id:'d5', img:'beach', kind:'photo', album:'下载',    name:'IMG_20260905_173001.jpg', mb:5.3,  status:'done', after:1.7,  days:-4, time:'2026-09-05 17:30', place:'福建 厦门'}
 ];
 
-/* 可变状态：图集基线在压缩 / 还原时整册搬移 */
+/* 可变状态：图集基线在压缩 / 还原时整册搬移（不受支持的媒体留在原处） */
 let state = ALBUM_SEED.map(a => ({
   name: a.name,
   todo: { photo:{...a.todo.photo}, live:{...a.todo.live}, video:{...a.todo.video} },
   done: { photo:{...a.done.photo}, live:{...a.done.live}, video:{...a.done.video} },
+  todoSkip: ['photo','live','video'].reduce((o,k) => {
+    o[k] = { ...((a.todoSkip && a.todoSkip[k]) || {n:0, mb:0}) };
+    return o;
+  }, {}),
   restorable: 0   // 备份仍可还原的已压缩项数（含基线），初始化时计算
 }));
 
@@ -898,16 +907,23 @@ function albumSamples(status, albumName){
   return items.filter(i => i.status === status && i.album === albumName);
 }
 
-/* 图集统计 = 基线（未逐张展示的其余媒体）+ 该图集的抽样项 */
+/* 图集统计 = 基线（未逐张展示的其余媒体）+ 该图集的抽样项
+   不受支持的媒体计入项数与占用体积，但不计入可压缩 */
 function albumTodoTotals(a){
   const t = a.todo;
   let n = KINDS.reduce((s,k) => s + t[k].n, 0);
   let mb = KINDS.reduce((s,k) => s + t[k].mb, 0);
+  let skipN  = KINDS.reduce((s,k) => s + a.todoSkip[k].n, 0);
+  let skipMb = KINDS.reduce((s,k) => s + a.todoSkip[k].mb, 0);
+
   const samples = albumSamples('todo', a.name);
+  const skipSamples = samples.filter(i => i.skip);
   n  += samples.length;
   mb += samples.reduce((s,i) => s + i.mb, 0);
-  const compressible = n - samples.filter(i => i.skip).length;
-  return { n, mb, compressible };
+  skipN  += skipSamples.length;
+  skipMb += skipSamples.reduce((s,i) => s + i.mb, 0);
+
+  return { n, mb, skipN, skipMb, compressible: n - skipN, compressibleMb: mb - skipMb };
 }
 
 function albumDoneTotals(a){
@@ -1082,7 +1098,8 @@ function tile(it){
 
   return `
     <button class="tile" data-id="${it.id}" data-skip="${skip ? 1 : 0}" data-blocked="${expired ? 1 : 0}"
-            aria-pressed="${pressed}" aria-label="${tileLabel(it)}" title="${it.name}">
+            aria-pressed="${pressed}" aria-label="${tileLabel(it)}" title="${it.name}"
+            ${(skip || expired) ? 'aria-disabled="true"' : ''}>
       <img src="${IMG[it.img]}" alt="">
       ${it.kind === 'video' ? `<span class="play" aria-hidden="true"><span>${PLAY}</span></span>` : ''}
       ${badge}
@@ -1365,7 +1382,7 @@ function actionTargets(status){
       && (status === 'todo' ? albumTodoTotals(a).n : albumDoneTotals(a).n) > 0);
     let n=0, mb=0, before=0, after=0;
     albums.forEach(a => {
-      if (status === 'todo'){ const t = albumTodoTotals(a); n += t.compressible; mb += t.mb; }
+      if (status === 'todo'){ const t = albumTodoTotals(a); n += t.compressible; mb += t.compressibleMb; }
       else { const d = albumDoneTotals(a); before += d.before; after += d.after; n += a.restorable; }
     });
     return { kind:'albums', albums, n, mb, before, after };
@@ -1477,23 +1494,25 @@ function restoreItems(ids){
   });
 }
 
-/* 整册压缩：基线 + 抽样项一起搬 */
+/* 整册压缩：只搬可压缩部分，不受支持的媒体留在未压缩 */
 function compressAlbum(name){
   const a = state.find(x => x.name === name);
   let movedN = 0;
   KINDS.forEach(k => {
-    const t = a.todo[k];
-    if (t.n > 0){
-      a.done[k].n += t.n;
-      a.done[k].before += t.mb;
-      a.done[k].after += t.mb * RATIO;
-      movedN += t.n;
-      a.todo[k] = {n:0, mb:0};
+    const sk = a.todoSkip[k];
+    const moveN  = Math.max(0, a.todo[k].n  - sk.n);
+    const moveMb = Math.max(0, a.todo[k].mb - sk.mb);
+    if (moveN > 0){
+      a.done[k].n += moveN;
+      a.done[k].before += moveMb;
+      a.done[k].after += moveMb * RATIO;
+      movedN += moveN;
     }
+    a.todo[k] = { n: sk.n, mb: sk.mb };   // 不支持的继续留在未压缩
   });
   const sampleIds = albumSamples('todo', name).filter(i => !i.skip).map(i => i.id);
   compressItems(sampleIds);
-  a.restorable += movedN;                       // 基线备份也进入可还原池
+  a.restorable += movedN;
   return movedN + sampleIds.length;
 }
 
