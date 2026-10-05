@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
-- **Last Active**: 2026-10-05
+- **Total Sessions**: 12
+- **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~342 | Active |
+| `journal-1.md` | ~372 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-10-06 | 轻存名称与桌面图标修复 | `b33116d` | `master` |
 | 11 | 2026-10-05 | 删除未压缩页未选择下方提示 | `fdca0df` | `master` |
 | 10 | 2026-10-05 | 首页节省百分比固定负号与统计卡居中 | `d90e81e` | `master` |
 | 9 | 2026-10-05 | 删除设置页压缩比例入口说明 | `fb7eb0b` | `master` |

@@ -340,3 +340,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 12: 轻存名称与桌面图标修复
+<!-- trellis-session: v=2 fp=733beb90527f0cab -->
+
+**Date**: 2026-10-06
+**Task**: 轻存名称与桌面图标修复
+**Branch**: `master`
+
+### Summary
+
+将实际安装工程的应用名称统一为轻存，接入另一工程中已选定的银白玉绿图标；0.1.11 覆盖安装真机，桌面截图确认名称和图标生效。
+
+### Main Changes
+
+- 替换 Android 16 实际选择的 v26 自适应图标，接入原稿、背景颜色和单色轮廓；首页及权限引导复用名称资源，记录跨工程错配根因。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b33116d` | fix(branding): apply Qingcun name and launcher icon to installed app |
+
+### Testing
+
+- [OK] assembleDebug 7 秒通过；APK 标签、三层图标及原稿摘要核对通过；ADB 安装 Success，版本读回 0.1.11/code12，真机桌面确认图标和轻存名称；差异检查通过，未运行测试套件。
+
+### Status
+
+[OK] **Completed**
