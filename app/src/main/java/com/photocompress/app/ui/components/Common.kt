@@ -41,7 +41,7 @@ fun AppBar(
     subtitle: String? = null,
     smallTitle: Boolean = false,
     navigation: (@Composable () -> Unit)? = null,
-    navigationSpacing: Dp = 0.dp,
+    navigationSpacing: Dp = 12.dp,
     actions: (@Composable () -> Unit)? = null,
 ) {
     Row(

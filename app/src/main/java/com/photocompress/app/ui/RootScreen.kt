@@ -1,6 +1,7 @@
 package com.photocompress.app.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.selection.selectable
@@ -23,11 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PhotoSizeSelectSmall
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.PhotoSizeSelectSmall
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Home
@@ -100,6 +101,11 @@ fun AppRoot(vm: AppViewModel) {
     var sheet by remember { mutableStateOf<SheetData?>(null) }
     var dialog by remember { mutableStateOf<DialogData?>(null) }
 
+    val isSettingsDetail = state.page == AppPage.TRASH || state.page == AppPage.ALBUM_FILTER || state.page == AppPage.COMPRESS_RATIO
+    BackHandler(enabled = isSettingsDetail && dialog == null && sheet == null) {
+        vm.go(AppPage.SETTINGS)
+    }
+
     LaunchedEffect(Unit) {
         vm.messages.collect { msg ->
             toast = msg
@@ -143,7 +149,7 @@ fun AppRoot(vm: AppViewModel) {
                 }
                 GlassSurface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), radius = 32.dp) {
                     Row(modifier = Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val navPage = if (state.page == AppPage.ALBUM_FILTER || state.page == AppPage.COMPRESS_RATIO) AppPage.SETTINGS else state.page
+                        val navPage = if (isSettingsDetail) AppPage.SETTINGS else state.page
                         NavItem(AppPage.HOME, "首页", navPage) { vm.go(it) }
                         NavItem(AppPage.TODO, "未压缩", navPage) { vm.go(it) }
                         NavItem(AppPage.DONE, "已压缩", navPage) { vm.go(it) }
@@ -197,7 +203,7 @@ fun AppRoot(vm: AppViewModel) {
 
                 AppPage.TRASH -> TrashScreen(
                     state = state,
-                    onBack = { vm.go(AppPage.DONE) },
+                    onBack = { vm.go(AppPage.SETTINGS) },
                     onPurgeAll = {
                         dialog = DialogData(
                             title = "清理回收站",
@@ -305,7 +311,7 @@ private fun RowScope.NavItem(page: AppPage, label: String, current: AppPage, onG
             imageVector = when (page) {
                 AppPage.HOME -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
                 AppPage.TODO -> if (selected) Icons.Filled.PhotoLibrary else Icons.Outlined.PhotoLibrary
-                AppPage.DONE -> if (selected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle
+                AppPage.DONE -> if (selected) Icons.Filled.PhotoSizeSelectSmall else Icons.Outlined.PhotoSizeSelectSmall
                 else -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
             },
             contentDescription = null,

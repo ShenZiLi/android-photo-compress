@@ -287,7 +287,7 @@ fun TrashScreen(
                 com.photocompress.app.ui.components.GlassIconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = "返回设置",
                     )
                 }
             },
