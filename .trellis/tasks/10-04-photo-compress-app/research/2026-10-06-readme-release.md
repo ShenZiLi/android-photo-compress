@@ -36,4 +36,10 @@
 
 ## 远端结果
 
-待推送及 GitHub Actions 执行后补充真实结果；本地构建成功不等同于远端发布成功。
+- 工作提交 `1d490f7` 已推送 `master`，注释标签 `v0.1.18` 指向同一提交；GitHub API 确认 README 与全部 11 张截图存在。
+- [Actions 37350484048](https://github.com/ShenZiLi/android-photo-compress/actions/runs/37350484048)：`success`，签名构建、签名校验、产物上传、Release 创建和临时私钥清理步骤均成功。
+- [轻存 0.1.18 Release](https://github.com/ShenZiLi/android-photo-compress/releases/tag/v0.1.18)：正式发布，非草稿、非预发布；包含 APK、`SHA256SUMS.txt` 和公开 `signing-certificate.txt`。
+- GitHub 记录发布时刻 `2026-10-05T17:47:13Z`（北京时间 2026-10-06 01:47）。APK 45,682,294 字节。
+- 从实际 Release 下载全部三个产物，本地重新核对 SHA-256 与清单一致：`8c483fe7f9eecfc770be32e4eea3a1dcc92fa8215a6e3bc9d1e73b6704cb34bf`。
+- 下载 APK 的 `apksigner` v2 验证通过，公开证书指纹与本机固定正式签名一致；`aapt` 确认包名、versionName 0.1.18、versionCode 19 正确。
+- 下载产物在忽略目录保存。此次没有执行真机安装或新增真机播放验收。
