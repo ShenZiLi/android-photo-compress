@@ -122,6 +122,12 @@ class JpegSegmentsTest {
         return mpf.toByteArray()
     }
 
+    private fun be32at(bytes: ByteArray, off: Int): Long =
+        ((bytes[off].toLong() and 0xFF) shl 24) or ((bytes[off + 1].toLong() and 0xFF) shl 16) or
+            ((bytes[off + 2].toLong() and 0xFF) shl 8) or (bytes[off + 3].toLong() and 0xFF)
+
+    private val mpEntryBase = 4 + 8 + 2 + 3 * 12 + 4
+
     @Test
     fun `MpfRewriter 读取张数并重写 size 与 offset`() {
         val payload = buildMpfEntry(2, listOf(1000L, 500L), listOf(0L, 1000L))
@@ -132,14 +138,39 @@ class JpegSegmentsTest {
         assertEquals("改写为定长", payload.size, updated!!.size)
         assertEquals(2, MpfRewriter.numberOfImages(updated))
 
-        val entryBase = 4 + 8 + 2 + 3 * 12 + 4
-        fun be32at(off: Int): Long =
-            ((updated[off].toLong() and 0xFF) shl 24) or ((updated[off + 1].toLong() and 0xFF) shl 16) or
-                ((updated[off + 2].toLong() and 0xFF) shl 8) or (updated[off + 3].toLong() and 0xFF)
-        assertEquals(1234L, be32at(entryBase + 4))
-        assertEquals(0L, be32at(entryBase + 8))
-        assertEquals(567L, be32at(entryBase + 20))
-        assertEquals(1234L, be32at(entryBase + 24))
+        assertEquals(1234L, be32at(updated, mpEntryBase + 4))
+        assertEquals(0L, be32at(updated, mpEntryBase + 8))
+        assertEquals(567L, be32at(updated, mpEntryBase + 20))
+        assertEquals(1234L, be32at(updated, mpEntryBase + 24))
+    }
+
+    @Test
+    fun `mpfPayloadOffset 定位 MPF 段 payload 的绝对位置`() {
+        val payload = buildMpfEntry(2, listOf(1000L, 500L), listOf(0L, 1000L))
+        val exif = exifSegment(ByteArray(24))
+        val jpeg = soi + exif + seg(0xE2, payload) + sos + eoi
+        assertEquals(soi.size + exif.size + 4, JpegSegments.mpfPayloadOffset(jpeg))
+    }
+
+    @Test
+    fun `MpfRewriter 的 offset 以 MP Endian 为基准`() {
+        val payload = buildMpfEntry(2, listOf(1000L, 500L), listOf(0L, 1000L))
+        val exif = exifSegment(ByteArray(24))
+        val jpeg = soi + exif + seg(0xE2, payload) + sos + eoi
+        val payloadAt = JpegSegments.mpfPayloadOffset(jpeg)!!
+
+        val gainAt = 123_456L
+        val updated = MpfRewriter.updateEntries(
+            payload,
+            longArrayOf(gainAt, 500L),
+            longArrayOf(0L, gainAt),
+            offsetBase = payloadAt.toLong(),
+        )
+        assertNotNull(updated)
+        // 首图按规范特例记 0
+        assertEquals(0L, be32at(updated!!, mpEntryBase + 8))
+        // 增益图 = 绝对位置 − MP Endian 基准（payload 起点 + "MPF\0"）
+        assertEquals(gainAt - (payloadAt + 4), be32at(updated, mpEntryBase + 24))
     }
 
     @Test

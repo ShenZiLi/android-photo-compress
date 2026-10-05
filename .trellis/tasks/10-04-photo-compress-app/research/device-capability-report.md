@@ -153,27 +153,37 @@ HEVC 软件编码器上限仅 **512**，模拟器上对 720p/1440p 视频不可�
 
 以 VP9 为输出编码时 `MediaMuxer.addTrack` 抛 `IllegalStateException: Failed to add the track to the muxer`。因此**输出编码固定为 HEVC / H.264 / AV1**；VP9 仍可作为**输入**被正常读取与转码（实测 VP9 源 201 KB → H.264 143 KB）。
 
-### 补充 3：oplus 实况照片的 MPF 索引本身不自洽，需重建
+### 补充 3：oplus 实况照片的 MPF 偏移以 MP Endian 为基准（曾误判为"不自洽"）
 
-样张 MPF 声明 2 张图（主图 + 增益图）：
+样张 MPF 声明 2 张图（主图 + 增益图），MPF 段 payload 位于文件偏移 25,351，
+其 TIFF 头（MP Endian "MM"）位于 payload +4 = **25,355**：
 
 | | 原始文件 | 说明 |
 |---|---|---|
-| image0 | size=3,717,033 offset=0 | 与实测主图长度 3,717,763 差 730 |
-| image1 | size=430,057 offset=3,692,408 | 实测增益图起点为 3,717,763，差 25,355 |
+| image0 | size=3,717,033 offset=0 | size 与实测主图长度 3,717,763 差 730（相机后处理过主图，属陈旧值） |
+| image1 | size=430,057 offset=3,692,408 | **25,355 + 3,692,408 = 3,717,763 = 实测增益图起点，逐字节吻合** |
 
-即原始 MPF 的 size/offset 与实际字节布局**并不一致**（XMP `Container:Directory` 的长度才是精确的，与实测完全吻合）。压缩后主图长度变化，若照抄 MPF 会彻底失效。
+CIPA DC-007 规定 MPEntry 的 Individual Image Data Offset 是**相对 MP Endian（TIFF 头）位置**的偏移，
+因此原始 MPF 的 offset 是自洽的；只有 image0.size 是陈旧值（相册显然不依赖它，否则原图也放不出来）。
 
-**处置**：`MpfRewriter` 按 MPEntry 规范**重建** size/offset（主图 0 起，增益图紧随主图），保留 MPF 其余字节。压缩后实测自洽：image0 size=1,186,008 offset=0，image1 size=430,057 offset=1,186,008，与实际拼接完全一致。
+**曾经的误判与后果**：早期按"offset 就是绝对偏移"理解，认为原 MPF 不自洽，
+于是压缩后把 offset 写成**绝对位置**（主图长度）。这样写出的值比正确值大一个 MP Endian 基准
+（约 25KB，随头部长度浮动），按 MPF 定位内嵌视频的读取方会整体偏移到视频中间，
+**mp4 头 `ftyp` 丢失 → 实况照片无法播放**（真机反馈的"压缩后无法播放"即此）。
+
+**处置**：`MpfRewriter.updateEntries` 增加 `offsetBase` 参数，写入 `绝对位置 − (MPF payload 位置 + 4)`；
+首图按规范特例记 0。样张离线复算：基准 25,496，image1.offset=3,692,408，25,496 + 3,692,408 = 3,717,904
+= 重组后增益图实际起点，吻合。
 
 ### 已实现的实况照片压缩口径（供真机复验）
 
 1. 主图：按质量档位重编码 JPEG，EXIF 段**逐字节保留**（实测压缩前后 EXIF 段 23,654 字节完全相同）。
 2. 增益图：**原样复制**，不重编码（HDR/ProXDR 重建依据，C6 / D10）。
-3. 内嵌视频：重编码（保持时长与帧数；实测 1.73 s / 44 帧 → 1.73 s / 44 帧）。
-4. XMP：重建 `Container:Directory` 的各 `Item:Length`；写入自有命名空间标记；`GCamera:*` / `OpCamera:*` 原样保留。
-5. MPF：重建 MPEntry。
+3. 内嵌视频：**仅当尾段是「单个普通 MP4」时才重编码**；oplus/realme 的尾段是「MP4 + 私有块 + MP4」复合结构，
+   此时**整段原样保留**（见补充 3 与真机修复记录），保证厂商结构不被破坏。
+4. XMP：`Item:Length` 只在长度真的变化时就地改写数字；自有标记以属性形式注入；`GCamera:*` / `OpCamera:*` 原样保留。
+5. MPF：重建 MPEntry，offset 以 **MP Endian 位置为基准**写入。
 6. 结构自校验：Container 项齐全且长度非 0、内嵌 MP4 开头为 `ftyp`、解码可解析。
 
-样张实测：**12,478,846 → 2,532,408 字节（-79.7%）**，mtime 保持为 `2026-10-03 08:47`。
+样张实测（保留厂商尾段口径）：**12,478,846 → 10,015,856 字节（-19.7%）**，EXIF / 增益图 / 内嵌尾段逐字节一致。
 

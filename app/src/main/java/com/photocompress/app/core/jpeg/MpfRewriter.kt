@@ -23,19 +23,33 @@ object MpfRewriter {
     /**
      * 改写 MPEntry 的 size / offset（数量必须与 NumberOfImages 一致）。
      * 返回新的 payload（含 "MPF\0" 前缀）；失败返回 null。
+     *
+     * [offsetBase] 是该 MPF 段 payload 在文件中的绝对偏移。CIPA DC-007 规定
+     * Individual Image Data Offset 是**相对 MP Endian（TIFF 头）位置**的偏移，
+     * 而 MP Endian 位于 payload 内 [PREFIX] 之后，故实际基准为 [offsetBase] + 4。
+     * oplus 实况照片样张即按此约定书写（增益图 offset + 基准 = 增益图绝对起点，逐字节吻合）。
+     * 传 0 表示存储的已是基准相对值。
      */
-    fun updateEntries(payload: ByteArray, sizes: LongArray, offsets: LongArray): ByteArray? {
+    fun updateEntries(
+        payload: ByteArray,
+        sizes: LongArray,
+        offsets: LongArray,
+        offsetBase: Long = 0L,
+    ): ByteArray? {
         if (sizes.size != offsets.size) return null
         val ctx = readContext(payload) ?: return null
         if (ctx.numberOfImages != sizes.size) return null
         val out = payload.copyOf()
 
+        val base = if (offsetBase > 0L) offsetBase + PREFIX.size else 0L
         val mpEntry = ctx.mpEntryOffset
         for (i in sizes.indices) {
             val entry = mpEntry + i * 16
             if (entry + 16 > out.size) return null
             writeU32(out, entry + 4, sizes[i], ctx.littleEndian)
-            writeU32(out, entry + 8, offsets[i], ctx.littleEndian)
+            // 首图的绝对位置是 0（规范特例），减基准后为负，统一按 0 记，
+            // 与 oplus 原文件中的写法一致。
+            writeU32(out, entry + 8, (offsets[i] - base).coerceAtLeast(0L), ctx.littleEndian)
         }
         return out
     }

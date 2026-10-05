@@ -296,12 +296,18 @@ class CompressionEngine(private val context: Context) {
 
             var finalPrimary = assemblePrimary(mpfPayload)
             if (mpfPayload != null && gainBytes != null) {
-                // MPEntry 改写为定长，两遍组装后主图长度稳定
-                val patched = MpfRewriter.updateEntries(
-                    mpfPayload,
-                    longArrayOf(finalPrimary.size.toLong(), gainLen),
-                    longArrayOf(0L, finalPrimary.size.toLong()),
-                )
+                // MPEntry 改写为定长，两遍组装后主图长度稳定。
+                // offset 必须以 MPF 段的实际位置为基准（相对 MP Endian），
+                // 否则相册按 MPF 定位内嵌视频时会整体偏移，导致无法播放。
+                val mpfPayloadAt = JpegSegments.mpfPayloadOffset(finalPrimary)
+                val patched = mpfPayloadAt?.let {
+                    MpfRewriter.updateEntries(
+                        mpfPayload,
+                        longArrayOf(finalPrimary.size.toLong(), gainLen),
+                        longArrayOf(0L, finalPrimary.size.toLong()),
+                        offsetBase = it.toLong(),
+                    )
+                }
                 if (patched != null) finalPrimary = assemblePrimary(patched)
             }
 

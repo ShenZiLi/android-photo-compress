@@ -50,7 +50,7 @@
 | 增益图（GainMap） | ✅ **逐字节相同**（430,057 B，未重编码） |
 | XMP `Container:Directory` | ✅ 重建后自洽：Primary(0) / GainMap(430057) / MotionPhoto(真实长度) |
 | `GCamera:*` / `OpCamera:*` | ✅ 原样保留（含 `MotionPhoto="1"`、`VideoLength="5116097"`） |
-| MPF MPEntry | ✅ 重建后与实际布局一致（主图 offset=0，增益图 offset=主图长度） |
+| MPF MPEntry | ✅ 重建后与实际布局一致：offset 以 MP Endian 为基准（主图 offset=0，增益图 offset = 主图长度 − 基准），`基准 + offset` 逐字节等于增益图实际起点 |
 | 内嵌 MP4 | ✅ 起点为 `ftyp`，`ffprobe` 可解析；时长/帧数与原一致（1.73 s / 44 帧） |
 | 文件 mtime | ✅ 保持 `2026-10-03 08:47` |
 

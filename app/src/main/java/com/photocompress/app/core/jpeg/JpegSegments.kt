@@ -36,7 +36,29 @@ object JpegSegments {
      * 遇到 SOS 即停止扫描（其后为熵编码数据，按字节透传）。
      */
     fun split(bytes: ByteArray): Split {
+        val w = walk(bytes)
+        val tail = if (w.tailStart < bytes.size) bytes.copyOfRange(w.tailStart, bytes.size) else ByteArray(0)
+        return Split(w.segments, tail)
+    }
+
+    /**
+     * MPF（APP2）段 payload 在文件中的绝对偏移；不存在返回 null。
+     *
+     * MPEntry 的 Individual Image Data Offset 是相对 MP Endian（即 payload 内
+     * "MPF\0" 之后的 TIFF 头）的偏移，换算成绝对位置需要这个值。
+     */
+    fun mpfPayloadOffset(bytes: ByteArray): Int? {
+        val w = walk(bytes)
+        val idx = w.segments.indices.firstOrNull { isMpf(w.segments[it]) } ?: return null
+        return w.starts[idx] + 4
+    }
+
+    private class Walk(val segments: List<Segment>, val starts: IntArray, val tailStart: Int)
+
+    /** 段扫描：split 与 mpfPayloadOffset 共用，保证两者的边界判定完全一致。 */
+    private fun walk(bytes: ByteArray): Walk {
         val segments = ArrayList<Segment>()
+        val starts = ArrayList<Int>()
         var i = 2 // 跳过 SOI
         while (i + 3 < bytes.size) {
             if ((bytes[i].toInt() and 0xFF) != 0xFF) break
@@ -46,12 +68,11 @@ object JpegSegments {
             if (marker == 0xFF) { i++; continue }
             val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
             if (len < 2 || i + 2 + len > bytes.size) break
-            val payload = bytes.copyOfRange(i + 4, i + 2 + len)
-            segments += Segment(marker, payload)
+            segments += Segment(marker, bytes.copyOfRange(i + 4, i + 2 + len))
+            starts += i
             i += 2 + len
         }
-        val tail = if (i < bytes.size) bytes.copyOfRange(i, bytes.size) else ByteArray(0)
-        return Split(segments, tail)
+        return Walk(segments, starts.toIntArray(), i)
     }
 
     /** 组装：SOI + 各段 + tail。 */
