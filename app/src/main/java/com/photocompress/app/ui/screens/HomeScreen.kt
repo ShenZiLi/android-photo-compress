@@ -302,10 +302,30 @@ private fun StatsRow(totals: Totals) {
             dotColor = MaterialTheme.appColors.dataDone,
             label = "已压缩",
             value = "${formatCount(totals.doneCount)} 项",
-            meta = "${formatSize(totals.before)} → ${formatSize(totals.after)}",
+            // 前后一致（如都为空）时只显示一个值，避免「0 B → 0 B」这种冗余
+            meta = if (totals.before == totals.after) {
+                formatSize(totals.before)
+            } else {
+                "${formatSize(totals.before)} → ${formatSize(totals.after)}"
+            },
+        )
+        StatCard(
+            modifier = Modifier.weight(1f),
+            dotColor = MaterialTheme.appColors.success,
+            label = "压缩率",
+            value = savingsSize(totals.saved),
+            meta = savingsPercent(totals.pct),
         )
     }
 }
+
+/** 节省量：为 0 时不加负号，避免出现「-0 B」。 */
+private fun savingsSize(bytes: Long): String =
+    if (bytes > 0L) "-${formatSize(bytes)}" else formatSize(0L)
+
+/** 节省百分比：为 0 时不加负号，避免出现「-0%」。 */
+private fun savingsPercent(pct: Float): String =
+    if (pct > 0f) "-${pct.roundToInt()}%" else "0%"
 
 @Composable
 private fun StatCard(
@@ -316,10 +336,11 @@ private fun StatCard(
     meta: String,
 ) {
     CardSurface(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        // 三卡并排后每张只剩约 110dp，横向内边距收到 12dp 给内容让位
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     label,
                     style = MaterialTheme.typography.labelSmall,
