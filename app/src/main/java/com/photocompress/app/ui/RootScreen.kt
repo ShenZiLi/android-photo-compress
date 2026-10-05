@@ -53,6 +53,7 @@ import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.ui.components.KeyValueRow
 import com.photocompress.app.ui.components.ThumbImage
 import com.photocompress.app.ui.screens.AlbumFilterScreen
+import com.photocompress.app.ui.screens.CompressRatioScreen
 import com.photocompress.app.ui.screens.DoneLevel1
 import com.photocompress.app.ui.screens.DoneLevel2
 import com.photocompress.app.ui.screens.HomeScreen
@@ -128,7 +129,7 @@ fun AppRoot(vm: AppViewModel) {
                     )
                 }
                 NavigationBar {
-                    val navPage = if (state.page == AppPage.ALBUM_FILTER) AppPage.SETTINGS else state.page
+                    val navPage = if (state.page == AppPage.ALBUM_FILTER || state.page == AppPage.COMPRESS_RATIO) AppPage.SETTINGS else state.page
                     NavItem(AppPage.HOME, "首页", navPage) { vm.go(it) }
                     NavItem(AppPage.TODO, "未压缩", navPage) { vm.go(it) }
                     NavItem(AppPage.DONE, "已压缩", navPage) { vm.go(it) }
@@ -196,8 +197,14 @@ fun AppRoot(vm: AppViewModel) {
                 AppPage.SETTINGS -> SettingsScreen(
                     state = state,
                     onOpenTrash = { vm.go(AppPage.TRASH) },
-                    onSetTier = { kind, tier -> vm.setTier(kind, tier) },
                     onOpenAlbumFilter = { vm.go(AppPage.ALBUM_FILTER) },
+                    onOpenCompressRatio = { vm.go(AppPage.COMPRESS_RATIO) },
+                )
+
+                AppPage.COMPRESS_RATIO -> CompressRatioScreen(
+                    state = state,
+                    onBack = { vm.go(AppPage.SETTINGS) },
+                    onSetTier = { kind, tier -> vm.setTier(kind, tier) },
                 )
 
                 AppPage.ALBUM_FILTER -> AlbumFilterScreen(

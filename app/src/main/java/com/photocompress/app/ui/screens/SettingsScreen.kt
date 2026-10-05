@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,31 +50,21 @@ import com.photocompress.app.ui.theme.appColors
 fun SettingsScreen(
     state: UiState,
     onOpenTrash: () -> Unit,
-    onSetTier: (MediaKind, QualityTier) -> Unit,
     onOpenAlbumFilter: () -> Unit,
+    onOpenCompressRatio: () -> Unit,
 ) {
-    val settings = state.settings
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(title = "设置")
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            TierCard(
-                title = "普通照片",
-                hint = "JPEG / HEIF",
-                selected = QualityTier.fromName(settings.photoTier),
-                onSelect = { onSetTier(MediaKind.PHOTO, it) },
-            )
-            TierCard(
-                title = "实况照片",
-                hint = "主图 + 增益图 + 内嵌视频",
-                selected = QualityTier.fromName(settings.liveTier),
-                onSelect = { onSetTier(MediaKind.LIVE_PHOTO, it) },
-            )
-            TierCard(
-                title = "视频",
-                hint = "HEVC / H.264 / AV1 / VP9",
-                selected = QualityTier.fromName(settings.videoTier),
-                onSelect = { onSetTier(MediaKind.VIDEO, it) },
-            )
+            SectionTitle("压缩", modifier = Modifier.padding(horizontal = 0.dp))
+            CardSurface(modifier = Modifier.fillMaxWidth()) {
+                SettingRow(
+                    icon = Icons.Filled.Tune,
+                    title = "压缩比例",
+                    subtitle = ratioSummary(state),
+                    onClick = onOpenCompressRatio,
+                )
+            }
 
             SectionTitle("显示", modifier = Modifier.padding(horizontal = 0.dp))
             CardSurface(modifier = Modifier.fillMaxWidth()) {
@@ -119,6 +110,59 @@ fun SettingsScreen(
 
 private fun UiState.restorableCount(): Int =
     ledger.count { it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null }
+
+/** 一级入口副标题：概览三类媒体当前档位。 */
+private fun ratioSummary(state: UiState): String {
+    val settings = state.settings
+    val photo = QualityTier.fromName(settings.photoTier).label
+    val live = QualityTier.fromName(settings.liveTier).label
+    val video = QualityTier.fromName(settings.videoTier).label
+    return "普通照片 $photo · 实况照片 $live · 视频 $video"
+}
+
+/**
+ * 压缩比例（二级页面）：分别为普通照片、实况照片、视频选择质量档位。
+ */
+@Composable
+fun CompressRatioScreen(
+    state: UiState,
+    onBack: () -> Unit,
+    onSetTier: (MediaKind, QualityTier) -> Unit,
+) {
+    val settings = state.settings
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        AppBar(
+            title = "压缩比例",
+            subtitle = "按媒体类型选择压缩档位",
+            navigation = {
+                androidx.compose.material3.IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回设置")
+                }
+            },
+        )
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            TierCard(
+                title = "普通照片",
+                hint = "JPEG / HEIF",
+                selected = QualityTier.fromName(settings.photoTier),
+                onSelect = { onSetTier(MediaKind.PHOTO, it) },
+            )
+            TierCard(
+                title = "实况照片",
+                hint = "主图 + 增益图 + 内嵌视频",
+                selected = QualityTier.fromName(settings.liveTier),
+                onSelect = { onSetTier(MediaKind.LIVE_PHOTO, it) },
+            )
+            TierCard(
+                title = "视频",
+                hint = "HEVC / H.264 / AV1 / VP9",
+                selected = QualityTier.fromName(settings.videoTier),
+                onSelect = { onSetTier(MediaKind.VIDEO, it) },
+            )
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
 
 @Composable
 private fun TierCard(

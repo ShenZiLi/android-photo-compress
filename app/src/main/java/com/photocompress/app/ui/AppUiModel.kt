@@ -6,7 +6,7 @@ import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
 
-enum class AppPage { HOME, TODO, DONE, TRASH, SETTINGS, ALBUM_FILTER }
+enum class AppPage { HOME, TODO, DONE, TRASH, SETTINGS, ALBUM_FILTER, COMPRESS_RATIO }
 
 /** 二级结构导航与选择状态（每个页面各一份）。 */
 data class LevelState(
