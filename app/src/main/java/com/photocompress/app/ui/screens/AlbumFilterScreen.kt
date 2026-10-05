@@ -21,9 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.photocompress.app.ui.components.GlassIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +38,7 @@ import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.allAlbumNames
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.EmptyState
+import com.photocompress.app.ui.components.GlassSurface
 import com.photocompress.app.ui.formatCount
 import com.photocompress.app.ui.theme.appColors
 
@@ -81,10 +81,8 @@ fun AlbumFilterScreen(
         ) {
             items(albums, key = { it.first }) { (name, count) ->
                 val shown = name !in hidden
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(14.dp),
-                    shadowElevation = 1.dp,
+                GlassSurface(
+                    blur = false,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
@@ -135,7 +133,10 @@ private fun ShownSwitch(shown: Boolean) {
         modifier = Modifier
             .size(width = TrackWidth, height = TrackHeight)
             .clip(shape)
-            .background(if (shown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
+                if (shown) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.surfaceSunken,
+                if (shown) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else MaterialTheme.appColors.surfaceSunken,
+            )))
             .border(
                 width = 1.dp,
                 color = if (shown) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,

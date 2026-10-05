@@ -16,8 +16,8 @@ android {
         applicationId = "com.photocompress.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.1.11"
+        versionCode = 13
+        versionName = "0.1.12"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -31,7 +31,10 @@ android {
         }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -67,6 +70,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.haze)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.androidx.room.runtime)

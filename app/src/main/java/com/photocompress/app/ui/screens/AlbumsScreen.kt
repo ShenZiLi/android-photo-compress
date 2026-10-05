@@ -3,6 +3,11 @@ package com.photocompress.app.ui.screens
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,10 +32,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.photocompress.app.ui.components.GlassIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -39,8 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -65,6 +73,7 @@ import com.photocompress.app.ui.applyTodoFilter
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.Badge
 import com.photocompress.app.ui.components.EmptyState
+import com.photocompress.app.ui.components.GlassSurface
 import com.photocompress.app.ui.components.PickCircle
 import com.photocompress.app.ui.components.ThumbImage
 import com.photocompress.app.ui.daysLeft
@@ -177,44 +186,48 @@ private fun AlbumCard(
     onTogglePick: () -> Unit,
 ) {
     val context = LocalContext.current
-    Column {
-        Box {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .combinedClickable(onClick = onOpen),
-            ) {
-                CollageCover(context, coverUris)
+    GlassSurface(modifier = Modifier.fillMaxWidth(), blur = false) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Box {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(if (picked) 2.dp else 1.dp, if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                        .combinedClickable(onClick = onOpen),
+                ) {
+                    CollageCover(context, coverUris)
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .toggleable(value = picked, role = Role.Checkbox, onValueChange = { onTogglePick() })
+                        .semantics { contentDescription = "选择图集 $name" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PickCircle(checked = picked)
+                }
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(2.dp)
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .combinedClickable(onClick = onTogglePick),
-                contentAlignment = Alignment.Center,
-            ) {
-                PickCircle(checked = picked)
-            }
+            Spacer(Modifier.height(8.dp))
+            Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                line2,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.appColors.onSurfaceMuted,
+                maxLines = 1,
+            )
+            Text(
+                line3,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (line3Warn) MaterialTheme.appColors.danger else MaterialTheme.appColors.success,
+                maxLines = 1,
+            )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            line2,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.appColors.onSurfaceMuted,
-            maxLines = 1,
-        )
-        Text(
-            line3,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = if (line3Warn) MaterialTheme.appColors.danger else MaterialTheme.appColors.success,
-            maxLines = 1,
-        )
     }
 }
 
@@ -285,8 +298,8 @@ fun TodoLevel2(
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(filtered, key = { it.id }) { item ->
                 MediaTile(
@@ -358,8 +371,8 @@ fun DoneLevel2(
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(filtered, key = { it.record.id }) { dm ->
                 val restorable = dm.restorable
@@ -405,8 +418,10 @@ private fun MediaTile(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .border(if (picked) 2.dp else 1.dp, if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics { selected = picked }
             // 键盘等价路径（AC16）：Enter 打开信息、Space 勾选
             .focusable()
             .onKeyEvent { event ->
@@ -436,7 +451,7 @@ private fun MediaTile(
                         .background(Color(0x85000000)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp).padding(start = 2.dp))
                 }
             }
         }
@@ -452,7 +467,7 @@ private fun MediaTile(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .background(Color(0x99000000))
+                .background(Brush.verticalGradient(listOf(Color(0x99000000), Color(0xDD000000))))
                 .padding(horizontal = 6.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -469,24 +484,26 @@ private fun FilterChips(
     onSelect: (String) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         options.forEach { (value, label) ->
             val active = value == selected
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(999.dp))
                     .background(
-                        if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
                     )
-                    .combinedClickable(onClick = { onSelect(value) })
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.12f), RoundedCornerShape(999.dp))
+                    .selectable(selected = active, role = Role.Tab, onClick = { onSelect(value) })
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text(
                     label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.appColors.onSurfaceMuted,
+                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.onSurfaceMuted,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
@@ -506,7 +523,8 @@ private fun ToolbarRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(note, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.appColors.onSurfaceMuted)
+        Text(note, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.appColors.onSurfaceMuted)
+        Spacer(Modifier.width(8.dp))
         OutlinedButton(onClick = onSelectAll, enabled = selectAllEnabled) {
             Text(selectAllLabel, style = MaterialTheme.typography.labelMedium)
         }

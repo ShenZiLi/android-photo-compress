@@ -1,6 +1,7 @@
 package com.photocompress.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,15 +31,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.photocompress.app.data.ledger.CompressedItemEntity
+import com.photocompress.app.BuildConfig
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
 import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.components.AppBar
 import com.photocompress.app.ui.components.CardSurface
 import com.photocompress.app.ui.components.EmptyState
+import com.photocompress.app.ui.components.GlassButton
 import com.photocompress.app.ui.components.SectionTitle
 import com.photocompress.app.ui.components.SegmentedControl
 import com.photocompress.app.ui.daysLeft
@@ -98,7 +103,7 @@ fun SettingsScreen(
                     SettingRow(
                         icon = Icons.Filled.Info,
                         title = "关于",
-                        subtitle = "版本 0.1.0",
+                        subtitle = "版本 ${BuildConfig.VERSION_NAME}",
                     )
                 }
             }
@@ -127,7 +132,7 @@ fun CompressRatioScreen(
             title = "压缩比例",
             subtitle = "按媒体类型选择压缩档位",
             navigation = {
-                androidx.compose.material3.IconButton(onClick = onBack) {
+                com.photocompress.app.ui.components.GlassIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回设置")
                 }
             },
@@ -231,10 +236,14 @@ private fun SettingRow(
     ) {
         Box(
             modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .background(Brush.linearGradient(listOf(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                )))
+                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -243,12 +252,13 @@ private fun SettingRow(
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
             }
         }
-        Text(
-            trailText ?: "›",
+        if (trailText == null && onClick != null) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.appColors.onSurfaceMuted)
+        } else if (trailText != null) Text(
+            trailText,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (trailText != null) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = FontWeight.SemiBold,
             color = when {
-                trailText == null -> MaterialTheme.appColors.onSurfaceMuted
                 trailOk -> MaterialTheme.appColors.success
                 else -> MaterialTheme.appColors.danger
             },
@@ -274,7 +284,7 @@ fun TrashScreen(
             title = "回收站",
             subtitle = "${formatCount(restorable.size)} 份备份可还原",
             navigation = {
-                androidx.compose.material3.IconButton(onClick = onBack) {
+                com.photocompress.app.ui.components.GlassIconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
@@ -331,14 +341,12 @@ fun TrashScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            androidx.compose.material3.Button(
+            GlassButton(
                 onClick = onPurgeAll,
                 enabled = backups.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.appColors.danger,
-                    contentColor = MaterialTheme.appColors.onDanger,
-                ),
+                containerColor = MaterialTheme.appColors.danger,
+                contentColor = MaterialTheme.appColors.onDanger,
             ) {
                 Text(if (backups.isEmpty()) "暂无可清理备份" else "清理全部备份（释放 ${formatSize(totalBefore)}）")
             }

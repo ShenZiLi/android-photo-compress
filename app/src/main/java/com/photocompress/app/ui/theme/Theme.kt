@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import com.photocompress.app.ui.components.GlassScene
 
 private val LightScheme = lightColorScheme(
     primary = LightPrimary,
@@ -46,20 +47,28 @@ fun PhotoCompressTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val colorScheme = when {
+    val baseScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> DarkScheme
         else -> LightScheme
     }
+    // 动态主题色继续参与控件；玻璃承载层与正文使用固定语义对比度。
+    val colorScheme = baseScheme.copy(
+        background = if (darkTheme) DarkSurface else LightSurface,
+        surface = if (darkTheme) DarkSurfaceVariant else LightSurfaceVariant,
+        onSurface = if (darkTheme) DarkOnSurface else LightOnSurface,
+        onBackground = if (darkTheme) DarkOnSurface else LightOnSurface,
+        onSurfaceVariant = if (darkTheme) DarkOnSurfaceVariant else LightOnSurfaceVariant,
+    )
     val appColors = if (darkTheme) DarkAppColors else LightAppColors
 
     CompositionLocalProvider(LocalAppColors provides appColors) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,
-            content = content,
+            content = { GlassScene(content = content) },
         )
     }
 }

@@ -11,11 +11,13 @@ exifinterface = "1.4.2"
 coroutines = "1.10.2"
 work = "2.10.5"
 coil = "2.7.0"
+haze = "1.6.10"
 junit = "4.13.2"
 androidxTestExtJunit = "1.2.1"
 androidxTestRunner = "1.6.2"
 
 [libraries]
+haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }

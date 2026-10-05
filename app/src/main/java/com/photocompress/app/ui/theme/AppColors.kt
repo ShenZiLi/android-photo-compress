@@ -31,10 +31,10 @@ data class AppColors(
 )
 
 val LightAppColors = AppColors(
-    surfaceRaised = Color(0xFFFFFFFF),
-    surfaceSunken = Color(0xFFECEEF5),
-    onSurfaceMuted = Color(0xFF50535F),
-    divider = Color(0xFFE6E8F0),
+    surfaceRaised = Color(0xFFFDFFFE),
+    surfaceSunken = Color(0xFFE3EDE7),
+    onSurfaceMuted = Color(0xFF435C52),
+    divider = Color(0xFFD6E4DC),
     success = Color(0xFF1F6B4A),
     onSuccess = Color(0xFFFFFFFF),
     danger = Color(0xFFA8271F),
@@ -47,10 +47,10 @@ val LightAppColors = AppColors(
 )
 
 val DarkAppColors = AppColors(
-    surfaceRaised = Color(0xFF1B1E24),
-    surfaceSunken = Color(0xFF23262E),
-    onSurfaceMuted = Color(0xFFB6B9C5),
-    divider = Color(0xFF33363E),
+    surfaceRaised = Color(0xFF1D2E2A),
+    surfaceSunken = Color(0xFF22352F),
+    onSurfaceMuted = Color(0xFFB9CFC4),
+    divider = Color(0xFF3B514B),
     success = Color(0xFF7FD3AC),
     onSuccess = Color(0xFF04301E),
     danger = Color(0xFFFFB4AB),

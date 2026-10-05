@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,7 +41,8 @@ class MainActivity : ComponentActivity() {
             PhotoCompressTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.surface,
+                    color = androidx.compose.ui.graphics.Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
                     AppEntry(viewModel)
                 }
@@ -70,7 +70,7 @@ private fun AppEntry(vm: AppViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 12.dp, bottom = 20.dp),
             )
-            Button(
+            com.photocompress.app.ui.components.GlassButton(
                 onClick = {
                     requested = true
                     runCatching { context.startActivity(StorageAccess.allFilesAccessIntent(context)) }

@@ -1,8 +1,11 @@
 package com.photocompress.app.ui
 
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +16,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,16 +30,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,11 +49,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.ui.components.KeyValueRow
+import com.photocompress.app.ui.components.GlassButton
+import com.photocompress.app.ui.components.GlassScene
+import com.photocompress.app.ui.components.GlassSurface
 import com.photocompress.app.ui.components.ThumbImage
 import com.photocompress.app.ui.screens.AlbumFilterScreen
 import com.photocompress.app.ui.screens.CompressRatioScreen
@@ -100,9 +112,10 @@ fun AppRoot(vm: AppViewModel) {
     val doneSummary = state.doneSelection()
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         bottomBar = {
-            Column {
+            Column(modifier = Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
                 if (state.page == AppPage.TODO || state.page == AppPage.DONE) {
                     ActionBar(
                         isTodo = state.page == AppPage.TODO,
@@ -128,12 +141,14 @@ fun AppRoot(vm: AppViewModel) {
                         },
                     )
                 }
-                NavigationBar {
-                    val navPage = if (state.page == AppPage.ALBUM_FILTER || state.page == AppPage.COMPRESS_RATIO) AppPage.SETTINGS else state.page
-                    NavItem(AppPage.HOME, "首页", navPage) { vm.go(it) }
-                    NavItem(AppPage.TODO, "未压缩", navPage) { vm.go(it) }
-                    NavItem(AppPage.DONE, "已压缩", navPage) { vm.go(it) }
-                    NavItem(AppPage.SETTINGS, "设置", navPage) { vm.go(it) }
+                GlassSurface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), radius = 32.dp) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val navPage = if (state.page == AppPage.ALBUM_FILTER || state.page == AppPage.COMPRESS_RATIO) AppPage.SETTINGS else state.page
+                        NavItem(AppPage.HOME, "首页", navPage) { vm.go(it) }
+                        NavItem(AppPage.TODO, "未压缩", navPage) { vm.go(it) }
+                        NavItem(AppPage.DONE, "已压缩", navPage) { vm.go(it) }
+                        NavItem(AppPage.SETTINGS, "设置", navPage) { vm.go(it) }
+                    }
                 }
             }
         },
@@ -222,32 +237,46 @@ fun AppRoot(vm: AppViewModel) {
     }
 
     sheet?.let { data ->
-        ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            InfoSheetContent(data)
+        ModalBottomSheet(
+            onDismissRequest = { sheet = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        ) {
+            GlassScene(modifier = Modifier.fillMaxWidth()) { InfoSheetContent(data) }
         }
     }
 
     dialog?.let { data ->
-        AlertDialog(
+        BasicAlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text(data.title) },
-            text = { Text(data.body) },
-            confirmButton = {
-                TextButton(onClick = {
-                    dialog = null
-                    data.onConfirm()
-                }) {
-                    Text(
-                        data.okLabel,
-                        color = if (data.danger) MaterialTheme.appColors.danger else MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+        ) {
+            GlassScene(modifier = Modifier.fillMaxWidth()) {
+                GlassSurface(modifier = Modifier.fillMaxWidth(), radius = 28.dp) {
+                    Column(modifier = Modifier
+                        .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
+                    ) {
+                        Text(data.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+                        Spacer(Modifier.height(16.dp))
+                        Text(data.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.appColors.onSurfaceMuted)
+                        Spacer(Modifier.height(24.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { dialog = null }) { Text("取消") }
+                            Spacer(Modifier.width(8.dp))
+                            GlassButton(
+                                onClick = {
+                                    dialog = null
+                                    data.onConfirm()
+                                },
+                                containerColor = if (data.danger) MaterialTheme.appColors.danger else MaterialTheme.colorScheme.primary,
+                                contentColor = if (data.danger) MaterialTheme.appColors.onDanger else MaterialTheme.colorScheme.onPrimary,
+                            ) { Text(data.okLabel, fontWeight = FontWeight.SemiBold) }
+                        }
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { dialog = null }) { Text("取消") }
-            },
-        )
+            }
+        }
     }
 }
 
@@ -256,22 +285,36 @@ private fun SelectionSummary.albumCount(): Int = albumNames.size.coerceAtLeast(1
 @Composable
 private fun RowScope.NavItem(page: AppPage, label: String, current: AppPage, onGo: (AppPage) -> Unit) {
     val selected = page == current
-    NavigationBarItem(
-        selected = selected,
-        onClick = { onGo(page) },
-        icon = {
-            Icon(
-                imageVector = when (page) {
-                    AppPage.HOME -> if (selected) Icons.Filled.Home else Icons.Filled.Home
-                    AppPage.TODO -> if (selected) Icons.Filled.PhotoLibrary else Icons.Outlined.PhotoLibrary
-                    AppPage.DONE -> if (selected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle
-                    else -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
-                },
-                contentDescription = label,
-            )
-        },
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-    )
+    val scheme = MaterialTheme.colorScheme
+    val tint = if (selected) scheme.primary else MaterialTheme.appColors.onSurfaceMuted
+    Column(
+        modifier = Modifier.weight(1f)
+            .clip(RoundedCornerShape(26.dp))
+            .background(Brush.verticalGradient(listOf(
+                if (selected) scheme.primary.copy(alpha = 0.23f) else Color.Transparent,
+                if (selected) scheme.primary.copy(alpha = 0.10f) else Color.Transparent,
+            )))
+            .border(1.dp, if (selected) Color.White.copy(alpha = 0.24f) else Color.Transparent, RoundedCornerShape(26.dp))
+            .selectable(selected = selected, role = Role.Tab, onClick = { onGo(page) })
+            .heightIn(min = 64.dp)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = when (page) {
+                AppPage.HOME -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
+                AppPage.TODO -> if (selected) Icons.Filled.PhotoLibrary else Icons.Outlined.PhotoLibrary
+                AppPage.DONE -> if (selected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle
+                else -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
+            },
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = tint, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+    }
 }
 
 @Composable
@@ -282,9 +325,9 @@ private fun ActionBar(
     batch: BatchState?,
     onAction: () -> Unit,
 ) {
-    Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
+    GlassSurface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -330,17 +373,9 @@ private fun ActionBar(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            androidx.compose.material3.Button(
+            GlassButton(
                 onClick = onAction,
                 enabled = !summary.empty && batch == null,
-                colors = if (isTodo) {
-                    androidx.compose.material3.ButtonDefaults.buttonColors()
-                } else {
-                    androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                },
             ) {
                 Text(if (isTodo) "压缩" else "还原", fontWeight = FontWeight.SemiBold)
             }
@@ -350,17 +385,12 @@ private fun ActionBar(
 
 @Composable
 private fun ToastOverlay(text: String, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = 6.dp,
-    ) {
+    GlassSurface(modifier = modifier.padding(horizontal = 16.dp), radius = 20.dp) {
         Text(
             text,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -368,7 +398,7 @@ private fun ToastOverlay(text: String, modifier: Modifier = Modifier) {
 @Composable
 private fun InfoSheetContent(data: SheetData) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Text(data.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         ThumbImage(
