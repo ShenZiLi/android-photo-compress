@@ -250,3 +250,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: 删除设置页压缩比例入口说明
+<!-- trellis-session: v=2 fp=d81fd7891c8b26a2 -->
+
+**Date**: 2026-10-05
+**Task**: 删除设置页压缩比例入口说明
+**Branch**: `master`
+
+### Summary
+
+删除设置页压缩比例入口下的当前档位摘要，入口单行显示；0.1.8 已覆盖安装真机。
+
+### Main Changes
+
+- SettingRow 副标题改为可选并不渲染缺省内容，移除不再使用的 ratioSummary。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb7eb0b` | fix(ui): remove compression ratio subtitle from settings |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（最终 3 秒）、差异检查通过；安装 Success，版本核对为 0.1.8 / versionCode 9；未运行测试，界面由用户验收。
+
+### Status
+
+[OK] **Completed**
