@@ -314,7 +314,7 @@ private fun ActionBar(
                     // else 分支、错显「仅 30 天内可还原」。
                     val hint = when {
                         !summary.empty && isTodo ->
-                            "预计可节约约 ${formatSize((summary.bytes * 0.37).toLong())}（按平衡档估算）"
+                            "预计可节约约 ${formatSize((summary.bytes * 0.37).toLong())}"
                         !summary.empty && !isTodo -> "将恢复原始画质与体积"
                         level == 1 && isTodo -> "勾选图集或图片后开始压缩"
                         level == 1 -> ""
