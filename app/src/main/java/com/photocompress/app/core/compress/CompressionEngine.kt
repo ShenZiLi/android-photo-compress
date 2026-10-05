@@ -301,7 +301,9 @@ class CompressionEngine(private val context: Context) {
                     newVideoLength = videoBytes.size.toLong()
                     // 尾块逐字节原样追加：其索引偏移自区段末尾反向计数，搬移后仍然有效
                     newMotionBytes = videoBytes + tailPart
-                    motionNote = "内嵌视频重编码（${res.codec ?: MediaClassifierCodec.label(probe.codec)}）"
+                    val codecName = res.codec ?: MediaClassifierCodec.label(probe.codec)
+                    motionNote = res.hdrNote?.let { "内嵌视频重编码（$codecName · $it）" }
+                        ?: "内嵌视频重编码（$codecName）"
                 } else {
                     motionNote = "内嵌视频原样保留（重编码结果无法解析）"
                 }
@@ -399,7 +401,13 @@ class CompressionEngine(private val context: Context) {
         val res = VideoTranscoder.transcode(file, dst, tier)
         if (!res.success || !dst.exists()) {
             dst.delete()
+            // HDR 源在无法保真时由 VideoTranscoder 返回跳过原因（原文件未改动）
             return CompressOutcome.Skipped(res.reason ?: "转码失败")
+        }
+        // 双保险：转码跑通但产物丢了 HDR 信号，也不允许落地（原文件保持不变）
+        if (res.hdrNote != null && !VideoProbeRunner.probe(dst.absolutePath).isHdr) {
+            dst.delete()
+            return CompressOutcome.Skipped("输出未保留 HDR 信号，已跳过（原文件未改动）")
         }
         // 写入文件内自有标记（D5），使账本丢失后仍能识别已压缩（F7 / AC5）
         Mp4XmpMarker.write(dst, newMarker())
@@ -415,7 +423,10 @@ class CompressionEngine(private val context: Context) {
             dst.delete()
             return CompressOutcome.Failed("输出视频无法解析")
         }
-        return commit(item, dst, tier, codecUsed = MediaClassifierCodec.label(probe.codec))
+        val codecLabel = MediaClassifierCodec.label(probe.codec)
+        // HDR 源的处置结论（保真 / 已转 SDR）随编码信息写入账本，便于识别与追溯
+        val codecUsed = res.hdrNote?.let { "$codecLabel · $it" } ?: codecLabel
+        return commit(item, dst, tier, codecUsed = codecUsed)
     }
 
     // ---------------------------------------------------------------- 提交（备份 → 原地替换 → 校验 → 回滚）

@@ -62,6 +62,28 @@ object DeviceCapabilityProbe {
         return result.sortedWith(compareBy({ it.mime }, { !it.hardware }, { it.name }))
     }
 
+    /**
+     * U4 补充：HEVC Main10（HDR10）编码能力——决定 10bit HDR 视频能否保真重编码。
+     * 无此能力时，HDR 源按用户确认的策略降级为 SDR 压缩。
+     */
+    fun probeHevcMain10(): Boolean {
+        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+        for (info in list.codecInfos) {
+            if (!info.isEncoder) continue
+            if (!info.supportedTypes.any { it.equals(MIME_HEVC, ignoreCase = true) }) continue
+            val caps = runCatching { info.getCapabilitiesForType(MIME_HEVC) }.getOrNull() ?: continue
+            val profiles = caps.profileLevels?.map { it.profile }?.distinct() ?: continue
+            val main10 = profiles.any {
+                it == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10 ||
+                    it == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10 ||
+                    it == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10Plus
+            }
+            Log.i(TAG, "hevcMain10 encoder=${info.name} hw=${info.isHardwareAccelerated} profiles=$profiles main10=$main10")
+            if (main10) return true
+        }
+        return false
+    }
+
     data class FileWriteProbe(
         val path: String,
         val writable: Boolean,
@@ -423,6 +445,9 @@ object DeviceCapabilityProbe {
         val heif = probeMuxerHeifSupport()
         Log.i(TAG, "muxerHeif=${heif}")
 
+        val hevcMain10 = probeHevcMain10()
+        Log.i(TAG, "hevcMain10Encodable=$hevcMain10")
+
         probeEncoderSizes()
 
         // 能力矩阵摘要：驱动后续阶段取舍
@@ -430,13 +455,14 @@ object DeviceCapabilityProbe {
         val hevc = MIME_HEVC in supported
         val vp9 = MIME_VP9 in supported
         val av1 = MIME_AV1 in supported
-        Log.i(TAG, "summary avc=$avc hevc=$hevc vp9=$vp9 av1=$av1 heif=$heif")
+        Log.i(TAG, "summary avc=$avc hevc=$hevc vp9=$vp9 av1=$av1 heif=$heif hevcMain10=$hevcMain10")
         Log.i(TAG, String.format(Locale.US, "summary_line %s", buildString {
             append("avc=").append(avc)
             append(" hevc=").append(hevc)
             append(" vp9=").append(vp9)
             append(" av1=").append(av1)
             append(" heif=").append(heif)
+            append(" hevcMain10=").append(hevcMain10)
         }))
     }
 }

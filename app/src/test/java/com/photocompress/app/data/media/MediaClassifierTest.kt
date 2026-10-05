@@ -1,6 +1,7 @@
 package com.photocompress.app.data.media
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -70,11 +71,39 @@ class MediaClassifierTest {
     }
 
     @Test
-    fun `10-bit HDR 视频跳过（D11）`() {
+    fun `10-bit HDR 视频按「保真或跳过」判类（D11 修订）`() {
         val hdr = VideoProbe(MediaClassifier.CODEC_HEVC, 3840, 2160, 5000, true, 16, 6, "")
-        val decision = MediaClassifier.decideVideo(ContainerFormat.MP4, hdr)
-        assertTrue(decision is SupportDecision.Skipped)
-        assertTrue((decision as SupportDecision.Skipped).reason.contains("10-bit"))
+
+        // 注入设备能力，避免在 JVM 单测里触碰 MediaCodecList（桩实现）
+        val preserved = MediaClassifier.decideVideo(ContainerFormat.MP4, hdr, canPreserveHdr = { true })
+        assertTrue("有 Main10 编码器时 HDR 源进入候选", preserved is SupportDecision.Supported)
+
+        val skipped = MediaClassifier.decideVideo(ContainerFormat.MP4, hdr, canPreserveHdr = { false })
+        assertTrue("无 Main10 编码器时跳过", skipped is SupportDecision.Skipped)
+        val reason = (skipped as SupportDecision.Skipped).reason
+        assertTrue(reason.contains("Main10"))
+        assertTrue(reason.contains("已跳过"))
+        // 关键回归：跳过原因不得再出现「转 SDR」这类降级表述
+        assertFalse("不得再出现降级为 SDR 的路径", reason.contains("SDR"))
+    }
+
+    @Test
+    fun `SDR 视频不受 HDR 能力开关影响`() {
+        val sdr = VideoProbe(MediaClassifier.CODEC_AVC, 1920, 1080, 3000, false, -1, -1, "")
+        assertTrue(MediaClassifier.decideVideo(ContainerFormat.MP4, sdr, canPreserveHdr = { false }) is SupportDecision.Supported)
+    }
+
+    @Test
+    fun `HDR 保真比对：传递特性与 10bit 主档丢失即降级或丢失`() {
+        val source = VideoProbe(MediaClassifier.CODEC_HEVC, 3840, 2160, 5000, true, 16, 6, "", profile = 2, bitDepth = 10)
+        // 产物完整保留
+        assertEquals(HdrFidelity.PRESERVED, MediaClassifier.compareHdr(source, source).first)
+        // 10bit 主档丢失（8bit HEVC）
+        val eightBit = source.copy(bitDepth = 8, profile = 1)
+        assertEquals(HdrFidelity.DEGRADED, MediaClassifier.compareHdr(source, eightBit).first)
+        // 完全退化为 SDR
+        val sdr = VideoProbe(MediaClassifier.CODEC_AVC, 3840, 2160, 5000, false, -1, -1, "")
+        assertEquals(HdrFidelity.LOST, MediaClassifier.compareHdr(source, sdr).first)
     }
 
     @Test

@@ -246,17 +246,20 @@ class MediaRepository(
         } else {
             VideoProbe(null, 0, 0, 0, false, -1, -1, "非 MP4 容器，不做轨道探测")
         }
-        // MediaExtractor 未给出色彩信息时兜底扫描 colr box
-        val effectiveProbe = if (format == ContainerFormat.MP4 && probe.codec != null &&
-            probe.colorTransfer < 0 && !probe.isTenBitHdr
-        ) {
-            val transfer = VideoProbeRunner.scanColrBox(File(path))
-            if (transfer == 6 || transfer == 7 || transfer == 16 || transfer == 18) {
-                probe.copy(isTenBitHdr = true, colorTransfer = transfer)
+        // MediaExtractor 未给出色彩信息时兜底扫描 colr box（MP4 容器才有）
+        val effectiveProbe = if (format == ContainerFormat.MP4 && probe.codec != null && probe.colorTransfer < 0) {
+            val colr = VideoProbeRunner.scanColrInfo(File(path))
+            if (colr.transfer in setOf(6, 7, 16, 18) || colr.primaries == VideoProbe.COLOR_STANDARD_BT2020) {
+                probe.copy(
+                    isTenBitHdr = true,
+                    colorTransfer = if (colr.transfer in setOf(6, 7, 16, 18)) colr.transfer else probe.colorTransfer,
+                    colorStandard = if (probe.colorStandard < 0) colr.primaries else probe.colorStandard,
+                )
             } else probe
         } else probe
 
-        val support = MediaClassifier.decideVideo(format, effectiveProbe)
+        // 判类时注入设备 HDR 保真能力：无 Main10 编码器则 HDR 源直接标记跳过（不降级）
+        val support = MediaClassifier.decideVideo(format, effectiveProbe) { MediaClassifier.deviceCanPreserveHdr }
         // 视频的自有标记在 MP4 顶层 uuid box（D5），用于账本丢失后的识别
         val xmpCompressId = runCatching { Mp4XmpMarker.read(File(path))?.id }.getOrNull()
 

@@ -7,7 +7,11 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.util.Log
+import com.photocompress.app.data.media.HdrFidelity
+import com.photocompress.app.data.media.MediaClassifier
 import com.photocompress.app.data.media.QualityTier
+import com.photocompress.app.data.media.VideoProbe
+import com.photocompress.app.data.media.VideoProbeRunner
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -25,6 +29,8 @@ object VideoTranscoder {
         val outputPath: String? = null,
         val codec: String? = null,
         val reason: String? = null,
+        /** HDR 处置标注（保真 / 已转 SDR）；源非 HDR 时为 null。 */
+        val hdrNote: String? = null,
     )
 
     /**
@@ -34,6 +40,16 @@ object VideoTranscoder {
      * - [AGGRESSIVE]：实况照片内嵌视频专用（画面占比小、允许一定损失以提高压缩率）。
      */
     enum class BitrateProfile { STANDARD, AGGRESSIVE }
+
+    /**
+     * HDR 处置模式。
+     *
+     * - [DEFAULT]：源非 HDR，保持既有行为（不干预色彩 signaling）。
+     * - [PRESERVE]：保留 HDR——HEVC Main10 编码 + 原样色彩 / HDR10 静态元数据。
+     *
+     * 注：曾有的 [SDR_CLEAR]（把 HDR 源压成 SDR）已按策略删除——HDR 源要么保真，要么跳过。
+     */
+    enum class HdrMode { DEFAULT, PRESERVE }
 
     private data class VideoTrack(
         val index: Int,
@@ -47,11 +63,46 @@ object VideoTranscoder {
         val durationUs: Long,
     )
 
+    /**
+     * 转码入口。源为 10bit HDR 时按「保真优先、不可保真即跳过」编排：
+     * 1. 设备有 HEVC Main10 编码器 → 尝试 [HdrMode.PRESERVE]，并校验产物确实保留了 HDR；
+     * 2. 设备无 Main10 编码器、或保真校验未通过 → **跳过**（返回 `success=false`），
+     *    绝不把 HDR 静默转成 SDR —— 用户的硬要求是「保留视频原始信息」。
+     *
+     * `reason` 会带上 HDR 前缀，由 [CompressionEngine] 直接作为跳过原因展示。
+     */
     fun transcode(
         input: File,
         output: File,
         tier: QualityTier,
         profile: BitrateProfile = BitrateProfile.STANDARD,
+    ): Result {
+        val source = VideoProbeRunner.probe(input.absolutePath)
+        if (!source.isHdr) return transcodeOnce(input, output, tier, profile, HdrMode.DEFAULT)
+
+        val kind = source.hdrKind.label
+        if (!hasMain10Encoder()) {
+            Log.w(TAG, "设备无 HEVC Main10 编码器，跳过 HDR 源（$kind）")
+            return Result(false, reason = "无 HEVC Main10 编码器，无法保真压缩 HDR（$kind），已跳过")
+        }
+
+        val preserved = transcodeOnce(input, output, tier, profile, HdrMode.PRESERVE)
+        if (preserved.success && isHdrPreserved(input, output)) {
+            return preserved.copy(hdrNote = "HDR 保真（$kind）")
+        }
+        val why = preserved.reason ?: "输出未保留 HDR 信号"
+        Log.w(TAG, "HDR 保真未达成（$why），跳过该视频")
+        runCatching { output.delete() }
+        // 转码过程失败时把原始失败原因带出来，便于定位（编码器不支持 / 异常等）
+        return Result(false, reason = "HDR 保真压缩失败（$why），已跳过")
+    }
+
+    private fun transcodeOnce(
+        input: File,
+        output: File,
+        tier: QualityTier,
+        profile: BitrateProfile,
+        hdrMode: HdrMode,
     ): Result {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
@@ -61,13 +112,24 @@ object VideoTranscoder {
             extractor.setDataSource(input.absolutePath)
             val video = findVideoTrack(extractor)
                 ?: return Result(false, reason = "无视频轨道")
-            val target = selectEncoder(video)
-                ?: return Result(false, reason = "无可用视频编码器（${video.mime} / ${video.width}x${video.height}）")
+            val requireMain10 = hdrMode == HdrMode.PRESERVE
+            val target = selectEncoder(video, requireMain10)
+                ?: return Result(
+                    false,
+                    reason = if (requireMain10) {
+                        "无支持 HEVC Main10 的视频编码器（${video.width}x${video.height}）"
+                    } else {
+                        "无可用视频编码器（${video.mime} / ${video.width}x${video.height}）"
+                    },
+                )
 
-            val targetBitrate = chooseBitrate(video, tier, target.mime, profile)
+            val targetBitrate = chooseBitrate(video, tier, target.mime, profile, hdr = requireMain10)
             if (targetBitrate <= 0) return Result(false, reason = "无法确定目标码率")
 
             val frameRate = video.frameRate.takeIf { it in 1..240 } ?: 30
+
+            // 需要在 MediaMuxer.addTrack 前打补丁的色彩/HDR10 元数据（仅保真模式）
+            val colorPatch = buildColorPatch(video.format, hdrMode)
 
             val encFormat = MediaFormat.createVideoFormat(target.mime, target.width, target.height).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
@@ -78,8 +140,13 @@ object VideoTranscoder {
                 // 码率模式：优先 CBR（软件编码器上更接近目标码率）
                 val mode = pickBitrateMode(target.mime)
                 if (mode >= 0) setInteger(MediaFormat.KEY_BITRATE_MODE, mode)
+                // 保真模式：声明 Main10 主档 + 沿用源的色彩 signaling，让编码器产出 10bit HDR 码流
+                if (requireMain10) {
+                    setInteger(MediaFormat.KEY_PROFILE, main10ProfileOf(video.format))
+                    colorPatch?.applyTo(this)
+                }
             }
-            Log.i(TAG, "target=${target.name} mime=${target.mime} ${target.width}x${target.height} bitrate=$targetBitrate fps=$frameRate scaled=${target.scaled}")
+            Log.i(TAG, "target=${target.name} mime=${target.mime} ${target.width}x${target.height} bitrate=$targetBitrate fps=$frameRate hdr=$hdrMode scaled=${target.scaled}")
 
             encoder = MediaCodec.createEncoderByType(target.mime).apply {
                 configure(encFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -94,7 +161,7 @@ object VideoTranscoder {
             muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             if (video.rotation != 0) muxer.setOrientationHint(video.rotation)
 
-            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input)
+            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input, colorPatch)
 
             if (!ok) {
                 return Result(false, reason = "编码管线执行失败")
@@ -124,6 +191,7 @@ object VideoTranscoder {
         encoder: MediaCodec,
         muxer: MediaMuxer,
         input: File,
+        colorPatch: ColorPatch?,
     ): Boolean {
         val bufferInfo = MediaCodec.BufferInfo()
         val encInfo = MediaCodec.BufferInfo()
@@ -180,7 +248,12 @@ object VideoTranscoder {
             // 2) 解码输出 → Surface
             if (!decoderOutputDone) {
                 val outIndex = decoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
-                if (outIndex >= 0) {
+                if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    // 部分源把 HDR10 静态元数据只暴露在解码器输出格式里，保真模式下补进 muxer
+                    if (colorPatch != null) {
+                        runCatching { colorPatch.captureHdrStaticInfo(decoder.outputFormat) }
+                    }
+                } else if (outIndex >= 0) {
                     val eos = bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     decoder.releaseOutputBuffer(outIndex, true)
                     if (eos) decoderOutputDone = true
@@ -200,7 +273,11 @@ object VideoTranscoder {
                     encIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> break
                     encIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         muxerStarted = true
-                        videoTrack = muxer.addTrack(encoder.outputFormat)
+                        // 把色彩 / HDR10 元数据打进 track format：MediaMuxer 据此写 colr / clli box，
+                        // 绕开「厂商编码器 outputFormat 是否回显色彩键」的不确定性
+                        val trackFormat = encoder.outputFormat
+                        colorPatch?.applyTo(trackFormat)
+                        videoTrack = muxer.addTrack(trackFormat)
                         if (audioFormat != null) muxAudioTrack = muxer.addTrack(audioFormat!!)
                         muxer.start()
                         if (audioTrackIndex >= 0) audioBuf.clear()
@@ -313,16 +390,24 @@ object VideoTranscoder {
     )
 
     /** 选择编码器：优先源编码，其次 HEVC → H.264 → AV1；先找能支持原尺寸的，再考虑缩放。 */
-    private fun selectEncoder(video: VideoTrack): TargetEnc? {
-        val candidates = buildList {
-            if (video.mime in OUTPUT_CODECS) add(video.mime)
-            addAll(OUTPUT_CODECS)
-        }.distinct()
+    private fun selectEncoder(video: VideoTrack, requireMain10: Boolean = false): TargetEnc? {
+        val candidates = if (requireMain10) {
+            listOf(MediaClassifierCodec.HEVC)
+        } else {
+            buildList {
+                if (video.mime in OUTPUT_CODECS) add(video.mime)
+                addAll(OUTPUT_CODECS)
+            }.distinct()
+        }
         // 第一轮：必须支持原始分辨率（保持分辨率不变，满足 F3）
         for (mime in candidates) {
-            findEncoderSupporting(mime, video.width, video.height, video.frameRate, allowScale = false)
-                ?.let { return it }
+            findEncoderSupporting(
+                mime, video.width, video.height, video.frameRate,
+                allowScale = false, requireMain10 = requireMain10,
+            )?.let { return it }
         }
+        // HDR 保真不接受降分辨率：宁可交给上层降级为 SDR，也不丢分辨率
+        if (requireMain10) return null
         // 第二轮：设备编码器上限不足时才等比缩放，取缩放后分辨率最高的方案
         var best: TargetEnc? = null
         for (mime in candidates) {
@@ -340,11 +425,13 @@ object VideoTranscoder {
         height: Int,
         fps: Int,
         allowScale: Boolean,
+        requireMain10: Boolean = false,
     ): TargetEnc? {
         val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
         for (info in list.codecInfos) {
             if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
             val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
+            if (requireMain10 && caps.profileLevels?.any { it.profile in VideoProbe.MAIN10_PROFILES } != true) continue
             val vc = caps.videoCapabilities ?: continue
             val size = fitSize(vc, width, height, fps, allowScale) ?: continue
             return TargetEnc(
@@ -357,6 +444,95 @@ object VideoTranscoder {
         }
         return null
     }
+
+    /**
+     * 设备是否存在支持 HEVC Main10（HDR10）档位的编码器。
+     * 复用 [MediaClassifier.deviceCanPreserveHdr] 的进程级缓存，与判类阶段结论保持一致。
+     */
+    private fun hasMain10Encoder(): Boolean = MediaClassifier.deviceCanPreserveHdr
+
+    /** 保真模式下写入编码器的 HEVC profile：沿用源的 Main10 系取值，缺省用 Main10HDR10。 */
+    private fun main10ProfileOf(source: MediaFormat): Int {
+        val p = source.intOr(MediaFormat.KEY_PROFILE, -1)
+        return if (p in VideoProbe.MAIN10_PROFILES) p
+        else MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10
+    }
+
+    /**
+     * 校验产物是否真的保留了 HDR：先用 MediaExtractor 报告的属性逐项比对，
+     * 报告缺省时兜底直读产物落盘的 `colr` box。任一确认即视为保留。
+     */
+    private fun isHdrPreserved(input: File, output: File): Boolean {
+        if (!output.exists() || output.length() <= 0) return false
+        val source = VideoProbeRunner.probe(input.absolutePath)
+        val produced = VideoProbeRunner.probe(output.absolutePath)
+        val (fidelity, reason) = MediaClassifier.compareHdr(source, produced)
+        if (fidelity == HdrFidelity.PRESERVED) return true
+        val colr = VideoProbeRunner.scanColrInfo(output)
+        if (colr.transfer in setOf(16, 18)) {
+            Log.i(TAG, "colr box 确认 HDR signaling：transfer=${colr.transfer}")
+            return true
+        }
+        Log.w(TAG, "HDR 保真校验未通过：$reason；产物 colr transfer=${colr.transfer}")
+        return false
+    }
+
+    /**
+     * 需要写入 muxer track format 的色彩 / HDR10 元数据。
+     * 在 [MediaMuxer.addTrack] 前打补丁，绕开厂商编码器 outputFormat 是否回显色彩键的不确定性。
+     */
+    private class ColorPatch(
+        private val standard: Int,
+        private val transfer: Int,
+        private val range: Int,
+        hdrStaticInfo: ByteArray? = null,
+    ) {
+        var hdrStaticInfo: ByteArray? = hdrStaticInfo
+            private set
+
+        /** 从解码器输出格式补齐 HDR10 静态元数据（源格式没带时才补）。 */
+        fun captureHdrStaticInfo(format: MediaFormat) {
+            if (hdrStaticInfo != null) return
+            hdrStaticInfo = readHdrStaticInfo(format)
+        }
+
+        fun applyTo(format: MediaFormat) {
+            if (standard >= 0) runCatching { format.setInteger(MediaFormat.KEY_COLOR_STANDARD, standard) }
+            if (transfer >= 0) runCatching { format.setInteger(MediaFormat.KEY_COLOR_TRANSFER, transfer) }
+            if (range >= 0) runCatching { format.setInteger(MediaFormat.KEY_COLOR_RANGE, range) }
+            hdrStaticInfo?.let { info ->
+                runCatching { format.setByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO, ByteBuffer.wrap(info)) }
+            }
+        }
+    }
+
+    /**
+     * 从源轨道格式提取要保留的色彩信息。
+     * 仅 [HdrMode.PRESERVE] 需要；非保真路径不写任何色彩标记（编码器默认即为 SDR，signaling 与内容一致）。
+     */
+    private fun buildColorPatch(source: MediaFormat, hdrMode: HdrMode): ColorPatch? {
+        if (hdrMode != HdrMode.PRESERVE) return null
+        val standard = source.intOr(MediaFormat.KEY_COLOR_STANDARD, -1)
+        val transfer = source.intOr(MediaFormat.KEY_COLOR_TRANSFER, -1)
+        val range = source.intOr(MediaFormat.KEY_COLOR_RANGE, -1)
+        val hdrInfo = readHdrStaticInfo(source)
+        if (standard < 0 && transfer < 0 && range < 0 && hdrInfo == null) {
+            // 源仅靠 profile / 位深判为 HDR、未标注色彩信息：按 BT.2020 + PQ 补齐，保证产物可识别
+            return ColorPatch(
+                MediaFormat.COLOR_STANDARD_BT2020,
+                MediaFormat.COLOR_TRANSFER_ST2084,
+                -1,
+            )
+        }
+        return ColorPatch(standard, transfer, range, hdrInfo)
+    }
+
+    private fun readHdrStaticInfo(format: MediaFormat): ByteArray? = runCatching {
+        if (!format.containsKey(MediaFormat.KEY_HDR_STATIC_INFO)) return@runCatching null
+        val bb = format.getByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO) ?: return@runCatching null
+        val copy = bb.duplicate()
+        ByteArray(copy.remaining()).also { copy.get(it) }
+    }.getOrNull()
 
     /**
      * 返回编码器可接受的尺寸。
@@ -396,8 +572,16 @@ object VideoTranscoder {
         tier: QualityTier,
         targetMime: String,
         profile: BitrateProfile = BitrateProfile.STANDARD,
+        hdr: Boolean = false,
     ): Int {
-        val factor = when (profile) {
+        val factor = if (hdr) {
+            // 10bit HDR 画面细节与噪声更高，同档位下单独放宽系数（画质优先）
+            when (tier) {
+                QualityTier.HIGH -> 0.85
+                QualityTier.BALANCED -> 0.62
+                QualityTier.COMPACT -> 0.45
+            }
+        } else when (profile) {
             BitrateProfile.STANDARD -> when (tier) {
                 QualityTier.HIGH -> 0.72
                 QualityTier.BALANCED -> 0.50
@@ -412,7 +596,7 @@ object VideoTranscoder {
         val base = if (video.bitrate in 100_000..200_000_000) video.bitrate
         else estimateBitrate(video.width, video.height, video.frameRate)
         var target = (base * factor).toInt()
-        if (profile == BitrateProfile.AGGRESSIVE) {
+        if (profile == BitrateProfile.AGGRESSIVE && !hdr) {
             // 地板：避免极低码率源被压到不可看（约等于「质量参考码率」的 20%）
             val floor = (estimateBitrate(video.width, video.height, video.frameRate) * 0.20).toInt()
             if (target < floor) target = floor
