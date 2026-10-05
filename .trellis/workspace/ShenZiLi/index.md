@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~162 | Active |
+| `journal-1.md` | ~192 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-10-05 | 精简压缩与还原完成提示 | `9cc9217` | `master` |
 | 5 | 2026-10-05 | MPF 不支持提示去除图片名称 | `26c2e62` | `master` |
 | 4 | 2026-10-05 | 删除预计节约量的档位说明 | `18e725b` | `master` |
 | 3 | 2026-10-05 | 0.1.2 首页调整版安装到真机 | `a8516cc` | `master` |

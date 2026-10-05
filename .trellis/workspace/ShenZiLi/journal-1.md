@@ -160,3 +160,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: 精简压缩与还原完成提示
+<!-- trellis-session: v=2 fp=f2dbc8d79be1006a -->
+
+**Date**: 2026-10-05
+**Task**: 精简压缩与还原完成提示
+**Branch**: `master`
+
+### Summary
+
+提示采用压缩5项，节省58.8MB，跳过1项和还原1项，新增1.1MB格式；0.1.5 已覆盖安装真机。
+
+### Main Changes
+
+- 完成提示删除成功字样及间隔点，使用中文逗号，数值与单位不留空格；还原新增体积按原始体积与压缩后体积之差统计。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9cc9217` | fix(ui): simplify batch completion messages and report restored size increase |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（5 秒）、差异检查通过；安装返回 Success，读回 0.1.5 / versionCode 6；未新增或运行测试，没有操作用户媒体。
+
+### Status
+
+[OK] **Completed**
