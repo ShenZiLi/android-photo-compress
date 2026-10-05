@@ -34,7 +34,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.photocompress.app.data.media.MediaKind
@@ -167,6 +171,21 @@ private fun HeroCard(totals: Totals) {
         KindSegment(MediaKind.VIDEO, "视频", colors.kindVideo, totals.kindBytes[MediaKind.VIDEO] ?: 0L),
     )
     val totalBytes = segments.sumOf { it.bytes }
+    val measurer = rememberTextMeasurer()
+    val percentStyle = MaterialTheme.typography.labelMedium.copy(
+        fontWeight = FontWeight.SemiBold,
+        fontFeatureSettings = "tnum",
+    )
+    val sizeStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
+    // 三行共享按当前字体测得的列宽，避免不同位数/单位挤动百分比列。
+    val percentWidth = with(LocalDensity.current) {
+        measurer.measure("100%", percentStyle, maxLines = 1, softWrap = false).size.width.toDp()
+    }
+    val sizeWidth = with(LocalDensity.current) {
+        segments.maxOf {
+            measurer.measure(formatSize(it.bytes), sizeStyle, maxLines = 1, softWrap = false).size.width
+        }.toDp()
+    }
 
     CardSurface(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -174,7 +193,7 @@ private fun HeroCard(totals: Totals) {
                 KindDonut(segments = segments, totalBytes = totalBytes)
                 Spacer(Modifier.width(18.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    segments.forEach { seg -> KindLegendRow(seg, totalBytes) }
+                    segments.forEach { seg -> KindLegendRow(seg, totalBytes, percentWidth, sizeWidth) }
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -263,7 +282,7 @@ private fun KindDonut(segments: List<KindSegment>, totalBytes: Long) {
 
 /** 图例一行：色点 + 名称 + 占比 + 体积。 */
 @Composable
-private fun KindLegendRow(seg: KindSegment, totalBytes: Long) {
+private fun KindLegendRow(seg: KindSegment, totalBytes: Long, percentWidth: Dp, sizeWidth: Dp) {
     val pct = if (totalBytes > 0L) seg.bytes.toFloat() / totalBytes * 100f else 0f
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -276,17 +295,25 @@ private fun KindLegendRow(seg: KindSegment, totalBytes: Long) {
                 .background(seg.color),
         )
         Spacer(Modifier.width(8.dp))
-        Text(seg.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+        Text(seg.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f).alignByBaseline())
         Text(
             "${pct.roundToInt()}%",
-            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.width(percentWidth).alignByBaseline(),
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
             fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            softWrap = false,
         )
         Spacer(Modifier.width(10.dp))
         Text(
             formatSize(seg.bytes),
-            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.width(sizeWidth).alignByBaseline(),
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
             color = MaterialTheme.appColors.onSurfaceMuted,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
