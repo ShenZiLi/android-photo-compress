@@ -92,8 +92,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(20.dp))
             CardSurface(modifier = Modifier.fillMaxWidth()) {
-                // 只留垂直内边距：水平内边距交给 CompareMetric 自己分配，
-                // 好让下方图例与 StatsRow 的卡片共用同一条水平网格（见 CompareMetric）。
+                // 水平内边距由 CompareMetric 分配给对比条和图例。
                 Column(modifier = Modifier.padding(vertical = 16.dp)) {
                     CompareMetric(
                         title = "数量",
@@ -210,7 +209,7 @@ private fun HeroCard(totals: Totals) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "${totals.pct.roundToInt()}%",
+                    "-${totals.pct.roundToInt()}%",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = colors.dataDone,
@@ -347,8 +346,11 @@ private fun StatCard(
     meta: String,
 ) {
     CardSurface(modifier = modifier) {
-        // 两卡等宽，内容与下方对比图例对齐；数值仍保持单行。
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+        // 两卡等宽，标题、数量与体积均在各自卡片内居中。
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                 Spacer(Modifier.width(6.dp))
@@ -366,6 +368,7 @@ private fun StatCard(
                     color = LocalContentColor.current,
                     fontWeight = FontWeight.Bold,
                     fontFeatureSettings = "tnum",
+                    textAlign = TextAlign.Center,
                 ),
                 maxLines = 1,
                 softWrap = false,
@@ -377,8 +380,10 @@ private fun StatCard(
             )
             Text(
                 meta,
+                modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.appColors.onSurfaceMuted,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -425,10 +430,7 @@ private fun CompareMetric(
             )
         }
         Spacer(Modifier.height(10.dp))
-        // 图例与 StatsRow 的卡片共用同一条水平网格——同宽（外层已无水平内边距，
-        // 故可直接 fillMaxWidth）、同间隔（12dp）、同内容内缩（16dp）。
-        // 这样两处图例的「已压缩」就会和顶部统计卡的「已压缩」落在同一条竖直线上；
-        // 若改用 spacedBy 紧挨排列，右栏起点会随左栏文字长度浮动，上下互不对齐。
+        // 对比图例保持两列等宽，右列起点不随左列文字长度浮动。
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
