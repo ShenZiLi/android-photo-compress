@@ -100,3 +100,33 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: 删除预计节约量的档位说明
+<!-- trellis-session: v=2 fp=9a320ad52e0e646f -->
+
+**Date**: 2026-10-05
+**Task**: 删除预计节约量的档位说明
+**Branch**: `master`
+
+### Summary
+
+删除截图红框中的按平衡档估算字样，保留预计节约数值；0.1.3 已覆盖安装真机。
+
+### Main Changes
+
+- 仅调整未压缩页操作栏提示文案及版本号。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `18e725b` | fix(ui): remove quality tier note from savings estimate |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（14 秒）、差异检查通过；安装返回 Success，读回 versionName=0.1.3 / versionCode=4；未运行测试或进行真机界面验收。
+
+### Status
+
+[OK] **Completed**
