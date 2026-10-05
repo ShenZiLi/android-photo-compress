@@ -374,7 +374,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val set = current.excludedSet.toMutableSet()
             if (shown) set -= name else set += name
             settingsDao.upsert(current.copy(excludedAlbums = set.sorted().joinToString("\n")))
-            _messages.trySend(if (shown) "已显示图集「$name」" else "已隐藏图集「$name」")
+            // 此处刻意不发提示：开关的当前状态在列表里一眼可见，
+            // 逐项切换时反复弹「已隐藏/已显示图集」纯属噪音。
         }
     }
 
