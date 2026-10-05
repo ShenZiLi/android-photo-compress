@@ -220,7 +220,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         is CompressOutcome.Skipped -> {
                             skipped++
-                            failures += "${item.displayName}：${outcome.reason}"
+                            failures += outcome.reason
                             android.util.Log.i(TAG, "${item.displayName}: SKIP ${outcome.reason}")
                         }
                         is CompressOutcome.Failed -> {

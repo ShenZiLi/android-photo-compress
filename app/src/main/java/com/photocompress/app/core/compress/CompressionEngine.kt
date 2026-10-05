@@ -181,7 +181,7 @@ class CompressionEngine(private val context: Context) {
         val mpfPayload = JpegSegments.mpfPayloadOf(original)
         if (mpfPayload != null) {
             val n = MpfRewriter.numberOfImages(mpfPayload)
-            if (n != 1) return CompressOutcome.Skipped("含 $n 图 MPF 多图结构，本版本不处理")
+            if (n != 1) return CompressOutcome.Skipped("含${n}图 MPF 多图结构，本版本不处理。")
         }
 
         val xmp = JpegSegments.xmpTextOf(original)
@@ -244,7 +244,7 @@ class CompressionEngine(private val context: Context) {
         val mpfPayload = JpegSegments.mpfPayloadOf(original)
         if (mpfPayload != null) {
             val n = MpfRewriter.numberOfImages(mpfPayload)
-            if (n != 1 && n != 2) return CompressOutcome.Skipped("含 $n 图 MPF 多图结构，本版本不处理")
+            if (n != 1 && n != 2) return CompressOutcome.Skipped("含${n}图 MPF 多图结构，本版本不处理。")
         }
 
         val primaryEnd = plan.primaryEnd.toInt()
