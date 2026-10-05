@@ -101,7 +101,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
                     )
                     Spacer(Modifier.height(22.dp))
                     CompareMetric(
-                        title = "体积",
+                        title = "占用",
                         total = formatSize(totals.todoBytes + totals.after),
                         todoValue = formatSize(totals.todoBytes),
                         doneValue = formatSize(totals.after),
@@ -156,7 +156,7 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
  *
  * 口径说明：未压缩媒体按原始大小、已压缩媒体按压缩后大小求和，
  * 因此饼图反映的是"此刻占了多少磁盘"，而非"压缩前有多少"。
- * 下方保留「已节约」摘要——那是本应用的核心成果指标，不因换饼图而丢失。
+ * 下方保留「已省」摘要，显示本应用节省的体积。
  */
 @Composable
 private fun HeroCard(totals: Totals) {
@@ -186,7 +186,7 @@ private fun HeroCard(totals: Totals) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "已节约 ${formatSize(totals.saved)}",
+                    "已省 ${formatSize(totals.saved)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -293,13 +293,13 @@ private fun KindLegendRow(seg: KindSegment, totalBytes: Long) {
 
 @Composable
 private fun StatsRow(totals: Totals) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatCard(
             modifier = Modifier.weight(1f),
             dotColor = MaterialTheme.appColors.dataTodo,
             label = "未压缩",
             value = "${formatCount(totals.todoCount)} 项",
-            meta = "共 ${formatSize(totals.todoBytes)}",
+            meta = formatSize(totals.todoBytes),
         )
         StatCard(
             modifier = Modifier.weight(1f),
@@ -308,23 +308,8 @@ private fun StatsRow(totals: Totals) {
             value = "${formatCount(totals.doneCount)} 项",
             meta = formatSize(totals.before),
         )
-        StatCard(
-            modifier = Modifier.weight(1.2f),
-            dotColor = MaterialTheme.appColors.success,
-            label = "压缩率",
-            value = savingsSize(totals.saved),
-            meta = savingsPercent(totals.pct),
-        )
     }
 }
-
-/** 节省量：为 0 时不加负号，避免出现「-0 B」。 */
-private fun savingsSize(bytes: Long): String =
-    if (bytes > 0L) "-${formatSize(bytes)}" else formatSize(0L)
-
-/** 节省百分比：为 0 时不加负号，避免出现「-0%」。 */
-private fun savingsPercent(pct: Float): String =
-    if (pct > 0f) "-${pct.roundToInt()}%" else "0%"
 
 @Composable
 private fun StatCard(
@@ -335,8 +320,8 @@ private fun StatCard(
     meta: String,
 ) {
     CardSurface(modifier = modifier) {
-        // 三卡并排时先给较长的节省量留宽度，再按实际可用宽度调整字号。
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+        // 两卡等宽，内容与下方对比图例对齐；数值仍保持单行。
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                 Spacer(Modifier.width(6.dp))
