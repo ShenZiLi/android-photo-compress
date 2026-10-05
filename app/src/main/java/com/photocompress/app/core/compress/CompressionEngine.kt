@@ -50,16 +50,24 @@ class CompressionEngine(private val context: Context) {
 
     private val recycle = RecycleBin(context)
 
-    suspend fun compress(item: MediaItem, tier: QualityTier): CompressOutcome = withContext(Dispatchers.IO) {
+    /**
+     * [tier] 决定图像质量档（主图 92/85/76）；
+     * [videoTier] 单独决定视频档位——普通视频与实况照片内嵌视频都用它，与图像档解耦。
+     */
+    suspend fun compress(
+        item: MediaItem,
+        tier: QualityTier,
+        videoTier: QualityTier = tier,
+    ): CompressOutcome = withContext(Dispatchers.IO) {
         runCatching {
             when (item.kind) {
                 MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
                     compressHeic(item, tier)
                 } else {
-                    compressPhoto(item, tier)
+                    compressPhoto(item, tier, videoTier)
                 }
-                MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier)
-                MediaKind.VIDEO -> compressVideo(item, tier)
+                MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier)
+                MediaKind.VIDEO -> compressVideo(item, videoTier)
             }
         }.getOrElse { t ->
             CompressOutcome.Failed("异常 ${t.javaClass.simpleName}: ${t.message}")
@@ -160,7 +168,7 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 普通照片
 
-    private suspend fun compressPhoto(item: MediaItem, tier: QualityTier): CompressOutcome {
+    private suspend fun compressPhoto(item: MediaItem, tier: QualityTier, videoTier: QualityTier): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         if (item.format != ContainerFormat.JPEG) {
@@ -179,7 +187,7 @@ class CompressionEngine(private val context: Context) {
         val containerItems = LivePhotoDetector.parseContainerItems(xmp ?: "")
         if (containerItems.any { it.semantic == "MotionPhoto" } || containerItems.any { it.semantic == "GainMap" }) {
             // 实况照片 / Ultra HDR 被误判为普通照片时，走容器重组路径
-            return compressLivePhoto(item, tier)
+            return compressLivePhoto(item, tier, videoTier)
         }
 
         val quality = JpegCompressor.qualityFor(tier)
@@ -217,7 +225,11 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 实况照片
 
-    private suspend fun compressLivePhoto(item: MediaItem, tier: QualityTier): CompressOutcome {
+    private suspend fun compressLivePhoto(
+        item: MediaItem,
+        tier: QualityTier,
+        videoTier: QualityTier,
+    ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         val original = file.readBytes()
@@ -247,48 +259,69 @@ class CompressionEngine(private val context: Context) {
         if (plan.hasMotion && motionBytes == null) return CompressOutcome.Skipped("内嵌视频区段越界")
         if (plan.hasGainMap && gainBytes == null) return CompressOutcome.Skipped("增益图区段越界")
 
-        // 1) 主图重编码
+        // 1) 主图重编码（画质维持现有档位，本次改造不动）
         val quality = JpegCompressor.qualityFor(tier)
         val encodedPrimary = JpegCompressor.compressJpeg(primaryBytes, quality)
             ?: return CompressOutcome.Failed("主图解码失败")
 
-        // 2) 内嵌视频：**只有「单个普通 MP4」才重编码**。
-        //    oplus/realme 的尾段常是厂商私有复合结构（MP4 + 私有块 + MP4），
-        //    整段替换会让相册无法播放（实机验证），故此类一律原样保留。
-        val canReencode = plan.hasMotion && motionBytes != null && LivePhotoContainer.isPlainMp4(motionBytes)
-        var newMotionFile: File? = null
-        var motionNote: String = when {
-            !plan.hasMotion -> "无内嵌视频"
-            !canReencode -> "内嵌视频原样保留（厂商私有封装）"
-            else -> "内嵌视频重编码"
+        // 2) 内嵌视频：按 OpCamera:VideoLength 只重编码「主视频」，其后的厂商私有尾块逐字节保留。
+        //    无法切分时退回旧逻辑（仅当整个区段本身就是单个普通 MP4 才整段重编码）。
+        val split = if (plan.hasMotion && motionBytes != null && plan.motionPadding == 0L) {
+            LivePhotoContainer.splitMotion(motionBytes, LivePhotoDetector.extractVideoLength(xmp))
+        } else {
+            null
         }
-        if (canReencode) {
-            val srcMotion = File(context.cacheDir, "pc_motion_src_${System.currentTimeMillis()}.mp4")
-            srcMotion.writeBytes(motionBytes!!)
-            val dstMotion = File(context.cacheDir, "pc_motion_dst_${System.currentTimeMillis()}.mp4")
-            val res = VideoTranscoder.transcode(srcMotion, dstMotion, tier)
-            if (res.success && dstMotion.exists() && dstMotion.length() < motionBytes.size) {
+        val videoPart: ByteArray? = when {
+            split != null -> split.first
+            plan.hasMotion && motionBytes != null && LivePhotoContainer.isPlainMp4(motionBytes) -> motionBytes
+            else -> null
+        }
+        val tailPart: ByteArray = split?.second ?: ByteArray(0)
+
+        var newMotionBytes: ByteArray? = null
+        var newVideoLength = 0L
+        var motionSrc: File? = null
+        var motionDst: File? = null
+        var motionNote: String = if (!plan.hasMotion) "无内嵌视频" else "内嵌视频原样保留（厂商私有封装）"
+        if (videoPart != null) {
+            val ts = System.currentTimeMillis()
+            val srcVideo = File(context.cacheDir, "pc_motion_src_$ts.mp4").also { motionSrc = it }
+            val dstVideo = File(context.cacheDir, "pc_motion_dst_$ts.mp4").also { motionDst = it }
+            srcVideo.writeBytes(videoPart)
+            val res = VideoTranscoder.transcode(
+                srcVideo, dstVideo, videoTier, VideoTranscoder.BitrateProfile.AGGRESSIVE,
+            )
+            if (res.success && dstVideo.exists() && dstVideo.length() < videoPart.size) {
                 // 内嵌视频也要保住原有元数据（相机信息等）
-                Mp4Metadata.inject(dstMotion, srcMotion)
-                newMotionFile = dstMotion
+                Mp4Metadata.inject(dstVideo, srcVideo)
+                val probe = VideoProbeRunner.probe(dstVideo.absolutePath)
+                if (probe.codec != null && probe.durationMs > 0) {
+                    val videoBytes = dstVideo.readBytes()
+                    newVideoLength = videoBytes.size.toLong()
+                    // 尾块逐字节原样追加：其索引偏移自区段末尾反向计数，搬移后仍然有效
+                    newMotionBytes = videoBytes + tailPart
+                    motionNote = "内嵌视频重编码（${res.codec ?: MediaClassifierCodec.label(probe.codec)}）"
+                } else {
+                    motionNote = "内嵌视频原样保留（重编码结果无法解析）"
+                }
             } else {
                 // 转码失败或没变小：退回「原样保留」，不影响主图收益
-                dstMotion.delete()
                 motionNote = "内嵌视频原样保留（重编码未获益：${res.reason ?: "体积未减小"}）"
             }
-            srcMotion.delete()
         }
 
         try {
             // 增益图**原样保留**：它是 HDR/ProXDR 重建的依据，重编码会引入偏差（C6 / D10）
             val gainLen = gainBytes?.size?.toLong() ?: 0L
-            val motionLen = newMotionFile?.length() ?: (motionBytes?.size?.toLong() ?: 0L)
+            val motionLen = newMotionBytes?.size?.toLong() ?: (motionBytes?.size?.toLong() ?: 0L)
 
             // 3) XMP：只在长度真的变化时就地改写数字，并注入自有标记（不改结构）
             val changed = HashMap<String, Long>()
             if (gainBytes != null && gainLen != plan.gainMapLength) changed["GainMap"] = gainLen
-            if (newMotionFile != null && motionLen != plan.motionLength) changed["MotionPhoto"] = motionLen
+            if (newMotionBytes != null && motionLen != plan.motionLength) changed["MotionPhoto"] = motionLen
             var xmpOut = if (changed.isEmpty()) xmp else LivePhotoContainer.rewriteItemLengths(xmp, changed)
+            // OpCamera:VideoLength 必须与新主视频字节数一致，否则相册无法定位内嵌视频
+            if (newMotionBytes != null) xmpOut = LivePhotoContainer.rewriteVideoLength(xmpOut, newVideoLength)
             xmpOut = PcXmp.injectAttributes(xmpOut, newMarker())
 
             fun assemblePrimary(mpf: ByteArray?): ByteArray =
@@ -317,7 +350,7 @@ class CompressionEngine(private val context: Context) {
             )
             out.write(finalPrimary)
             gainBytes?.let { out.write(it) }
-            newMotionFile?.let { out.write(it.readBytes()) } ?: motionBytes?.let { out.write(it) }
+            newMotionBytes?.let { out.write(it) } ?: motionBytes?.let { out.write(it) }
             val assembled = out.toByteArray()
 
             LivePhotoContainer.verify(assembled)?.let {
@@ -328,6 +361,18 @@ class CompressionEngine(private val context: Context) {
                 val magic = String(assembled, mp4Start + 4, 4, Charsets.US_ASCII)
                 if (magic != "ftyp") return CompressOutcome.Skipped("内嵌视频定位校验失败")
             }
+            if (newMotionBytes != null) {
+                // 分段自校验：XMP 声明的数字必须与实际重编码后的字节数一致
+                val head = String(assembled, 0, minOf(256 * 1024, assembled.size), Charsets.ISO_8859_1)
+                if (LivePhotoDetector.extractVideoLength(head) != newVideoLength) {
+                    return CompressOutcome.Skipped("实况分段自校验失败（视频长度）")
+                }
+                val declaredMotion = LivePhotoDetector.parseContainerItems(head)
+                    .firstOrNull { it.semantic == "MotionPhoto" }?.length
+                if (declaredMotion != null && declaredMotion != motionLen) {
+                    return CompressOutcome.Skipped("实况分段自校验失败（区段长度）")
+                }
+            }
             if (assembled.size >= original.size) {
                 return CompressOutcome.Skipped("压缩后体积未减小（${original.size} → ${assembled.size}）")
             }
@@ -336,7 +381,8 @@ class CompressionEngine(private val context: Context) {
             temp.writeBytes(assembled)
             return commit(item, temp, tier, codecUsed = "JPEG q=$quality + 增益图原样 + $motionNote")
         } finally {
-            newMotionFile?.delete()
+            motionDst?.delete()
+            motionSrc?.delete()
         }
     }
 

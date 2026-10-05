@@ -194,7 +194,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _batch.value = BatchState("正在压缩", 0f, 0, targets.size)
                 for ((index, item) in targets.withIndex()) {
                     val tier = tierFor(item.kind, tiers)
-                    when (val outcome = engine.compress(item, tier)) {
+                    // 视频单独取「视频」档位：实况照片的内嵌视频也用它（与图像档解耦）
+                    val videoTier = tierFor(MediaKind.VIDEO, tiers)
+                    when (val outcome = engine.compress(item, tier, videoTier)) {
                         is CompressOutcome.Success -> {
                             ledgerDao.upsert(outcome.record)
                             done++

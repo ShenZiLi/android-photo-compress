@@ -27,6 +27,14 @@ object VideoTranscoder {
         val reason: String? = null,
     )
 
+    /**
+     * 码率档位策略。
+     *
+     * - [STANDARD]：普通视频页使用，保持既有系数。
+     * - [AGGRESSIVE]：实况照片内嵌视频专用（画面占比小、允许一定损失以提高压缩率）。
+     */
+    enum class BitrateProfile { STANDARD, AGGRESSIVE }
+
     private data class VideoTrack(
         val index: Int,
         val format: MediaFormat,
@@ -39,7 +47,12 @@ object VideoTranscoder {
         val durationUs: Long,
     )
 
-    fun transcode(input: File, output: File, tier: QualityTier): Result {
+    fun transcode(
+        input: File,
+        output: File,
+        tier: QualityTier,
+        profile: BitrateProfile = BitrateProfile.STANDARD,
+    ): Result {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         var encoder: MediaCodec? = null
@@ -51,7 +64,7 @@ object VideoTranscoder {
             val target = selectEncoder(video)
                 ?: return Result(false, reason = "无可用视频编码器（${video.mime} / ${video.width}x${video.height}）")
 
-            val targetBitrate = chooseBitrate(video, tier, target.mime)
+            val targetBitrate = chooseBitrate(video, tier, target.mime, profile)
             if (targetBitrate <= 0) return Result(false, reason = "无法确定目标码率")
 
             val frameRate = video.frameRate.takeIf { it in 1..240 } ?: 30
@@ -378,15 +391,32 @@ object VideoTranscoder {
         return null
     }
 
-    private fun chooseBitrate(video: VideoTrack, tier: QualityTier, targetMime: String): Int {
-        val factor = when (tier) {
-            QualityTier.HIGH -> 0.72
-            QualityTier.BALANCED -> 0.50
-            QualityTier.COMPACT -> 0.34
+    private fun chooseBitrate(
+        video: VideoTrack,
+        tier: QualityTier,
+        targetMime: String,
+        profile: BitrateProfile = BitrateProfile.STANDARD,
+    ): Int {
+        val factor = when (profile) {
+            BitrateProfile.STANDARD -> when (tier) {
+                QualityTier.HIGH -> 0.72
+                QualityTier.BALANCED -> 0.50
+                QualityTier.COMPACT -> 0.34
+            }
+            BitrateProfile.AGGRESSIVE -> when (tier) {
+                QualityTier.HIGH -> 0.50
+                QualityTier.BALANCED -> 0.30
+                QualityTier.COMPACT -> 0.18
+            }
         }
         val base = if (video.bitrate in 100_000..200_000_000) video.bitrate
         else estimateBitrate(video.width, video.height, video.frameRate)
         var target = (base * factor).toInt()
+        if (profile == BitrateProfile.AGGRESSIVE) {
+            // 地板：避免极低码率源被压到不可看（约等于「质量参考码率」的 20%）
+            val floor = (estimateBitrate(video.width, video.height, video.frameRate) * 0.20).toInt()
+            if (target < floor) target = floor
+        }
         // 目标编码器码率上限约束
         val caps = encoderBitrateRange(targetMime)
         if (caps != null) target = target.coerceIn(caps.first, caps.second)

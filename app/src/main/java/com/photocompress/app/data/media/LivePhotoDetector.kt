@@ -19,7 +19,8 @@ object LivePhotoDetector {
         val gainMapLength: Long,
         val primaryLengthHint: Long,
         val isOplus: Boolean,
-        val videoDurationUs: Long,
+        /** `OpCamera:VideoLength` 的值——内嵌主视频的**字节长度**（不是时长）。 */
+        val videoLengthBytes: Long,
     )
 
     data class XmpItem(
@@ -56,7 +57,7 @@ object LivePhotoDetector {
                         gainMapLength = gain?.length ?: 0L,
                         primaryLengthHint = primary?.length ?: 0L,
                         isOplus = text.contains("oplus", ignoreCase = true),
-                        videoDurationUs = extractVideoLengthUs(text),
+                        videoLengthBytes = extractVideoLength(text),
                     )
                 }
             }
@@ -70,7 +71,7 @@ object LivePhotoDetector {
             gainMapLength = 0L,
             primaryLengthHint = 0L,
             isOplus = text.contains("oplus", ignoreCase = true),
-            videoDurationUs = extractVideoLengthUs(text),
+            videoLengthBytes = extractVideoLength(text),
         )
     }
 
@@ -93,8 +94,12 @@ object LivePhotoDetector {
         }.toList()
     }
 
-    private fun extractVideoLengthUs(text: String): Long =
-        Regex("""OpCamera:VideoLength="(\d+)"""").find(text)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    /**
+     * 读取 `OpCamera:VideoLength`——内嵌主视频的**字节长度**（oplus 把它写在了 XMP 里，
+     * 名字容易误读成时长）。容器按它定位内嵌视频，因此重编码后必须同步改写。
+     */
+    fun extractVideoLength(xmpText: String): Long =
+        Regex("""OpCamera:VideoLength="(\d+)"""").find(xmpText)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
 
     private fun readHeader(file: File): ByteArray? = runCatching {
         RandomAccessFile(file, "r").use { raf ->

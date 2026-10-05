@@ -85,6 +85,30 @@ object LivePhotoContainer {
     }
 
     /**
+     * 把 MotionPhoto 区段切成「内嵌主视频」与「厂商私有尾块」。
+     *
+     * oplus/realme 的 MotionPhoto 区段 = 主视频 MP4 + 私有尾块（第二张全尺寸图 + 子视频 +
+     * 索引 JSON）。`OpCamera:VideoLength` 精确给出主视频的字节长度，因此可以只重编码主视频、
+     * 把尾块逐字节搬移——尾块索引偏移是自区段末尾反向计数的，不带对主视频的引用，搬移安全。
+     *
+     * [videoLength] 不在合法区间、或前缀不是自洽的完整 MP4 时返回 null（调用方退回原样保留）。
+     */
+    fun splitMotion(motionBytes: ByteArray, videoLength: Long): Pair<ByteArray, ByteArray>? {
+        if (videoLength <= 0 || videoLength >= motionBytes.size) return null
+        val n = videoLength.toInt()
+        val video = motionBytes.copyOfRange(0, n)
+        if (!isPlainMp4(video)) return null
+        return video to motionBytes.copyOfRange(n, motionBytes.size)
+    }
+
+    /**
+     * 就地改写 `OpCamera:VideoLength` 的数字（内嵌主视频字节长度），不重建 XMP 结构。
+     * 属性不存在时原样返回。用 lambda 形式替换，避免替换串里的 `$` 被当作分组引用。
+     */
+    fun rewriteVideoLength(xmp: String, length: Long): String =
+        Regex("""OpCamera:VideoLength="\d*"""").replace(xmp) { "OpCamera:VideoLength=\"$length\"" }
+
+    /**
      * 判断内嵌尾段是否为「单个普通 MP4」。
      *
      * oplus/realme 的实况照片尾段常是厂商私有复合结构
