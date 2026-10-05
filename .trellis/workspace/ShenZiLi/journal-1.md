@@ -220,3 +220,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: 首页图例数值上下对齐与右对齐
+<!-- trellis-session: v=2 fp=d92dcb6ff553b968 -->
+
+**Date**: 2026-10-05
+**Task**: 首页图例数值上下对齐与右对齐
+**Branch**: `master`
+
+### Summary
+
+百分比、体积两列各共享动态测量宽度并右对齐，同一行文本基线对齐；0.1.7 已覆盖安装真机。
+
+### Main Changes
+
+- 按现有字体测量列宽并启用等宽数字，数值单行显示，保持占比统计口径。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe78f5e` | fix(ui): align home legend values in right-aligned columns |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（5 秒）、差异检查通过；安装 Success，读回 0.1.7 / versionCode 8；未运行测试，真机界面由用户自行验收。
+
+### Status
+
+[OK] **Completed**

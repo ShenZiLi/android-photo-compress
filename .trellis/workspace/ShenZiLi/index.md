@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~222 | Active |
+| `journal-1.md` | ~252 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-10-05 | 首页图例数值上下对齐与右对齐 | `fe78f5e` | `master` |
 | 7 | 2026-10-05 | 首页双卡布局与占用文案调整 | `ad0616b` | `master` |
 | 6 | 2026-10-05 | 精简压缩与还原完成提示 | `9cc9217` | `master` |
 | 5 | 2026-10-05 | MPF 不支持提示去除图片名称 | `26c2e62` | `master` |
