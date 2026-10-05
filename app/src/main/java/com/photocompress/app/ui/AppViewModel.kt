@@ -194,8 +194,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _batch.value = BatchState("正在压缩", 0f, 0, targets.size)
                 for ((index, item) in targets.withIndex()) {
                     val tier = tierFor(item.kind, tiers)
-                    // 视频单独取「视频」档位：实况照片的内嵌视频也用它（与图像档解耦）
-                    val videoTier = tierFor(MediaKind.VIDEO, tiers)
+                    // 实况照片内嵌视频取独立的「实况视频段」档位；只有普通视频才用「视频」档位
+                    val videoTier = if (item.kind == MediaKind.VIDEO) {
+                        QualityTier.fromName(tiers.videoTier)
+                    } else {
+                        QualityTier.fromName(tiers.liveVideoTier)
+                    }
                     when (val outcome = engine.compress(item, tier, videoTier)) {
                         is CompressOutcome.Success -> {
                             ledgerDao.upsert(outcome.record)
@@ -337,6 +341,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 MediaKind.VIDEO -> current.copy(videoTier = tier.name)
             }
             settingsDao.upsert(next)
+        }
+    }
+
+    /** 实况照片「视频段」档位：仅作用于实况照片内嵌视频，不影响普通视频。 */
+    fun setLiveVideoTier(tier: QualityTier) {
+        viewModelScope.launch {
+            val current = settingsDao.get() ?: SettingsEntity()
+            settingsDao.upsert(current.copy(liveVideoTier = tier.name))
         }
     }
 

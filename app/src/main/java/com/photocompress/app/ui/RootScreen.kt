@@ -205,6 +205,7 @@ fun AppRoot(vm: AppViewModel) {
                     state = state,
                     onBack = { vm.go(AppPage.SETTINGS) },
                     onSetTier = { kind, tier -> vm.setTier(kind, tier) },
+                    onSetLiveVideoTier = { vm.setLiveVideoTier(it) },
                 )
 
                 AppPage.ALBUM_FILTER -> AlbumFilterScreen(

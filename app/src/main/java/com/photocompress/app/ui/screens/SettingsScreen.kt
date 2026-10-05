@@ -111,23 +111,26 @@ fun SettingsScreen(
 private fun UiState.restorableCount(): Int =
     ledger.count { it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null }
 
-/** 一级入口副标题：概览三类媒体当前档位。 */
+/** 一级入口副标题：概览各媒体当前档位。 */
 private fun ratioSummary(state: UiState): String {
     val settings = state.settings
     val photo = QualityTier.fromName(settings.photoTier).label
-    val live = QualityTier.fromName(settings.liveTier).label
+    val liveImage = QualityTier.fromName(settings.liveTier).label
+    val liveVideo = QualityTier.fromName(settings.liveVideoTier).label
     val video = QualityTier.fromName(settings.videoTier).label
-    return "普通照片 $photo · 实况照片 $live · 视频 $video"
+    return "普通照片 $photo · 实况照片（图 $liveImage / 视频 $liveVideo）· 视频 $video"
 }
 
 /**
- * 压缩比例（二级页面）：分别为普通照片、实况照片、视频选择质量档位。
+ * 压缩比例（二级页面）：普通照片、视频各一个档位；
+ * 实况照片拆成「图片段」「视频段」两个档位，分开控制。
  */
 @Composable
 fun CompressRatioScreen(
     state: UiState,
     onBack: () -> Unit,
     onSetTier: (MediaKind, QualityTier) -> Unit,
+    onSetLiveVideoTier: (QualityTier) -> Unit,
 ) {
     val settings = state.settings
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
@@ -144,32 +147,56 @@ fun CompressRatioScreen(
             TierCard(
                 title = "普通照片",
                 hint = "JPEG / HEIF",
-                selected = QualityTier.fromName(settings.photoTier),
-                onSelect = { onSetTier(MediaKind.PHOTO, it) },
+                options = listOf(
+                    TierOption(
+                        selected = QualityTier.fromName(settings.photoTier),
+                        onSelect = { onSetTier(MediaKind.PHOTO, it) },
+                    ),
+                ),
             )
             TierCard(
                 title = "实况照片",
                 hint = "主图 + 增益图 + 内嵌视频",
-                selected = QualityTier.fromName(settings.liveTier),
-                onSelect = { onSetTier(MediaKind.LIVE_PHOTO, it) },
+                options = listOf(
+                    TierOption(
+                        label = "图片段 · 主图",
+                        selected = QualityTier.fromName(settings.liveTier),
+                        onSelect = { onSetTier(MediaKind.LIVE_PHOTO, it) },
+                    ),
+                    TierOption(
+                        label = "视频段 · 内嵌视频",
+                        selected = QualityTier.fromName(settings.liveVideoTier),
+                        onSelect = onSetLiveVideoTier,
+                    ),
+                ),
             )
             TierCard(
                 title = "视频",
                 hint = "HEVC / H.264 / AV1 / VP9",
-                selected = QualityTier.fromName(settings.videoTier),
-                onSelect = { onSetTier(MediaKind.VIDEO, it) },
+                options = listOf(
+                    TierOption(
+                        selected = QualityTier.fromName(settings.videoTier),
+                        onSelect = { onSetTier(MediaKind.VIDEO, it) },
+                    ),
+                ),
             )
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
+/** 卡片内的一个档位控制项；[label] 为空表示该卡片只有一个档位，无需分组标题。 */
+private data class TierOption(
+    val selected: QualityTier,
+    val onSelect: (QualityTier) -> Unit,
+    val label: String? = null,
+)
+
 @Composable
 private fun TierCard(
     title: String,
     hint: String,
-    selected: QualityTier,
-    onSelect: (QualityTier) -> Unit,
+    options: List<TierOption>,
 ) {
     CardSurface(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -181,12 +208,18 @@ private fun TierCard(
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
             }
-            Spacer(Modifier.height(12.dp))
-            SegmentedControl(
-                options = QualityTier.entries.map { it.label },
-                selectedIndex = QualityTier.entries.indexOf(selected),
-                onSelect = { onSelect(QualityTier.entries[it]) },
-            )
+            options.forEach { option ->
+                Spacer(Modifier.height(12.dp))
+                option.label?.let { label ->
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
+                    Spacer(Modifier.height(6.dp))
+                }
+                SegmentedControl(
+                    options = QualityTier.entries.map { it.label },
+                    selectedIndex = QualityTier.entries.indexOf(option.selected),
+                    onSelect = { option.onSelect(QualityTier.entries[it]) },
+                )
+            }
         }
     }
 }

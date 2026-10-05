@@ -52,7 +52,8 @@ class CompressionEngine(private val context: Context) {
 
     /**
      * [tier] 决定图像质量档（主图 92/85/76）；
-     * [videoTier] 单独决定视频档位——普通视频与实况照片内嵌视频都用它，与图像档解耦。
+     * [videoTier] 决定视频档位——调用方按媒体类型传入（普通视频取「视频」档，
+     * 实况照片内嵌视频取「实况视频段」档），与图像档解耦。
      */
     suspend fun compress(
         item: MediaItem,

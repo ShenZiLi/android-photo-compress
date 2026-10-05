@@ -58,12 +58,16 @@ data class CompressedItemEntity(
     }
 }
 
-/** 三类媒体的质量档位（F12 / D4）。 */
+/** 各媒体的质量档位（F12 / D4）。 */
 @Entity(tableName = "app_settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val photoTier: String = "BALANCED",
+    /** 实况照片「图片段」（主图）质量档位。 */
     val liveTier: String = "BALANCED",
+    /** 实况照片「视频段」（内嵌视频）质量档位，与普通视频的 [videoTier] 解耦。 */
+    val liveVideoTier: String = "BALANCED",
+    /** 普通视频质量档位。 */
     val videoTier: String = "BALANCED",
     /** 用户选择排除的图集名，以 `\n` 分隔（这些图集不出现在未压缩/已压缩页）。 */
     val excludedAlbums: String = "",
@@ -127,7 +131,7 @@ interface SettingsDao {
 
 @Database(
     entities = [CompressedItemEntity::class, SettingsEntity::class, CachedMediaEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -164,12 +168,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4：新增实况照片「视频段」独立档位（与普通视频档位解耦）。 */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN liveVideoTier TEXT NOT NULL DEFAULT 'BALANCED'")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }
