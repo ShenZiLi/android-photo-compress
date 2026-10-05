@@ -61,7 +61,6 @@ fun SettingsScreen(
                 SettingRow(
                     icon = Icons.Filled.Tune,
                     title = "压缩比例",
-                    subtitle = ratioSummary(state),
                     onClick = onOpenCompressRatio,
                 )
             }
@@ -110,16 +109,6 @@ fun SettingsScreen(
 
 private fun UiState.restorableCount(): Int =
     ledger.count { it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null }
-
-/** 一级入口副标题：概览各媒体当前档位。 */
-private fun ratioSummary(state: UiState): String {
-    val settings = state.settings
-    val photo = QualityTier.fromName(settings.photoTier).label
-    val liveImage = QualityTier.fromName(settings.liveTier).label
-    val liveVideo = QualityTier.fromName(settings.liveVideoTier).label
-    val video = QualityTier.fromName(settings.videoTier).label
-    return "普通照片 $photo · 实况照片（图 $liveImage / 视频 $liveVideo）· 视频 $video"
-}
 
 /**
  * 压缩比例（二级页面）：普通照片、视频各一个档位；
@@ -228,7 +217,7 @@ private fun TierCard(
 private fun SettingRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     trailText: String? = null,
     trailOk: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -250,7 +239,9 @@ private fun SettingRow(
         Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
+            }
         }
         Text(
             trailText ?: "›",
