@@ -5,6 +5,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -35,9 +37,11 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import com.photocompress.app.ui.components.GlassIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -482,10 +486,17 @@ private fun FilterChips(
     ) {
         options.forEach { (value, label) ->
             val active = value == selected
+            val interactions = remember(value) { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(24.dp))
-                    .selectable(selected = active, role = Role.Tab, onClick = { onSelect(value) })
+                    .selectable(
+                        selected = active,
+                        role = Role.Tab,
+                        interactionSource = interactions,
+                        indication = null,
+                        onClick = { onSelect(value) },
+                    )
                     .heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -495,6 +506,8 @@ private fun FilterChips(
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
                         .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.12f), RoundedCornerShape(16.dp))
+                        // 外层保留 48dp 点击范围；中心扩散反馈仅绘制在内层胶囊，避免外层点击坐标造成偏移。
+                        .indication(interactionSource = interactions, indication = ripple(bounded = false))
                         .heightIn(min = 32.dp)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
