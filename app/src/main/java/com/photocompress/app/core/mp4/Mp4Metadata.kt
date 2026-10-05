@@ -6,24 +6,45 @@ import java.io.RandomAccessFile
 /**
  * MP4 元数据搬运。
  *
- * MediaMuxer 转码后只保留编码必需的结构，源文件的 `moov/udta`（相机厂商、机型、
- * GPS、拍摄时间等）会丢失——这正是"视频压缩后相机信息消失"的原因。
+ * MediaMuxer 转码后只保留编码必需的结构，源文件 `moov` 下承载相机信息的框
+ * （厂商 / 机型 / GPS / 拍摄参数等）会丢失——这正是"视频压缩后相机信息消失"的原因。
  *
- * 这里把源文件的 `udta` / `meta` 子框搬到转码结果的 `moov` 内，并同步 `mvhd`
- * 的创建/修改时间。`moov` 位于 `mdat` 之前时，`moov` 变大会让 `mdat` 后移，
- * 因此必须同步修正 `stco` / `co64` 中的 chunk 偏移。
+ * 这里把源 `moov` 下除 [PRODUCT_OWNED_BOXES] 之外的全部子框搬到转码结果的 `moov` 内，
+ * 并同步 `mvhd` 的创建 / 修改时间。`moov` 位于 `mdat` 之前时，`moov` 变大会让
+ * `mdat` 后移，因此必须同步修正 `stco` / `co64` 中的 chunk 偏移。
+ * （MediaMuxer 默认把 `moov` 写在文件末尾，此时无需修正。）
  */
 object Mp4Metadata {
 
     private val CONTAINER_TYPES = setOf("moov", "trak", "mdia", "minf", "stbl", "edts", "udta", "mvex", "moof", "traf")
 
+    /**
+     * 这些框属于**产物自己**，不能拿源的覆盖（覆盖会破坏结构或时长语义）：
+     * - `mvhd`：时长 / 时间基准，产物的才是对的（时间值另由 [patchMvhdTime] 同步）
+     * - `trak`：轨道结构与样本索引，由 muxer 依实际编码结果重建
+     * - `mvex` / `iods` / `drm` / `pssh`：分片、初始对象描述、加密相关
+     *
+     * 其余一律视为「需要从源搬过来的信息」，包括 `udta`、`meta`、`titl`
+     * 以及各厂商的私有框——不做白名单，避免再漏掉未知类型。
+     */
+    private val PRODUCT_OWNED_BOXES = setOf("mvhd", "trak", "mvex", "iods", "drm", "pssh")
+
     data class Box(val type: String, val offset: Long, val size: Long)
 
-    /** 源文件中需要搬运的元数据框原始字节（udta / meta）。 */
+    /**
+     * 源文件中需要搬运到产物的 moov 子框原始字节。
+     *
+     * 采用**排除法**（取 moov 下除 [PRODUCT_OWNED_BOXES] 之外的全部子框），
+     * 而不是只挑 `udta` / `meta`：
+     * - MediaMuxer 会自己写一个空的 `moov/meta`（约 118B），只挑 `meta` 会与之撞名，
+     *   导致源里真正带相机信息的 `meta` 被顶掉；
+     * - 厂商私有框（实测 realme 会在 moov 下放 `titl`）此前完全不在搬运范围内，
+     *   会直接丢失。
+     */
     fun extractMetaBoxes(source: File): List<Box> = runCatching {
         RandomAccessFile(source, "r").use { raf ->
             val moov = topLevelBoxes(raf).firstOrNull { it.type == "moov" } ?: return emptyList()
-            childBoxes(raf, moov).filter { it.type == "udta" || it.type == "meta" }
+            childBoxes(raf, moov).filter { it.type !in PRODUCT_OWNED_BOXES }
         }
     }.getOrDefault(emptyList())
 
@@ -67,13 +88,14 @@ object Mp4Metadata {
         val moovBytes = RandomAccessFile(target, "r").use { readBytes(it, moov.offset, moov.size) }
         val children = childBoxesInMemory(moovBytes, 8, moovBytes.size)
 
-        // 同类型子框就地替换（udta 是相机信息的权威来源，一律用源替换）；否则追加
+        // 源是元数据的权威来源：同类型子框一律就地替换，源有的而产物没有则追加。
+        // 这里不能因为「产物已有同名框」就跳过——MediaMuxer 自己会写一个空的
+        // `moov/meta`（约 118B），一跳过源的相机信息就被它顶掉了。
         val replacements = LinkedHashMap<String, ByteArray>()
         RandomAccessFile(source, "r").use { src ->
             for (b in metaBoxes) {
                 if (replacements.containsKey(b.type)) continue
-                val hasSame = children.any { it.type == b.type }
-                if (!hasSame || b.type == "udta") replacements[b.type] = readBytes(src, b.offset, b.size)
+                replacements[b.type] = readBytes(src, b.offset, b.size)
             }
         }
 

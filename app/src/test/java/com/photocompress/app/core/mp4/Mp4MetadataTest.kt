@@ -160,4 +160,81 @@ class Mp4MetadataTest {
         assertEquals(1690000000L, times!![0])
         assertEquals(1690000123L, times[1])
     }
+
+    @Test
+    fun `产物自带同名 meta 时仍以源为准`() {
+        // 回归：MediaMuxer 自己会写一个空的 moov/meta，早前实现见「同名已存在」就跳过，
+        // 导致源里带相机信息的 meta 被那个空框顶掉（真机实测 447B → 118B）。
+        val target = temp.newFile("t4.mp4")
+        write(
+            target,
+            listOf(
+                box("ftyp", "mp42".toByteArray()),
+                box("moov", mvhd(1, 2) + box("meta", ByteArray(90) { 7 })),
+                box("mdat", ByteArray(16)),
+            ),
+        )
+
+        val source = temp.newFile("s4.mp4")
+        write(
+            source,
+            listOf(
+                box("ftyp", "mp42".toByteArray()),
+                box("moov", mvhd(1, 2) + box("meta", "CAMERA-INFO".toByteArray())),
+                box("mdat", ByteArray(16)),
+            ),
+        )
+
+        assertTrue(Mp4Metadata.inject(target, source))
+        assertTrue(
+            "源的 meta 应覆盖产物自带的同名 meta",
+            indexOf(target.readBytes(), "CAMERA-INFO".toByteArray()) > 0,
+        )
+    }
+
+    @Test
+    fun `搬运 udta meta 之外的厂商私有框`() {
+        // 回归：厂商会在 moov 下放私有框（realme 实测有 titl），
+        // 早前只挑 udta/meta，这类框会直接丢失。
+        val target = temp.newFile("t5.mp4")
+        write(target, listOf(box("ftyp", "mp42".toByteArray()), moovWithStco(listOf(500)), box("mdat", ByteArray(16))))
+
+        val source = temp.newFile("s5.mp4")
+        write(
+            source,
+            listOf(
+                box("ftyp", "mp42".toByteArray()),
+                box("moov", mvhd(1, 2) + box("titl", "Oplus_0".toByteArray())),
+                box("mdat", ByteArray(16)),
+            ),
+        )
+
+        assertTrue(Mp4Metadata.inject(target, source))
+        assertTrue(
+            "厂商私有框 titl 应被搬运",
+            indexOf(target.readBytes(), "Oplus_0".toByteArray()) > 0,
+        )
+    }
+
+    @Test
+    fun `产物自有的结构框不被源覆盖`() {
+        // trak / mvhd 由产物提供，不能拿源的换掉（否则轨道结构与时长就错了）
+        val target = temp.newFile("t6.mp4")
+        write(target, listOf(box("ftyp", "mp42".toByteArray()), moovWithStco(listOf(500)), box("mdat", ByteArray(16))))
+
+        val source = temp.newFile("s6.mp4")
+        write(
+            source,
+            listOf(
+                box("ftyp", "mp42".toByteArray()),
+                box("moov", mvhd(1111, 2222) + box("trak", "SOURCE-TRAK".toByteArray())),
+                box("mdat", ByteArray(16)),
+            ),
+        )
+
+        val targetSizeBefore = target.length()
+        assertTrue(Mp4Metadata.inject(target, source))
+        assertEquals("源的 trak 不应被搬进来", -1, indexOf(target.readBytes(), "SOURCE-TRAK".toByteArray()))
+        assertEquals("除 mvhd 时间外长度不变", targetSizeBefore, target.length())
+    }
 }
