@@ -16,8 +16,8 @@ android {
         applicationId = "com.photocompress.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.1.14"
+        versionCode = 16
+        versionName = "0.1.15"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

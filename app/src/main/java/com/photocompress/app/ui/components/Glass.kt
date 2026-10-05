@@ -204,8 +204,8 @@ fun GlassButton(
 }
 
 @Composable
-fun GlassIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun GlassIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) {
     GlassSurface(modifier = modifier.size(48.dp), radius = 24.dp, blur = false) {
-        IconButton(onClick = onClick, modifier = Modifier.size(48.dp), content = content)
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp), enabled = enabled, content = content)
     }
 }

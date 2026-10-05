@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import com.photocompress.app.ui.components.GlassIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,14 +91,13 @@ fun TodoLevel1(
     val albums = state.albumTodoAll().filter { it.compressibleCount > 0 }
     val totalBytes = albums.sumOf { it.bytes }
     val count = albums.sumOf { it.count }
+    val allSelected = albums.isNotEmpty() && albums.all { it.name in state.todo.pickedAlbums }
     Column(modifier = Modifier.fillMaxSize()) {
         AppBar(
             title = "未压缩",
             subtitle = "${formatCount(count)} 项 · 共 ${formatSize(totalBytes)}",
             actions = {
-                IconButton(onClick = onSelectAll) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = "全选图集")
-                }
+                SelectAllAction(allSelected = allSelected, enabled = albums.isNotEmpty(), onClick = onSelectAll)
             },
         )
         // 无可压缩图集时留空（不再显示占位文案）
@@ -131,8 +129,11 @@ fun DoneLevel1(
     state: UiState,
     onOpenAlbum: (String) -> Unit,
     onToggleAlbum: (String) -> Unit,
+    onSelectAll: () -> Unit,
 ) {
     val albums = state.albumDoneAll()
+    val actionable = albums.filter { it.restorableCount > 0 }
+    val allSelected = actionable.isNotEmpty() && actionable.all { it.name in state.done.pickedAlbums }
     val count = albums.sumOf { it.count }
     val before = albums.sumOf { it.before }
     val after = albums.sumOf { it.after }
@@ -142,6 +143,9 @@ fun DoneLevel1(
             title = "已压缩",
             subtitle = if (knownBefore == 0) "${formatCount(count)} 项 · ${formatSize(after)}"
             else "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}",
+            actions = {
+                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll)
+            },
         )
         // 暂无可处理图集时留空（不再显示占位文案）
         if (albums.isEmpty()) return
@@ -274,7 +278,7 @@ fun TodoLevel2(
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
             navigationSpacing = 12.dp,
             actions = {
-                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll)
+                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll, modifier = Modifier.padding(end = 12.dp))
             },
         )
         FilterChips(
@@ -345,7 +349,7 @@ fun DoneLevel2(
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
             navigationSpacing = 12.dp,
             actions = {
-                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll)
+                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll, modifier = Modifier.padding(end = 12.dp))
             },
         )
         FilterChips(
@@ -509,10 +513,13 @@ private fun FilterChips(
 }
 
 @Composable
-private fun SelectAllAction(allSelected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    GlassSurface(modifier = Modifier.padding(end = 12.dp), radius = 24.dp, blur = false) {
-        TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(if (allSelected) "取消全选" else "全选", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        }
+private fun SelectAllAction(
+    allSelected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.semantics { selected = allSelected }) {
+        Icon(Icons.Filled.CheckCircle, contentDescription = if (allSelected) "取消全选" else "全选")
     }
 }
