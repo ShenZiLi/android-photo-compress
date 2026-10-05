@@ -460,3 +460,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: 统一一级二级页面全选按钮
+<!-- trellis-session: v=2 fp=0ddc678cb6233a27 -->
+
+**Date**: 2026-10-06
+**Task**: 统一一级二级页面全选按钮
+**Branch**: `master`
+
+### Summary
+
+未压缩与已压缩一级图集列表、二级图片网格共四个页面，统一为圆形玻璃勾选按钮，点击切换全选和取消全选。轻存0.1.15已更新真机。
+
+### Main Changes
+
+- 复用SelectAllAction和既有选择逻辑；一级选择可压缩/可还原图集，二级仅选择当前筛选内可操作项目；无可操作项目禁用按钮。统一48dp触摸区域、右侧边距和选中语义。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8518260` | fix(ui): unify album and media select-all icon actions |
+
+### Testing
+
+- [OK] assembleDebug编译成功，git diff --check通过；真机90d3e7c6安装Success，版本读取0.1.15/code16。未运行自动化测试；四页实际交互与视觉由用户确认。
+
+### Status
+
+[OK] **Completed**

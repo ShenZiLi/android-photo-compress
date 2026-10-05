@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~462 | Active |
+| `journal-1.md` | ~492 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-10-06 | 统一一级二级页面全选按钮 | `8518260` | `master` |
 | 15 | 2026-10-06 | 删除已压缩页右上角删除图标 | `7d46c1e` | `master` |
 | 14 | 2026-10-06 | 图片网格顶栏与筛选布局调整 | `4b0eb00` | `master` |
 | 13 | 2026-10-06 | 轻存全局液态玻璃 UI | `1ab66d2` | `master` |
