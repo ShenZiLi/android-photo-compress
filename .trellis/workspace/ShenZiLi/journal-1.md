@@ -370,3 +370,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 13: 轻存全局液态玻璃 UI
+<!-- trellis-session: v=2 fp=d8522ebc89426773 -->
+
+**Date**: 2026-10-06
+**Task**: 轻存全局液态玻璃 UI
+**Branch**: `master`
+
+### Summary
+
+按 ui-ux-pro-max 和 better-ui 统一全局玻璃材质、浮动导航、图集卡、设置与弹窗；保留现有操作与确认文案，0.1.12 已覆盖安装真机。
+
+### Main Changes
+
+- 增加 Haze 1.6.10 背景采样及共享 Glass 组件，深浅色语义令牌、节电/高对比回退、选择语义与触摸面积，修复透明容器文字继承和禁用渐变问题；持久化设计规范与审阅记录。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1ab66d2` | feat(ui): apply liquid glass surfaces across Qingcun app |
+
+### Testing
+
+- [OK] 最终 assembleDebug 15 秒通过，差异检查通过；安装 Success，设备读回 0.1.12/code13，APK 轻存标签及包名正确；已查看深色首页和图集显示，其他页面、浅色、大字体、横屏及性能未完整实机验收；未运行测试套件或处理个人媒体。
+
+### Status
+
+[OK] **Completed**
