@@ -1,0 +1,130 @@
+name: Release Android APP
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to build (for example v0.1.18)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+    steps:
+      - name: Check out version tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Check version and signing configuration
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64, os, pathlib, re, subprocess
+          source = pathlib.Path('app/build.gradle.kts').read_text()
+          version = re.search(r'versionName\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"', source).group(1)
+          tag = os.environ['RELEASE_TAG']
+          if tag != f'v{version}':
+              raise SystemExit('Release tag does not match versionName.')
+          tag_commit = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}']).decode().strip()
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
+          if head != tag_commit:
+              raise SystemExit('Checkout is not the requested tag commit.')
+          for name in ('SIGNING_KEYSTORE_BASE64', 'SIGNING_STORE_PASSWORD', 'SIGNING_KEY_ALIAS', 'SIGNING_KEY_PASSWORD'):
+              if not os.environ.get(name):
+                  raise SystemExit(f'Missing signing secret: {name}')
+          store = pathlib.Path(os.environ['RUNNER_TEMP']) / 'qingcun-release.keystore'
+          store.write_bytes(base64.b64decode(os.environ['SIGNING_KEYSTORE_BASE64'], validate=True))
+          store.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'APP_VERSION={version}\nSIGNING_STORE_FILE={store}\n')
+          PY
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Build signed release APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --console=plain
+
+      - name: Verify signature and package download
+        run: |
+          mkdir -p release-output
+          APK="release-output/qingcun-${RELEASE_TAG}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" > release-output/signing-certificate.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          head -n 1 "$RUNNER_TEMP/apk-badging.txt"
+          (cd release-output && sha256sum "qingcun-${RELEASE_TAG}.apk" > SHA256SUMS.txt)
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qingcun-${{ env.RELEASE_TAG }}
+          path: release-output/
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## 轻存
+
+          Android 照片、实况照片与视频的本地压缩工具。
+
+          - 液态玻璃界面、总览、图集与图片网格、多选压缩/还原。
+          - 图片、实况图片段、实况视频段和普通视频独立质量档位。
+          - 文件内唯一标记避免重复压缩，原始备份默认保留 30 天。
+          - 新增页面方向过渡、按压、多选、筛选、真实进度和提示动效。
+
+          ### 下载
+
+          安装 `qingcun-v*.apk`；`SHA256SUMS.txt` 用于校验下载，`signing-certificate.txt` 提供公开签名证书指纹。签名私钥不随产物发布。
+
+          ### 使用范围
+
+          Android 11 及以上。首批参考真我 GT7 Pro / Android 16；不同厂商实况格式、HDR 编码器和文件系统时间能力请参阅 README。请先用备份副本确认兼容性。正式签名 APK 无法直接覆盖使用其他签名的调试版本，不要为了切换版本直接卸载仍持有恢复备份的旧版。
+          EOF
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo 'This release already exists; refusing to overwrite published APKs.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" release-output/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest --title "轻存 ${APP_VERSION}" --notes-file release-notes.md
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/qingcun-release.keystore"

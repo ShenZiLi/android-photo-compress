@@ -21,8 +21,28 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val signingStore = providers.environmentVariable("SIGNING_STORE_FILE").orNull
+    val signingStorePassword = providers.environmentVariable("SIGNING_STORE_PASSWORD").orNull
+    val signingAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").orNull
+    val signingKeyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").orNull
+    val hasReleaseSigning = listOf(signingStore, signingStorePassword, signingAlias, signingKeyPassword).all { !it.isNullOrBlank() }
+    if (gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }) {
+        require(hasReleaseSigning) { "Release builds require all four SIGNING_* environment variables." }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(signingStore))
+                storePassword = signingStorePassword
+                keyAlias = signingAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
