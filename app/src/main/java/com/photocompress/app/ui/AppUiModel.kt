@@ -304,8 +304,8 @@ fun List<DoneMedia>.applyDoneFilter(filter: String): List<DoneMedia> = when (fil
 /** 确认框正文的按类型列举（与按钮、统计共用同一口径）。 */
 fun enumerateCounts(counts: Map<MediaKind, Int>): String {
     val parts = buildList {
-        counts[MediaKind.PHOTO]?.takeIf { it > 0 }?.let { add("普通图片 $it 张") }
-        counts[MediaKind.LIVE_PHOTO]?.takeIf { it > 0 }?.let { add("实况照片 $it 张") }
+        counts[MediaKind.PHOTO]?.takeIf { it > 0 }?.let { add("图片 $it 张") }
+        counts[MediaKind.LIVE_PHOTO]?.takeIf { it > 0 }?.let { add("实况 $it 张") }
         counts[MediaKind.VIDEO]?.takeIf { it > 0 }?.let { add("视频 $it 条") }
     }
     return parts.joinToString("、").ifEmpty { "无" }

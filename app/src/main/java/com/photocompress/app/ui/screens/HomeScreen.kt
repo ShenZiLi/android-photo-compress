@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -21,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.ui.Totals
 import com.photocompress.app.ui.UiState
@@ -148,7 +152,7 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
 }
 
 /**
- * 首页主卡：按「普通图片 / 实况图片 / 视频」三类展示**当前实际占用**占比。
+ * 首页主卡：按「图片 / 实况 / 视频」三类展示**当前实际占用**占比。
  *
  * 口径说明：未压缩媒体按原始大小、已压缩媒体按压缩后大小求和，
  * 因此饼图反映的是"此刻占了多少磁盘"，而非"压缩前有多少"。
@@ -158,8 +162,8 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
 private fun HeroCard(totals: Totals) {
     val colors = MaterialTheme.appColors
     val segments = listOf(
-        KindSegment(MediaKind.PHOTO, "普通图片", colors.kindPhoto, totals.kindBytes[MediaKind.PHOTO] ?: 0L),
-        KindSegment(MediaKind.LIVE_PHOTO, "实况图片", colors.kindLive, totals.kindBytes[MediaKind.LIVE_PHOTO] ?: 0L),
+        KindSegment(MediaKind.PHOTO, "图片", colors.kindPhoto, totals.kindBytes[MediaKind.PHOTO] ?: 0L),
+        KindSegment(MediaKind.LIVE_PHOTO, "实况", colors.kindLive, totals.kindBytes[MediaKind.LIVE_PHOTO] ?: 0L),
         KindSegment(MediaKind.VIDEO, "视频", colors.kindVideo, totals.kindBytes[MediaKind.VIDEO] ?: 0L),
     )
     val totalBytes = segments.sumOf { it.bytes }
@@ -302,15 +306,10 @@ private fun StatsRow(totals: Totals) {
             dotColor = MaterialTheme.appColors.dataDone,
             label = "已压缩",
             value = "${formatCount(totals.doneCount)} 项",
-            // 前后一致（如都为空）时只显示一个值，避免「0 B → 0 B」这种冗余
-            meta = if (totals.before == totals.after) {
-                formatSize(totals.before)
-            } else {
-                "${formatSize(totals.before)} → ${formatSize(totals.after)}"
-            },
+            meta = formatSize(totals.before),
         )
         StatCard(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1.2f),
             dotColor = MaterialTheme.appColors.success,
             label = "压缩率",
             value = savingsSize(totals.saved),
@@ -336,7 +335,7 @@ private fun StatCard(
     meta: String,
 ) {
     CardSurface(modifier = modifier) {
-        // 三卡并排后每张只剩约 110dp，横向内边距收到 12dp 给内容让位
+        // 三卡并排时先给较长的节省量留宽度，再按实际可用宽度调整字号。
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
@@ -348,7 +347,22 @@ private fun StatCard(
                 )
             }
             Spacer(Modifier.height(8.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            BasicText(
+                text = value,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    color = LocalContentColor.current,
+                    fontWeight = FontWeight.Bold,
+                    fontFeatureSettings = "tnum",
+                ),
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 12.sp,
+                    maxFontSize = MaterialTheme.typography.titleMedium.fontSize,
+                    stepSize = 0.5.sp,
+                ),
+            )
             Text(
                 meta,
                 style = MaterialTheme.typography.labelSmall,
