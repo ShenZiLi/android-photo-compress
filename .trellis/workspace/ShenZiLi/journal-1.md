@@ -400,3 +400,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: 图片网格顶栏与筛选布局调整
+<!-- trellis-session: v=2 fp=c2ecbd7ab082c689 -->
+
+**Date**: 2026-10-06
+**Task**: 图片网格顶栏与筛选布局调整
+**Branch**: `master`
+
+### Summary
+
+同步修改未压缩、已压缩二级网格页：删除统计工具行，右上角全选，筛选胶囊紧凑居中，标题与返回按钮间距增加12dp；0.1.13 已安装真机。
+
+### Main Changes
+
+- 共享全选入口保留筛选范围、取消全选和禁用状态；32dp视觉胶囊仍有48dp触摸范围；AppBar 间距参数默认0，只调整两处网格页。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b0eb00` | fix(ui): compact media grid filters and move select all into header |
+
+### Testing
+
+- [OK] assembleDebug 8秒通过、差异检查通过；安装 Success，版本读回0.1.13/code14；未运行测试，页面效果由用户验收。
+
+### Status
+
+[OK] **Completed**
