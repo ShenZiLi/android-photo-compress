@@ -550,3 +550,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: 轻存全应用交互动效
+<!-- trellis-session: v=2 fp=dbd8118c565c11f9 -->
+
+**Date**: 2026-10-06
+**Task**: 轻存全应用交互动效
+**Branch**: `master`
+
+### Summary
+
+按emil-design-eng为轻存实现页面、导航、按压、多选、筛选、档位、开关、列表、统计、进度、结果提示和确认弹窗的业务动效。0.1.18/code19安装包已生成，真机未连接。
+
+### Main Changes
+
+- 新增统一Motion策略：120/150/220ms缓出、系统动画关闭/节电/键盘回退、主题瞬时切色；当前页过渡避免保留旧可点击页面；共享按压与颜色反馈；网格仅位置变化；真实进度平滑与静态真实数字；提示可被新消息即时替换；确认立即执行且退出时禁用防重复。设计矩阵与UI规范已保存。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `472f63e` | feat(ui): add coherent motion to navigation and media workflows |
+
+### Testing
+
+- [OK] 最终assembleDebug成功（3s），git diff --check通过；未运行自动化测试。ADB5038设备列表为空，未安装真机。产物artifacts/qingcun-0.1.18-debug-20261006.apk；真机动效/慢速回放/大图库性能/主题与字体/回退实际表现待用户确认。
+
+### Status
+
+[OK] **Completed**
