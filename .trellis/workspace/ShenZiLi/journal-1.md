@@ -430,3 +430,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 15: 删除已压缩页右上角删除图标
+<!-- trellis-session: v=2 fp=01398893d496c81c -->
+
+**Date**: 2026-10-06
+**Task**: 删除已压缩页右上角删除图标
+**Branch**: `master`
+
+### Summary
+
+移除已压缩一级图集页右上角回收站图标，清理无用回调和导入；0.1.14 已安装真机。
+
+### Main Changes
+
+- 删除 DoneLevel1 顶栏操作及其 onOpenTrash 参数，设置页回收站入口和二级网格全选沿用现有实现。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d46c1e` | fix(ui): remove trash shortcut from compressed albums header |
+
+### Testing
+
+- [OK] assembleDebug 6秒通过、差异检查通过；安装 Success，设备读回0.1.14/code15；未运行测试或操作真实媒体，界面由用户验收。
+
+### Status
+
+[OK] **Completed**
