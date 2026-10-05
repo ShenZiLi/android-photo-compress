@@ -54,6 +54,23 @@ muxerHeif=true
 - 真机（GT7 Pro）预期具备 HEVC 硬件编码器，硬件能力差异属预期，不作为验收失败。
 - 影响：D6 / F3 的「AV1 / VP9 编码」在模拟器上**无法完整验证**，仅在真机可确认。
 
+### U4b HEVC Main10（HDR10）编码能力 —— 待真机
+
+- 探针：`DeviceCapabilityProbe.probeHevcMain10()`，日志键 `hevcMain10Encodable=` 与逐编码器的 `hevcMain10=<encoder> ... profiles=[...]`。
+- 模拟器上 `c2.android.hevc.encoder` 为软件编码器且尺寸上限 512，**预期不含 Main10 档位**，故模拟器上 10bit HDR 源一定是「跳过」路径（正好可验证 AC12 的跳过与不改原文件）。
+- **真机（GT7 Pro / ColorOS 16）必须实测**：结果决定 D11 的落点——
+  - 有 Main10 硬件编码器 → HDR 源走 `HdrMode.PRESERVE` 保真压缩，须再验 U4c；
+  - 无 → HDR 源一律跳过并显示原因（原文件不动），不产生压缩收益。
+- 结论落盘：真机执行 `adb logcat -s PCPROBE | grep hevcMain10` 后回填本段。
+
+### U4c HDR 保真链路真机复验 —— 待真机
+
+用 `local-test-media/videos/vid_10bit_hdr.mp4`（HEVC Main10 / profile_idc=2 / bitDepthLumaMinus8=2，**无 colr box**，属「裸 10bit 无 signaling」样本）在真机走一遍：
+1. 压缩后读产物 `colr`(nclx) 的 primaries/transfer/matrix，应与源可识别口径一致（源无 colr 时按 BT.2020 + PQ 补齐）；
+2. 读产物 `hvcC`，`profile_idc` 应仍为 2（Main10），位深仍 10bit；
+3. ColorOS 相册播放观感与压缩前一致（不发灰、不偏色）。
+任一不满足 → 该视频应判定为跳过而非落地（当前实现的兜底行为）。
+
 ### U1 直接文件写入（可判定）
 
 `/sdcard/Download` 对 MANAGE_EXTERNAL_STORAGE 授权后的应用可写、可创建。

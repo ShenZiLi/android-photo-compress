@@ -103,6 +103,34 @@
 - 优先硬编码器；目标编码（AV1 / VP9）无可用硬编码器时回退 H.264 / HEVC 或跳过（C4）。
 - 重封装后保留轨道时间戳与媒体库时间字段。
 
+#### 4.5.1 10bit HDR：保真或跳过（D11）
+
+**核心原则：HDR 源要么保真压缩，要么跳过；禁止静默降级为 SDR 落地。**
+
+判定（`VideoProbe` / `VideoProbeRunner`）：
+- HDR 判定 = 传递特性 ∈ {PQ 6、HLG 7、PQ-ISO 16、HLG-ISO 18} ∪ 色彩标准 = BT.2020(6) ∪ HEVC Main10 系(profile 2/4096/8192) ∪ 位深 ≥ 10。
+- **兜底链**：MediaExtractor 不报告 `KEY_PROFILE` / `bit-depth-luma` 时，直读 `hvcC` 取 profile 与位深
+  （`VideoProbeRunner.scanHevcConfig`）；不报告色彩键时，直读 `colr`(nclx) 取 primaries/transfer/matrix
+  （`VideoProbeRunner.scanColrInfo`）。二者覆盖「10bit Main10 但无 colr」的裸 HDR 源。
+
+能力门槛（`MediaClassifier.canPreserveHdr`，进程级缓存）：
+- 设备存在 HEVC 编码器且 `profileLevels` 含 Main10 系之一 → 可保真；否则在**判类阶段**即标记跳过，
+  理由「无 HEVC Main10 编码器，无法保真压缩 HDR（xx），已跳过」，不进入压缩流程。
+
+保真压缩（`HdrMode.PRESERVE`）：
+- 编码 MIME 固定 HEVC，**不接受降分辨率**（`selectEncoder(requireMain10 = true)` 不做缩放）。
+- 码率系数独立放宽：HIGH 0.85 / BALANCED 0.62 / COMPACT 0.45。
+- signaling 在 `MediaMuxer.addTrack` **之前**打补丁（`ColorPatch`）：`KEY_COLOR_STANDARD`(BT.2020)、
+  `KEY_COLOR_TRANSFER`(PQ/HLG)、`KEY_COLOR_RANGE`、`KEY_HDR_STATIC_INFO`（HDR10 静态元数据 / clli）；
+  解码器 `INFO_OUTPUT_FORMAT_CHANGED` 时若源格式未带静态元数据则从解码器输出格式补齐。
+- 源未标注任何色彩信息、仅靠 profile/位深判为 HDR 时，按 BT.2020 + PQ 补齐 signaling，保证产物可识别。
+
+产校与兜底：
+- 压缩后 `isHdrPreserved` 逐项比对（传递特性、10bit 主档、BT.2020），并在报告缺省时直读产物 `colr`。
+- 校验未通过或转码失败 → **跳过**（`Result(success = false)`），`CompressionEngine` 删除临时产物、
+  返回 `Skipped` 且**不触碰原文件**；`compressVideo` 另有二次确认（产物必须 `isHdr`）后置保险。
+- 落地的 HDR 结论写入账本 `codecUsed`，格式 `"HEVC · HDR 保真（HDR10/PQ）"`；实况内嵌视频同理写入 `motionNote`。
+
 ### 4.6 MP4 容器重写（内嵌视频与独立视频共用）
 
 - box 级解析（`ftyp` / `moov` / `mdat` / `stbl` 等），重建样本索引与 chunk 偏移。
@@ -139,6 +167,8 @@
 | U2 | 原地截断写入后，相册是否正常显示并保留归属 / 时间 | AC3 / AC4 |
 | U3 | HEIC 重编码能否保留 EXIF / XMP | F1 / D6 / AC12 |
 | U4 | 设备是否存在 AV1 / VP9 硬件编码器 | F3 / D6 |
+| U4b | **设备是否存在 HEVC Main10（HDR10）编码器**（`DeviceCapabilityProbe.probeHevcMain10`，日志 `hevcMain10Encodable=`）——决定 10bit HDR 视频能否保真压缩 | D11 / AC12 |
+| U4c | **HDR 保真链路的真机复验**：PRESERVE 产物 `colr`/`hvcC` 的 10bit + PQ/HLG + BT.2020 是否一致，相册观感是否发灰 | D11 / AC12 |
 | U5 | 实况照片重组后相册识别 / 播放 / HDR | AC1 |
 | U6 | 新增自有 XMP 字段是否被相册与其他应用接受 | D5 / F7 |
 | U7 | JPEG 质量档位"肉眼不可见"的阈值标定 | C1 / AC2 |

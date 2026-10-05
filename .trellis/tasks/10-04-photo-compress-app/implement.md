@@ -48,6 +48,15 @@
 - [ ] `core.video`：MediaCodec 重编码（保持分辨率 / 帧率 / 时长），音频直通。
 - [ ] 独立视频接入未压缩页与批量流程。
 - [ ] 验证：AC7 视频部分通过；无可用编码器时按 C4 跳过并给出原因。
+- [x] **阶段 5b：10bit HDR「保真或跳过」（D11 修订，2026-10-05）**
+  - [x] `VideoProbe` 扩展 profile / bitDepth / colorRange，新增 `HdrKind` / `HdrFidelity`。
+  - [x] 兜底探测：`scanHevcConfig`（hvcC）+ `scanColrInfo`（colr），覆盖「Main10 但无 colr」源。
+  - [x] `canPreserveHdr`（进程级缓存）能力门槛，判类阶段即拦截无 Main10 编码器的 HDR 源。
+  - [x] `HdrMode.PRESERVE`：HEVC Main10 固定、不降分辨率、HDR 专用码率系数、`ColorPatch` 写 signaling 与 HDR10 静态元数据。
+  - [x] 产物校验 `isHdrPreserved`（含 colr 兜底）+ `compressVideo` 二次保险；失败即跳过、原文件零改动。
+  - [x] **删除 `HdrMode.SDR_CLEAR` 及自动降级链**（禁止 HDR 静默转 SDR 落地）。
+  - [x] 文档同步：`prd.md` D11/C5/AC12/不在首版范围、`design.md` §4.5.1/§8 U4b·U4c、`device-capability-report.md`、`acceptance-report.md` §六。
+  - [ ] 验证：编译通过；模拟器跳过路径待跑；**真机 U4b / U4c 待验**（GT7 Pro Main10 硬编 + 产物 colr/hvcC + 相册观感）。
 
 ## 阶段 6：扩展格式（按阶段 1 与 U3 / U4 / U8 / U9 结论决定是否纳入）
 

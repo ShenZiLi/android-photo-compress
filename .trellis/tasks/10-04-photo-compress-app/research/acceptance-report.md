@@ -19,7 +19,7 @@
 - `JpegSegmentsTest`(7)：JPEG 段拆分、EXIF/XMP 逐字节搬运、XMP 覆写、MPF 读取/改写/数量校验
 - `PcXmpTest`(6)：自有标记合并、保留其它命名空间、重复合并不叠加、Container 长度重算
 - `Mp4XmpMarkerTest`(3)：MP4 顶层 uuid box 标记读写往返与 box 结构校验
-- `MediaClassifierTest`(9)：JPEG/HEIF/PNG/BMP/WebP/GIF/AVIF/DNG 判类与跳过原因、容器识别、10-bit HDR 跳过
+- `MediaClassifierTest`(9)：JPEG/HEIF/PNG/BMP/WebP/GIF/AVIF/DNG 判类与跳过原因、容器识别、10-bit HDR 判类（**结论已随 D11 修订为「保真或跳过」**，见 §四）
 - `InPlaceRewriterTest`(4)：原地写入复用同一文件、mtime 还原、失败回滚、SHA-256
 
 ## 二、端到端实测（模拟器）
@@ -40,7 +40,10 @@
 | `vid_hevc.mp4` | 1,003,510 | 539,915 | -46% | 输出 H.264，1280×720 不变 |
 | `vid_vp9.mp4` | 200,889 | 142,676 | -29% | 输出 H.264，640×360 不变 |
 
-跳过项（未修改原文件，原因可见）：`vid_10bit_hdr.mp4`（10-bit HDR，D11）、`vid_mov.mov`（MOV 容器）、`screenshot_*.png` / `img.webp` / `img.bmp` / `anim.gif`（非相机原生格式，D12）、HEIC（HEIF 元信息无法保留，C4）。
+跳过项（未修改原文件，原因可见）：`vid_10bit_hdr.mp4`（**HEVC Main10 / 10bit，模拟器无 Main10 编码器 → 按 D11「保真或跳过」跳过**）、`vid_mov.mov`（MOV 容器）、`screenshot_*.png` / `img.webp` / `img.bmp` / `anim.gif`（非相机原生格式，D12）、HEIC（HEIF 元信息无法保留，C4）。
+
+> `vid_10bit_hdr.mp4` 样本实测属性：`hvcC` profile_idc = **2**（Main10）、bitDepthLumaMinus8 = **2**（10bit）、**无 `colr` box**。
+> 即「裸 10bit Main10、无 HDR signaling」，正好覆盖 `scanHevcConfig` 兜底路径；模拟器上因无 Main10 编码器必然跳过。
 
 ### 实况照片容器正确性（对样张逐项核对）
 
@@ -92,7 +95,7 @@
 | AC9 看板数据与实际一致 | ✅ 已验证 | 统计直接读 `File.length()`，规避媒体库缓存滞后；界面对照截图核对 |
 | AC10 多选批量压缩/还原 | ✅ 已验证 | 图集级与图片级批量均已实测；超期/已清理项不可选并给出说明 |
 | AC11 三类档位独立生效 | ✅ 已验证 | 设置页三类独立持久化（Room）；压缩时按类型取对应档位 |
-| AC12 不满足条件者被标记跳过且未改动原文件 | ✅ 已验证 | 10-bit HDR / MOV / PNG / WebP / BMP / GIF / HEIC 均按 C4 跳过并显示原因 |
+| AC12 不满足条件者被标记跳过且未改动原文件 | ✅ 已验证 | 10-bit HDR（设备无 Main10 编码器时）/ MOV / PNG / WebP / BMP / GIF / HEIC 均按 C4 跳过并显示原因；**10bit HDR 的「保真压缩」分支须真机验证（U4b/U4c）** |
 | AC13 GainMap 照片压缩后 HDR 效果一致 | ⚠️ **部分验证** | 增益图**逐字节保留**（结构上不可能劣化）；相册 HDR 观感须真机复验 |
 | AC14 非相机原生格式跳过且未改动 | ✅ 已验证 | 判类单测 + 模拟器实测（文件大小未变化） |
 | AC15 二级结构、勾选自洽、按钮与确认文案数字一致 | ✅ 已验证 | 图集项数 = 图集内全部媒体数；可压缩/可还原数 ≤ 项数；按钮、确认框、统计同源 |
@@ -213,3 +216,39 @@ Room 升到 v2 并提供 `MIGRATION_1_2`（新增 `originalPath`、`excludedAlbu
 | `e103502` | 阶段 2–4：媒体库、二级界面、压缩引擎、回收站 |
 | `3a979cb` | 阶段 5–7：到期清理 Worker、编码器回退、单元测试 |
 | 见最后一次提交 | 文件内标记（MP4 uuid box）、跳过与展示口径修正、验收报告 |
+
+## 六、10bit HDR 支持（D11 修订：保真或跳过）
+
+### 背景与决策
+
+原 D11 为「10-bit HDR 视频首版不处理（识别即跳过）」。新需求要求**支持 10bit HDR 压缩且保留视频原始信息**。
+
+评审给出三种候选：A 跳过 / B 降级 SDR + 提示 / C 用户可选。**结论：采纳 A**——理由是「保留原始信息」是硬要求，降级即使有提示也在事实上违约，不能把决策成本转给用户。
+
+**实现约束**：HDR 源**永不静默转 SDR 落地**。设备无 HEVC Main10 编码器、或保真校验未通过 → 跳过并显示原因，原文件零改动。
+
+### 实现要点
+
+| 环节 | 实现 |
+|---|---|
+| HDR 判定 | transfer ∈ {6,7,16,18} ∪ standard = BT.2020(6) ∪ HEVC Main10(2/4096/8192) ∪ bitDepth ≥ 10 |
+| 兜底探测 | `scanHevcConfig`（hvcC 取 profile/位深）+ `scanColrInfo`（colr 取 primaries/transfer/matrix），覆盖「Main10 但无 colr」源 |
+| 能力门槛 | `MediaClassifier.canPreserveHdr`（进程级缓存），判类阶段即拦截 |
+| 保真编码 | HEVC Main10 固定、**不降分辨率**、HDR 专用码率系数（0.85/0.62/0.45） |
+| signaling | `ColorPatch` 在 `addTrack` 前写 BT.2020 / PQ/HLG / full range / HDR10 静态元数据 |
+| 产物校验 | `isHdrPreserved` 逐项比对 + 产物 `colr` 兜底；失败即跳过 |
+| 二次保险 | `compressVideo` 在 commit 前再确认产物 `isHdr`，不满足则删临时文件并跳过 |
+| 账本 | 落地时 `codecUsed = "HEVC · HDR 保真（HDR10/PQ）"`；实况内嵌视频写 `motionNote` |
+
+### 验证状态
+
+| 项 | 状态 |
+|---|---|
+| 编译 | ✅ `:app:compileDebugKotlin` 通过 |
+| 样本属性 | ✅ `vid_10bit_hdr.mp4` = hvcC profile_idc 2 / 10bit / 无 colr，覆盖兜底路径 |
+| 模拟器跳过路径 | ⏳ 待跑（模拟器 HEVC 上限 512、预期无 Main10 → 必然跳过） |
+| 真机保真压缩 | ⏳ **U4b / U4c 必须真机验证**（GT7 Pro 是否有 Main10 硬编；产物 colr/hvcC 与相册观感） |
+
+### 被删除的旧行为
+
+`HdrMode.SDR_CLEAR` 及「保真失败 → 自动转 SDR」的降级链**已移除**。此前若真机无 Main10 编码器，HDR 视频会被静默削成 SDR 后照常落地——这与「保留视频原始信息」直接冲突，属必须消除的违约路径。
