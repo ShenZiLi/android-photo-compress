@@ -493,17 +493,26 @@ class CompressionEngine(private val context: Context) {
             )
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
-            // 回滚：用备份原地恢复
-            if (backupRel != null) {
+            // 刷新未通过同样不能记为成功。保留备份，并分别报告文件恢复与相册同步结果。
+            var bytesRestored = false
+            val rollback = backupRel?.let { backupPath ->
                 runCatching {
-                    recycle.restore(backupRel, file, mtimeMs)
+                    recycle.restore(backupPath, file, mtimeMs)
+                    check(FileUtils.sha256(file) == originalSha) { "回滚内容与原文件不一致" }
+                    bytesRestored = true
                     MediaStoreUpdater.refresh(
                         context, item.uri, item.dataPath,
                         item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec,
                     )
                 }
             }
-            CompressOutcome.Failed("写入失败已回滚：${t.javaClass.simpleName}: ${t.message}")
+            val state = when {
+                rollback == null -> "写入失败，原文件未改动"
+                rollback.isSuccess -> "写入失败，原文件及相册记录已恢复"
+                bytesRestored -> "原文件已恢复，但相册同步未通过；原始备份已保留"
+                else -> "回滚未通过；原始备份已保留，请勿清理备份"
+            }
+            CompressOutcome.Failed("$state：${t.javaClass.simpleName}: ${t.message}")
         } finally {
             tempContent.delete()
         }

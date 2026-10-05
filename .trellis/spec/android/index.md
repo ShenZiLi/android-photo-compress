@@ -1,10 +1,11 @@
 # 安卓项目规范入口
 
-本项目为 Android 工程 `android-photo-compress`，当前仅完成 Trellis 初始化，尚无实现代码；规范随实际落地代码继续补充。
+本项目为 Android 工程 `android-photo-compress`，采用 Kotlin / Compose；规范随实际实现和设备验证继续补充。
 
 ## 当前已经确定的约定
 
 - [本地 Git 提交](git-workflow.md)：用户要求每个完成的变更单元提交到本地 Git。
+- [原地改写后的媒体库同步](media-store-refresh.md)：原厂实况索引、日期与条目身份校验。
 
 ## 开发前检查
 
