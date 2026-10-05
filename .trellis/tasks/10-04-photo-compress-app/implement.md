@@ -56,7 +56,8 @@
   - [x] 产物校验 `isHdrPreserved`（含 colr 兜底）+ `compressVideo` 二次保险；失败即跳过、原文件零改动。
   - [x] **删除 `HdrMode.SDR_CLEAR` 及自动降级链**（禁止 HDR 静默转 SDR 落地）。
   - [x] 文档同步：`prd.md` D11/C5/AC12/不在首版范围、`design.md` §4.5.1/§8 U4b·U4c、`device-capability-report.md`、`acceptance-report.md` §六。
-  - [ ] 验证：编译通过；模拟器跳过路径待跑；**真机 U4b / U4c 待验**（GT7 Pro Main10 硬编 + 产物 colr/hvcC + 相册观感）。
+  - [x] **真机 U4b 已验证（2026-10-05）**：realme RMX5010（GT7 Pro）/ ColorOS 16 具备 HEVC Main10 硬件编码器 `c2.qti.hevc.encoder`（profiles 含 2 / 4096 / 8192，上限 8192）→ **保真压缩路径可用**，HDR 源不会被迫跳过；4K HDR 可原分辨率编码。
+  - [ ] 验证：编译通过；模拟器跳过路径待跑；**真机 U4c 待验**（产物 `colr`/`hvcC` 一致性 + 相册观感）。
 
 ## 阶段 6：扩展格式（按阶段 1 与 U3 / U4 / U8 / U9 结论决定是否纳入）
 

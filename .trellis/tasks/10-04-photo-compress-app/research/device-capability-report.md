@@ -19,7 +19,17 @@
 | ABI | x86_64, arm64-v8a |
 | 采集时间 | 2026-10-04 |
 
+**真机环境（2026-10-05 补充）**：
+
+| 项 | 值 |
+|---|---|
+| 设备 | realme `RMX5010`（GT7 Pro）· 骁龙平台（编解码器前缀 `c2.qti` / `OMX.qcom`） |
+| 系统 | ColorOS `RMX5010_16.0.10.500(CN01)` / Android 16 / API 36 |
+| ABI | arm64-v8a |
+| 采集方式 | `./gradlew :app:assembleDebugAndroidTest` → `adb install -r` → `am instrument -e class ...DeviceCapabilityProbeTest` → `adb logcat -d -s PCPROBE` |
+
 > 目标真机为真我 GT7 Pro / ColorOS 16。模拟器**无法**验证 ColorOS 相册行为（U5 / U6 的相册侧接受度）与硬件编解码器差异，下表已逐项标注。
+> ⚠️ ColorOS 16 加固了 appops：`adb shell appops set ... MANAGE_EXTERNAL_STORAGE allow` 与 `pm grant` 均被拒（`uid 2000 does not have MANAGE_APP_OPS_MODES`），**「所有文件访问」必须由用户在系统设置中手动授予**。
 
 ## 原始结论（logcat: PCPROBE）
 
@@ -51,17 +61,38 @@ muxerHeif=true
 
 **结论与处置**：编码器选择必须在运行时按 `MediaCodecList` 探测结果决定，不得硬编码。
 - 模拟器上视频重编码目标编码按 `源编码 → HEVC(若满足尺寸) → H.264` 回退；VP9 源在模拟器上无可用 vp9 编码器 → 按 C4 跳过并给出原因。
-- 真机（GT7 Pro）预期具备 HEVC 硬件编码器，硬件能力差异属预期，不作为验收失败。
-- 影响：D6 / F3 的「AV1 / VP9 编码」在模拟器上**无法完整验证**，仅在真机可确认。
+- 真机（GT7 Pro）**已实测**：HEVC / H.264 均有高通硬件编码器（`c2.qti.*` / `OMX.qcom.*`，上限 8192）；**VP9 无可用编码器**（`encoderAvailable vp9=false`）；AV1 仅软件编码器（`c2.android.av1.encoder`，上限 1920）。
+- 影响：D6 / F3 的「AV1 / VP9 编码」在模拟器上**无法完整验证**；真机上 VP9 源仍须按 C4 跳过或回退，AV1 走软件编码（慢，但可用）。
 
-### U4b HEVC Main10（HDR10）编码能力 —— 待真机
+### U4b HEVC Main10（HDR10）编码能力 —— ✅ 真机已验证（2026-10-05）
 
 - 探针：`DeviceCapabilityProbe.probeHevcMain10()`，日志键 `hevcMain10Encodable=` 与逐编码器的 `hevcMain10=<encoder> ... profiles=[...]`。
-- 模拟器上 `c2.android.hevc.encoder` 为软件编码器且尺寸上限 512，**预期不含 Main10 档位**，故模拟器上 10bit HDR 源一定是「跳过」路径（正好可验证 AC12 的跳过与不改原文件）。
-- **真机（GT7 Pro / ColorOS 16）必须实测**：结果决定 D11 的落点——
-  - 有 Main10 硬件编码器 → HDR 源走 `HdrMode.PRESERVE` 保真压缩，须再验 U4c；
-  - 无 → HDR 源一律跳过并显示原因（原文件不动），不产生压缩收益。
-- 结论落盘：真机执行 `adb logcat -s PCPROBE | grep hevcMain10` 后回填本段。
+- 模拟器上 `c2.android.hevc.encoder` 为软件编码器且尺寸上限 512，**不含 Main10 档位**，故模拟器上 10bit HDR 源一定走「跳过」路径。
+
+**真机结论（realme RMX5010 / ColorOS 16 / Android 16 / arm64-v8a）**：
+
+```
+hevcMain10 encoder=c2.qti.hevc.encoder hw=true profiles=[1, 4, 2, 4096, 8192, 8] main10=true
+hevcMain10Encodable=true
+summary_line avc=true hevc=true vp9=false av1=true heif=true hevcMain10=true
+```
+
+**→ 真机具备 HEVC Main10 硬件编码器，D11 的保真压缩路径可用。**
+
+| 编码器 | 类型 | Main10 相关 profile | 尺寸上限 |
+|---|---|---|---|
+| `c2.qti.hevc.encoder` | **硬件** | ✅ profile 2 / 4096 / 8192 | 8192（可原分辨率编 4K HDR） |
+| `OMX.qcom.video.encoder.hevc` | 硬件（同上组件的 alias） | ✅ 同源 | 8192 |
+| `c2.qti.hevc.encoder.hdr` | **硬件（HDR 专用）** | XML 声明 `hdr-editing` | **4096** |
+| `c2.qti.hevc.encoder.cq` | 硬件 | — | 512（恒质量模式） |
+| `c2.android.hevc.encoder` | 软件 | ❌ | 512（不可用） |
+
+真机编码器全貌（`encoderAvailable`）：`avc=true / hevc=true / vp9=false / av1=true`，另有 `c2.qti.dv.encoder`（杜比视界，8192）与 `c2.android.apv.encoder`（Android 16 APV，1920）。
+
+**对实现的影响**：
+- `MediaClassifier.deviceCanPreserveHdr` 在真机返回 `true` → HDR 源进入 `HdrMode.PRESERVE`，不触发跳过。
+- 4K HDR（3840×2160）在 `c2.qti.hevc.encoder` 上**可按原分辨率编码**，不会因尺寸上限被迫缩放（`selectEncoder(requireMain10 = true)` 的「不降分辨率」约束成立）。
+- ⚠️ 待观察：`selectEncoder` 按 `MediaCodecList.REGULAR_CODECS` 顺序取首个满足 Main10 的编码器，未显式偏好 HDR 专用的 `c2.qti.hevc.encoder.hdr`。若后续发现普适编码器在 HDR 上色准/元数据保留不佳，可加一条「优先 hdr 专用编码器」的偏好。**（U4c 需一并观察）**
 
 ### U4c HDR 保真链路真机复验 —— 待真机
 

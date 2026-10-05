@@ -21,6 +21,7 @@ keystore.properties
 local-test-media/
 local-device-reports/
 local-recovery/
+.tmp-device/
 
 # Temporary output
 *.log

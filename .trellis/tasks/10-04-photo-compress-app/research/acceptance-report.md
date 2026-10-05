@@ -245,9 +245,13 @@ Room 升到 v2 并提供 `MIGRATION_1_2`（新增 `originalPath`、`excludedAlbu
 | 项 | 状态 |
 |---|---|
 | 编译 | ✅ `:app:compileDebugKotlin` 通过 |
+| 单元测试 | ✅ `:app:testDebugUnitTest` 62 条全绿 |
 | 样本属性 | ✅ `vid_10bit_hdr.mp4` = hvcC profile_idc 2 / 10bit / 无 colr，覆盖兜底路径 |
-| 模拟器跳过路径 | ⏳ 待跑（模拟器 HEVC 上限 512、预期无 Main10 → 必然跳过） |
-| 真机保真压缩 | ⏳ **U4b / U4c 必须真机验证**（GT7 Pro 是否有 Main10 硬编；产物 colr/hvcC 与相册观感） |
+| 真机安装 | ✅ realme RMX5010 / ColorOS 16 安装成功（`lastUpdateTime=2026-10-05 15:40:27`） |
+| **真机 U4b 能力探测** | ✅ **`hevcMain10Encodable=true`** —— 存在 `c2.qti.hevc.encoder`（硬件，profiles 含 Main10/HDR10/HDR10Plus，上限 8192）→ 保真路径可用 |
+| 模拟器跳过路径 | ⏳ 待跑（模拟器 HEVC 上限 512、无 Main10 → 必然跳过） |
+| **真机 U4c 保真链路** | ⏳ **待验**（PRESERVE 产物 `colr`/`hvcC` 一致性 + 相册观感） |
+| 真机「所有文件访问」授权 | ⚠️ **需用户手动授予** —— ColorOS 16 拒绝 `adb shell appops set` 与 `pm grant`（`uid 2000 does not have MANAGE_APP_OPS_MODES`） |
 
 ### 被删除的旧行为
 
