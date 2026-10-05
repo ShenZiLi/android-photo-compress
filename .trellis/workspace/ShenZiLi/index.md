@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
+- **Total Sessions**: 18
 - **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~522 | Active |
+| `journal-1.md` | ~552 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-10-06 | 设置二级页间距与返回路径、已压缩图标 | `7c12910` | `master` |
 | 17 | 2026-10-06 | 修正紧凑类型菜单点击动效 | `4837aac` | `master` |
 | 16 | 2026-10-06 | 统一一级二级页面全选按钮 | `8518260` | `master` |
 | 15 | 2026-10-06 | 删除已压缩页右上角删除图标 | `7d46c1e` | `master` |

@@ -520,3 +520,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 18: 设置二级页间距与返回路径、已压缩图标
+<!-- trellis-session: v=2 fp=8c8fe8622ee91f5f -->
+
+**Date**: 2026-10-06
+**Task**: 设置二级页间距与返回路径、已压缩图标
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.17完成设置二级页标题右移、回收站返回设置、已压缩底部图标改为缩小图片样式。安装包已生成，真机已断开，未安装。
+
+### Main Changes
+
+- AppBar返回按钮与标题默认间距12dp；设置三个二级页面共用系统BackHandler返回设置，弹窗与信息面板优先关闭；回收站页面按钮返回设置并保留底部设置选中；已压缩导航使用PhotoSizeSelectSmall填充/描边图标。同步UI规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c12910` | fix(ui): refine settings navigation and compressed tab icon |
+
+### Testing
+
+- [OK] assembleDebug成功，git diff --check通过；安装尝试提示device 90d3e7c6 not found，devices列表为空。产物artifacts/qingcun-0.1.17-debug-20261006.apk；未运行自动化测试，真机布局、图标和返回交互待确认。
+
+### Status
+
+[OK] **Completed**
