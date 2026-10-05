@@ -70,3 +70,33 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: 0.1.2 首页调整版安装到真机
+<!-- trellis-session: v=2 fp=48adb3d87657cbf9 -->
+
+**Date**: 2026-10-05
+**Task**: 0.1.2 首页调整版安装到真机
+**Branch**: `master`
+
+### Summary
+
+0.1.2 APK 已覆盖安装到连接的 GT7 Pro，安装返回 Success，读回 versionName=0.1.2 / versionCode=3。
+
+### Main Changes
+
+- 覆盖安装已有应用，保留现有应用数据。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8516cc` | fix(ui): simplify home statistics and keep savings on one line |
+
+### Testing
+
+- [OK] 核对安装结果及实际安装版本；没有进行界面或媒体测试，真机验收由用户自行操作。
+
+### Status
+
+[OK] **Completed**
