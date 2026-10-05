@@ -7,9 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -179,11 +176,11 @@ fun GlassButton(
 ) {
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, tween(150, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)), label = "glassPress")
+    val scale = motionFloat(if (pressed && enabled && LocalMotionEnabled.current) 0.96f else 1f, "glassPress", AppMotion.Press)
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(28.dp)
-    val fill = if (enabled) containerColor else scheme.onSurface.copy(alpha = 0.08f)
-    val foreground = if (enabled) contentColor else scheme.onSurface.copy(alpha = 0.38f)
+    val fill = motionColor(if (enabled) containerColor else scheme.onSurface.copy(alpha = 0.08f), "glassFill")
+    val foreground = motionColor(if (enabled) contentColor else scheme.onSurface.copy(alpha = 0.38f), "glassForeground")
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -205,7 +202,10 @@ fun GlassButton(
 
 @Composable
 fun GlassIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) {
-    GlassSurface(modifier = modifier.size(48.dp), radius = 24.dp, blur = false) {
-        IconButton(onClick = onClick, modifier = Modifier.size(48.dp), enabled = enabled, content = content)
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale = motionFloat(if (pressed && enabled && LocalMotionEnabled.current) 0.97f else 1f, "glassIconPress", AppMotion.Press)
+    GlassSurface(modifier = modifier.size(48.dp).graphicsLayer { scaleX = scale; scaleY = scale }, radius = 24.dp, blur = false) {
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp), enabled = enabled, interactionSource = interactions, content = content)
     }
 }

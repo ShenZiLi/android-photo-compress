@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import com.photocompress.app.ui.components.GlassScene
+import com.photocompress.app.ui.components.MotionProvider
 
 private val LightScheme = lightColorScheme(
     primary = LightPrimary,
@@ -68,7 +69,7 @@ fun PhotoCompressTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,
-            content = { GlassScene(content = content) },
+            content = { MotionProvider { GlassScene(content = content) } },
         )
     }
 }

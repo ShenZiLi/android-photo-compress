@@ -2,6 +2,8 @@ package com.photocompress.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,11 +24,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,21 +124,20 @@ fun EmptyState(title: String, desc: String, modifier: Modifier = Modifier) {
 /** 圆形勾选框（图集封面右上角 / 图片右上角共用）。 */
 @Composable
 fun PickCircle(checked: Boolean, modifier: Modifier = Modifier, size: Int = 22) {
-    val bg = if (checked) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.34f)
+    val bg = motionColor(if (checked) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.34f), "pickFill")
+    val checkAlpha = motionFloat(if (checked) 1f else 0f, "pickCheck", AppMotion.Press)
     Box(
         modifier = modifier.size(size.dp).clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0.85f))))
+            .background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = bg.alpha * 0.85f))))
             .border(1.dp, Color.White.copy(alpha = 0.55f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        if (checked) {
-            Icon(
-                imageVector = Icons.Filled.Check,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size((size * 0.6f).dp),
-            )
-        }
+        Icon(
+            imageVector = Icons.Filled.Check,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size((size * 0.6f).dp).graphicsLayer { alpha = checkAlpha },
+        )
     }
 }
 
@@ -193,16 +197,23 @@ fun SegmentedControl(
     ) {
         options.forEachIndexed { index, label ->
             val active = index == selectedIndex
+            val interactions = remember(index) { MutableInteractionSource() }
+            val pressed by interactions.collectIsPressedAsState()
+            val scale = motionFloat(if (pressed && LocalMotionEnabled.current) 0.97f else 1f, "tierPress", AppMotion.Press)
+            val fill = motionColor(if (active) MaterialTheme.colorScheme.primary else Color.Transparent, "tierFill")
+            val edge = motionColor(if (active) Color.White.copy(alpha = 0.32f) else Color.Transparent, "tierEdge")
+            val text = motionColor(if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.appColors.onSurfaceMuted, "tierText")
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
                     .clip(RoundedCornerShape(999.dp))
                     .background(Brush.verticalGradient(listOf(
-                        if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.Transparent,
+                        fill,
+                        fill.copy(alpha = fill.alpha * 0.85f),
                     )))
-                    .border(1.dp, if (active) Color.White.copy(alpha = 0.32f) else Color.Transparent, RoundedCornerShape(999.dp))
-                    .selectable(selected = active, role = Role.Tab, onClick = { onSelect(index) })
+                    .border(1.dp, edge, RoundedCornerShape(999.dp))
+                    .selectable(selected = active, role = Role.Tab, interactionSource = interactions, onClick = { onSelect(index) })
                     .heightIn(min = 48.dp)
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -211,7 +222,7 @@ fun SegmentedControl(
                     label,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.appColors.onSurfaceMuted,
+                    color = text,
                 )
             }
         }

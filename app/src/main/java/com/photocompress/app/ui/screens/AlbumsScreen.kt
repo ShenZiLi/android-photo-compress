@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -40,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -73,6 +76,11 @@ import com.photocompress.app.ui.albumTodoAll
 import com.photocompress.app.ui.applyDoneFilter
 import com.photocompress.app.ui.applyTodoFilter
 import com.photocompress.app.ui.components.AppBar
+import com.photocompress.app.ui.components.AppMotion
+import com.photocompress.app.ui.components.LocalMotionEnabled
+import com.photocompress.app.ui.components.motionColor
+import com.photocompress.app.ui.components.motionFloat
+import com.photocompress.app.ui.components.motionTween
 import com.photocompress.app.ui.components.Badge
 import com.photocompress.app.ui.components.EmptyState
 import com.photocompress.app.ui.components.GlassSurface
@@ -114,6 +122,7 @@ fun TodoLevel1(
         ) {
             items(albums, key = { it.name }) { album ->
                 AlbumCard(
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     coverUris = album.items.take(4).map { it.uri },
                     name = album.name,
                     line2 = "${formatCount(album.count)} 项 · ${formatSize(album.bytes)}",
@@ -161,6 +170,7 @@ fun DoneLevel1(
         ) {
             items(albums, key = { it.name }) { album ->
                 AlbumCard(
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     coverUris = album.items.take(4).mapNotNull { it.item?.uri },
                     name = album.name,
                     line2 = album.sizeLine,
@@ -177,6 +187,7 @@ fun DoneLevel1(
 
 @Composable
 private fun AlbumCard(
+    modifier: Modifier = Modifier,
     coverUris: List<android.net.Uri>,
     name: String,
     line2: String,
@@ -187,7 +198,8 @@ private fun AlbumCard(
     onTogglePick: () -> Unit,
 ) {
     val context = LocalContext.current
-    GlassSurface(modifier = Modifier.fillMaxWidth(), blur = false) {
+    val selectionEdge = motionColor(if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), "albumSelection")
+    GlassSurface(modifier = modifier.fillMaxWidth(), blur = false) {
         Column(modifier = Modifier.padding(8.dp)) {
             Box {
                 Box(
@@ -195,7 +207,7 @@ private fun AlbumCard(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(16.dp))
-                        .border(if (picked) 2.dp else 1.dp, if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                        .border(if (picked) 2.dp else 1.dp, selectionEdge, RoundedCornerShape(16.dp))
                         .combinedClickable(onClick = onOpen),
                 ) {
                     CollageCover(context, coverUris)
@@ -302,6 +314,7 @@ fun TodoLevel2(
         ) {
             items(filtered, key = { it.id }) { item ->
                 MediaTile(
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     uri = item.uri,
                     picked = item.id in level.pickedItems,
                     selectable = item.compressible,
@@ -375,6 +388,7 @@ fun DoneLevel2(
                 val restorable = dm.restorable
                 val days = daysLeft(dm.record.restoreDeadlineMs, now)
                 MediaTile(
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     uri = dm.item?.uri,
                     picked = dm.record.mediaStoreId in level.pickedItems,
                     selectable = restorable,
@@ -399,6 +413,7 @@ fun DoneLevel2(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MediaTile(
+    modifier: Modifier = Modifier,
     uri: android.net.Uri?,
     picked: Boolean,
     selectable: Boolean,
@@ -411,12 +426,13 @@ private fun MediaTile(
     onLongClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val selectionEdge = motionColor(if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), "mediaSelection")
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(RoundedCornerShape(16.dp))
-            .border(if (picked) 2.dp else 1.dp, if (picked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .border(if (picked) 2.dp else 1.dp, selectionEdge, RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics { selected = picked }
             // 键盘等价路径（AC16）：Enter 打开信息、Space 勾选
@@ -487,6 +503,11 @@ private fun FilterChips(
         options.forEach { (value, label) ->
             val active = value == selected
             val interactions = remember(value) { MutableInteractionSource() }
+            val pressed by interactions.collectIsPressedAsState()
+            val scale = motionFloat(if (pressed && LocalMotionEnabled.current) 0.97f else 1f, "filterPress", AppMotion.Press)
+            val fill = motionColor(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f), "filterFill")
+            val edge = motionColor(Color.White.copy(alpha = if (active) 0.35f else 0.12f), "filterEdge")
+            val text = motionColor(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.onSurfaceMuted, "filterText")
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(24.dp))
@@ -503,9 +524,10 @@ private fun FilterChips(
                 // 视觉胶囊 32dp；保留外层 48dp 触摸范围，文字与胶囊共同居中。
                 Box(
                     modifier = Modifier
+                        .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
-                        .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.12f), RoundedCornerShape(16.dp))
+                        .background(fill)
+                        .border(1.dp, edge, RoundedCornerShape(16.dp))
                         // 外层保留 48dp 点击范围；中心扩散反馈仅绘制在内层胶囊，避免外层点击坐标造成偏移。
                         .indication(interactionSource = interactions, indication = ripple(bounded = false))
                         .heightIn(min = 32.dp)
@@ -515,7 +537,7 @@ private fun FilterChips(
                     Text(
                         label,
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.onSurfaceMuted,
+                        color = text,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1,
                     )

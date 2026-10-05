@@ -1,6 +1,9 @@
 package com.photocompress.app.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +51,9 @@ import com.photocompress.app.ui.Totals
 import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.comparisonRatios
 import com.photocompress.app.ui.components.AppBar
+import com.photocompress.app.ui.components.AppMotion
+import com.photocompress.app.ui.components.motionFloat
+import com.photocompress.app.ui.components.motionTween
 import com.photocompress.app.ui.components.CardSurface
 import com.photocompress.app.ui.formatCount
 import com.photocompress.app.ui.formatSize
@@ -81,9 +87,11 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
             },
         )
 
-        if (state.fullScan) {
-            ScanProgressCard(state, modifier = Modifier.padding(horizontal = 20.dp))
-            Spacer(Modifier.height(14.dp))
+        AnimatedVisibility(visible = state.fullScan, enter = fadeIn(motionTween()), exit = fadeOut(motionTween(AppMotion.Exit))) {
+            Column {
+                ScanProgressCard(state, modifier = Modifier.padding(horizontal = 20.dp))
+                Spacer(Modifier.height(14.dp))
+            }
         }
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             HeroCard(totals)
@@ -123,6 +131,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
 /** 首次扫描进度：给出可见进度条与已扫描数量，避免长时间只显示「正在扫描媒体库…」。 */
 @Composable
 private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
+    val progress = motionFloat(state.scanProgress.coerceIn(0f, 1f), "scanProgress", AppMotion.Progress)
     CardSurface(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -140,7 +149,7 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(10.dp))
             if (state.scanTotal > 0) {
                 LinearProgressIndicator(
-                    progress = { state.scanProgress },
+                    progress = { progress },
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
@@ -238,6 +247,7 @@ private data class KindSegment(
 private fun KindDonut(segments: List<KindSegment>, totalBytes: Long) {
     val track = MaterialTheme.appColors.surfaceSunken
     val muted = MaterialTheme.appColors.onSurfaceMuted
+    val sweeps = segments.map { motionFloat(if (totalBytes > 0L) 360f * it.bytes / totalBytes else 0f, "kindArc${it.kind}") }
     Box(contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.size(116.dp)) {
             val stroke = 12.dp.toPx()
@@ -255,9 +265,9 @@ private fun KindDonut(segments: List<KindSegment>, totalBytes: Long) {
             )
             if (totalBytes <= 0L) return@Canvas
             var start = -90f
-            for (s in segments) {
-                if (s.bytes <= 0L) continue
-                val sweep = 360f * s.bytes / totalBytes
+            for ((index, s) in segments.withIndex()) {
+                val sweep = sweeps[index]
+                if (sweep <= 0f) continue
                 drawArc(
                     color = s.color,
                     startAngle = start,
@@ -403,7 +413,8 @@ private fun CompareMetric(
     val todoColor = MaterialTheme.appColors.dataTodo
     val doneColor = MaterialTheme.appColors.dataDone
     // 比例必须用原始数值（字节/个数）计算，不能用格式化后的字符串
-    val (todoRatio, doneRatio) = comparisonRatios(todoRaw, doneRaw)
+    val (todoRatio, _) = comparisonRatios(todoRaw, doneRaw)
+    val ratio = motionFloat(todoRatio, "compareRatio$title")
     Column {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -414,22 +425,17 @@ private fun CompareMetric(
             Text(total, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
         }
         Spacer(Modifier.height(10.dp))
-        Row(
+        Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .height(12.dp)
                 .clip(CircleShape),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Box(
-                modifier = Modifier.weight(todoRatio).fillMaxWidth().height(12.dp)
-                    .background(todoColor),
-            )
-            Box(
-                modifier = Modifier.weight(doneRatio).fillMaxWidth().height(12.dp)
-                    .background(doneColor),
-            )
+            val gap = 2.dp.toPx()
+            val left = (size.width - gap).coerceAtLeast(0f) * ratio.coerceIn(0f, 1f)
+            drawRect(todoColor, size = Size(left, size.height))
+            drawRect(doneColor, topLeft = androidx.compose.ui.geometry.Offset(left + gap, 0f), size = Size((size.width - left - gap).coerceAtLeast(0f), size.height))
         }
         Spacer(Modifier.height(10.dp))
         // 对比图例保持两列等宽，右列起点不随左列文字长度浮动。

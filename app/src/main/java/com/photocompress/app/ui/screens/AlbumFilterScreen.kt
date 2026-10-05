@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.allAlbumNames
 import com.photocompress.app.ui.components.AppBar
+import com.photocompress.app.ui.components.motionColor
+import com.photocompress.app.ui.components.motionTween
 import com.photocompress.app.ui.components.EmptyState
 import com.photocompress.app.ui.components.GlassSurface
 import com.photocompress.app.ui.formatCount
@@ -125,8 +127,11 @@ fun AlbumFilterScreen(
 private fun ShownSwitch(shown: Boolean) {
     val thumbOffset by animateDpAsState(
         targetValue = if (shown) TrackWidth - ThumbSize - ThumbInset else ThumbInset,
+        animationSpec = motionTween(),
         label = "thumbOffset",
     )
+    val trackColor = motionColor(if (shown) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.surfaceSunken, "switchTrack")
+    val thumbColor = motionColor(if (shown) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline, "switchThumb")
     val shape = RoundedCornerShape(TrackHeight / 2)
 
     Box(
@@ -134,8 +139,8 @@ private fun ShownSwitch(shown: Boolean) {
             .size(width = TrackWidth, height = TrackHeight)
             .clip(shape)
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
-                if (shown) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.surfaceSunken,
-                if (shown) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else MaterialTheme.appColors.surfaceSunken,
+                trackColor,
+                trackColor.copy(alpha = trackColor.alpha * 0.8f),
             )))
             .border(
                 width = 1.dp,
@@ -147,11 +152,11 @@ private fun ShownSwitch(shown: Boolean) {
     ) {
         Box(
             modifier = Modifier
-                .offset(x = thumbOffset)
+                .graphicsLayer { translationX = thumbOffset.toPx() }
                 .size(ThumbSize)
                 .clip(CircleShape)
                 .background(
-                    if (shown) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline,
+                    thumbColor,
                 ),
         )
     }
