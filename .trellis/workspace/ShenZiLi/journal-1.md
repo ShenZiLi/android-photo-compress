@@ -280,3 +280,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: 首页节省百分比固定负号与统计卡居中
+<!-- trellis-session: v=2 fp=565068f6c4df5418 -->
+
+**Date**: 2026-10-05
+**Task**: 首页节省百分比固定负号与统计卡居中
+**Branch**: `master`
+
+### Summary
+
+已省摘要百分比固定负号（含零值），未压缩和已压缩卡片内容改为居中，0.1.9 已覆盖安装真机。
+
+### Main Changes
+
+- 色点与标题组合、数量及体积在各自卡片居中，移除过时的对齐说明；统计口径不变。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d90e81e` | fix(ui): center home statistics and prefix savings percentage with minus |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（5 秒）、差异检查通过；安装 Success，读回 0.1.9 / versionCode 10；未运行测试，真机界面由用户自行验收。
+
+### Status
+
+[OK] **Completed**
