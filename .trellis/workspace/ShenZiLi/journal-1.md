@@ -580,3 +580,40 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 20: GitHub 图文 README 与正式 APK 发布
+<!-- trellis-session: v=2 fp=0559741907d6a626 -->
+
+**Date**: 2026-10-06
+**Task**: GitHub 图文 README 与正式 APK 发布
+**Branch**: `master`
+
+### Summary
+
+编写核心页面图文 README，使用独立 Android 16 模拟器取得 11 张真实截图；固定正式签名与 Actions 发布流程已推送，v0.1.18 正式发布并完成下载校验。
+
+### Main Changes
+
+- README 覆盖总览、图集、网格、多选、压缩确认、还原、媒体详情、独立档位、过滤和回收站；使用合成演示媒体，说明格式、时间、备份占用与签名升级边界。
+- 新增版本标签发布工作流，Gradle 环境变量签名；签名资料仅在忽略目录和 Actions Secrets 保存，第三方 Actions 固定提交，已有 Release 不覆盖。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d490f7` | feat(release): add illustrated README and signed Android release workflow |
+| `0178c78` | docs: record verified v0.1.18 GitHub publication |
+
+### Testing
+
+- [OK] assembleRelease 成功；11 张 PNG、README 链接与 GitHub Markdown 渲染、YAML、差异和忽略规则检查通过；未另行运行测试套件。
+- [OK] Actions 37350484048 success，正式 Release v0.1.18 包含 APK/校验值/公开证书；下载 APK SHA-256 与清单一致，apksigner 和 aapt 验证通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机正式版安装与播放由使用者按签名兼容性安排；当前未卸载调试版，整体应用任务保持进行中。
