@@ -35,12 +35,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.photocompress.app.R
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.ui.Totals
 import com.photocompress.app.ui.UiState
@@ -61,7 +63,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
     val totals = state.totals()
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(
-            title = "照片压缩",
+            title = stringResource(R.string.app_name),
             subtitle = when {
                 state.fullScan -> "正在扫描媒体库…"
                 state.scanning -> "正在同步媒体变更…"

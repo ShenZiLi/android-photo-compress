@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,7 +66,7 @@ private fun AppEntry(vm: AppViewModel) {
         ) {
             Text("需要文件访问权限", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "照片压缩需要「所有文件访问」权限，才能原地改写照片并保留拍摄时间与位置信息。",
+                "${stringResource(R.string.app_name)}需要「所有文件访问」权限，才能原地改写照片并保留拍摄时间与位置信息。",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 12.dp, bottom = 20.dp),
             )
