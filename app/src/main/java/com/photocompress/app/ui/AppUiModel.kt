@@ -102,6 +102,12 @@ data class Totals(
     val pct: Float,
     val restorableCount: Int,
     val restorableBytes: Long,
+    /**
+     * 三类媒体的**当前实际占用**（字节）：未压缩按原始大小，已压缩按压缩后大小。
+     * 用于首页占用饼图——口径是"此刻占了多少"，不是"压缩前有多少"。
+     * 缺失的类别视为 0（在 UI 侧补齐三行，保证图例条目稳定）。
+     */
+    val kindBytes: Map<MediaKind, Long>,
 )
 
 private val ACTIVE_STATUSES = setOf(
@@ -256,6 +262,16 @@ fun UiState.totals(): Totals {
     val saved = (before - after).coerceAtLeast(0)
     val restorable = done.filter { it.restorable }
     val pct = if (before + todoBytes > 0) saved.toFloat() / (before + todoBytes) * 100f else 0f
+
+    // 三类媒体的当前占用：未压缩取原始大小；已压缩优先取实时文件大小
+    // （adopted 条目账本缺失、compressedSize 不可信，只要文件还在库里就以实际为准）。
+    val kindBytes = HashMap<MediaKind, Long>()
+    for (m in todo) kindBytes[m.kind] = (kindBytes[m.kind] ?: 0L) + m.size
+    for (d in done) {
+        val current = d.item?.size ?: d.compressedSize
+        kindBytes[d.kind] = (kindBytes[d.kind] ?: 0L) + current
+    }
+
     return Totals(
         todoCount = todo.size,
         todoBytes = todoBytes,
@@ -266,6 +282,7 @@ fun UiState.totals(): Totals {
         pct = pct,
         restorableCount = restorable.size,
         restorableBytes = restorable.sumOf { it.originalSize },
+        kindBytes = kindBytes,
     )
 }
 

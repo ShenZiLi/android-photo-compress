@@ -20,6 +20,14 @@ data class AppColors(
     val onDanger: Color,
     val dataTodo: Color,
     val dataDone: Color,
+    /**
+     * 媒体大类占比色（首页占用饼图）。
+     * 与 [dataTodo] / [dataDone]（未压缩 / 已压缩）是**不同维度**的语义，勿混用：
+     * 那对是「处理状态」，这三个是「媒体类型」。
+     */
+    val kindPhoto: Color,
+    val kindLive: Color,
+    val kindVideo: Color,
 )
 
 val LightAppColors = AppColors(
@@ -33,6 +41,9 @@ val LightAppColors = AppColors(
     onDanger = Color(0xFFFFFFFF),
     dataTodo = Color(0xFF2F6BD8),
     dataDone = Color(0xFF1F9E6B),
+    kindPhoto = Color(0xFF2F6BD8),
+    kindLive = Color(0xFF8B5CF6),
+    kindVideo = Color(0xFFE07B39),
 )
 
 val DarkAppColors = AppColors(
@@ -46,6 +57,9 @@ val DarkAppColors = AppColors(
     onDanger = Color(0xFF690005),
     dataTodo = Color(0xFF7FA8FF),
     dataDone = Color(0xFF5FD0A0),
+    kindPhoto = Color(0xFF7FA8FF),
+    kindLive = Color(0xFFBE9CFF),
+    kindVideo = Color(0xFFF0A868),
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }

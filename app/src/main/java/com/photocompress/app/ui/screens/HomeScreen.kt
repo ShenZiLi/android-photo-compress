@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.ui.Totals
 import com.photocompress.app.ui.UiState
 import com.photocompress.app.ui.comparisonRatios
@@ -44,6 +46,7 @@ import com.photocompress.app.ui.theme.appColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(state: UiState, onRescan: () -> Unit) {
@@ -144,58 +147,142 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * 首页主卡：按「普通图片 / 实况图片 / 视频」三类展示**当前实际占用**占比。
+ *
+ * 口径说明：未压缩媒体按原始大小、已压缩媒体按压缩后大小求和，
+ * 因此饼图反映的是"此刻占了多少磁盘"，而非"压缩前有多少"。
+ * 下方保留「已节约」摘要——那是本应用的核心成果指标，不因换饼图而丢失。
+ */
 @Composable
 private fun HeroCard(totals: Totals) {
+    val colors = MaterialTheme.appColors
+    val segments = listOf(
+        KindSegment(MediaKind.PHOTO, "普通图片", colors.kindPhoto, totals.kindBytes[MediaKind.PHOTO] ?: 0L),
+        KindSegment(MediaKind.LIVE_PHOTO, "实况图片", colors.kindLive, totals.kindBytes[MediaKind.LIVE_PHOTO] ?: 0L),
+        KindSegment(MediaKind.VIDEO, "视频", colors.kindVideo, totals.kindBytes[MediaKind.VIDEO] ?: 0L),
+    )
+    val totalBytes = segments.sumOf { it.bytes }
+
     CardSurface(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ProgressRing(percent = totals.pct)
-            Spacer(Modifier.width(16.dp))
-            Column {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KindDonut(segments = segments, totalBytes = totalBytes)
+                Spacer(Modifier.width(18.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    segments.forEach { seg -> KindLegendRow(seg, totalBytes) }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = colors.divider)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     "已节约 ${formatSize(totals.saved)}",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "${totals.pct.roundToInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.dataDone,
                 )
             }
         }
     }
 }
 
+/** 饼图的一段：一种媒体类型的展示名、配色与占用字节数。 */
+private data class KindSegment(
+    val kind: MediaKind,
+    val label: String,
+    val color: Color,
+    val bytes: Long,
+)
+
+/**
+ * 三段环形图，按占用字节数分配弧长，中心显示总占用。
+ * 用 `StrokeCap.Butt` 而非圆头：圆头会让相邻段互相压边，
+ * 视觉上扭曲实际占比（段越短偏差越明显）。
+ */
 @Composable
-private fun ProgressRing(percent: Float) {
-    val accent = MaterialTheme.colorScheme.primary
+private fun KindDonut(segments: List<KindSegment>, totalBytes: Long) {
     val track = MaterialTheme.appColors.surfaceSunken
+    val muted = MaterialTheme.appColors.onSurfaceMuted
     Box(contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(100.dp)) {
-            val stroke = 10.dp.toPx()
+        Canvas(modifier = Modifier.size(116.dp)) {
+            val stroke = 12.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
+            val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
             drawArc(
                 color = track,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                topLeft = topLeft,
                 size = arcSize,
                 style = Stroke(width = stroke, cap = StrokeCap.Butt),
             )
-            drawArc(
-                color = accent,
-                startAngle = -90f,
-                sweepAngle = 360f * (percent.coerceIn(0f, 100f) / 100f),
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            if (totalBytes <= 0L) return@Canvas
+            var start = -90f
+            for (s in segments) {
+                if (s.bytes <= 0L) continue
+                val sweep = 360f * s.bytes / totalBytes
+                drawArc(
+                    color = s.color,
+                    startAngle = start,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Butt),
+                )
+                start += sweep
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("总占用", style = MaterialTheme.typography.labelSmall, color = muted)
+            Text(
+                formatSize(totalBytes),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
             )
         }
+    }
+}
+
+/** 图例一行：色点 + 名称 + 占比 + 体积。 */
+@Composable
+private fun KindLegendRow(seg: KindSegment, totalBytes: Long) {
+    val pct = if (totalBytes > 0L) seg.bytes.toFloat() / totalBytes * 100f else 0f
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
+                .background(seg.color),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(seg.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
         Text(
-            text = "${percent.toInt()}%",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            "${pct.roundToInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            formatSize(seg.bytes),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.appColors.onSurfaceMuted,
         )
     }
 }
