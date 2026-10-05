@@ -130,3 +130,33 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: MPF 不支持提示去除图片名称
+<!-- trellis-session: v=2 fp=2bf1fc5c05ca3940 -->
+
+**Date**: 2026-10-05
+**Task**: MPF 不支持提示去除图片名称
+**Branch**: `master`
+
+### Summary
+
+MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因提示移除文件名，0.1.4 已覆盖安装真机。
+
+### Main Changes
+
+- MPF 图数动态保留，移除含与图数之间的空格；跳过通知只显示原因，压缩判定规则不变。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26c2e62` | fix(ui): simplify MPF skip message and remove filename prefix |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（4 秒）、差异检查通过；安装 Success，读回 0.1.4 / versionCode 5。没有运行测试或操作真实媒体，界面由用户验收。
+
+### Status
+
+[OK] **Completed**
