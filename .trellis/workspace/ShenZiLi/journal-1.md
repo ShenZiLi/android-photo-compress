@@ -490,3 +490,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: 修正紧凑类型菜单点击动效
+<!-- trellis-session: v=2 fp=d9af58d3f401b60b -->
+
+**Date**: 2026-10-06
+**Task**: 修正紧凑类型菜单点击动效
+**Branch**: `master`
+
+### Summary
+
+修正未压缩与已压缩图片网格类型菜单动效尺寸不匹配；轻存0.1.16已安装到真机。
+
+### Main Changes
+
+- 根因是selectable的默认反馈绘制在48dp点击层，视觉胶囊只有32dp。外层取消默认indication，内层共享InteractionSource并在圆角裁切内绘制中心扩散ripple，保留点击范围与原生选中语义。同步UI规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4837aac` | fix(ui): clip compact filter feedback to visible capsules |
+
+### Testing
+
+- [OK] assembleDebug成功；git diff --check通过；真机90d3e7c6安装Success，读取版本0.1.16/code17。未运行自动化测试，真机动效观感与深浅色状态待用户确认。
+
+### Status
+
+[OK] **Completed**
