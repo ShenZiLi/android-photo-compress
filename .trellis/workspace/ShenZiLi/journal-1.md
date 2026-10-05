@@ -310,3 +310,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: 删除未压缩页未选择下方提示
+<!-- trellis-session: v=2 fp=a91ff8bf3cdd68fe -->
+
+**Date**: 2026-10-05
+**Task**: 删除未压缩页未选择下方提示
+**Branch**: `master`
+
+### Summary
+
+删除未压缩一级页面的勾选图集或图片后开始压缩提示，未选择时不渲染小字及空白行，与已压缩一级页面一致；0.1.10 已安装真机。
+
+### Main Changes
+
+- 移除未压缩一级未选择提示分支，沿用空字符串处理；更新说明注释。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fdca0df` | fix(ui): remove unselected compression guidance from action bar |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（5 秒）、差异检查通过；安装 Success，读回 0.1.10 / versionCode 11；未运行测试，真机界面由用户自行验收。
+
+### Status
+
+[OK] **Completed**
