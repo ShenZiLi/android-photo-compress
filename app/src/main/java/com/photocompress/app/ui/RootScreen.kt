@@ -308,19 +308,26 @@ private fun ActionBar(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(
-                        when {
-                            !summary.empty && isTodo ->
-                                "预计可节约约 ${formatSize((summary.bytes * 0.37).toLong())}（按平衡档估算）"
-                            !summary.empty && !isTodo -> "将恢复原始画质与体积"
-                            level == 1 && isTodo -> "勾选图集或图片后开始压缩"
-                            level == 1 -> "勾选图集或图片后可还原"
-                            isTodo -> "勾选图片后开始压缩"
-                            else -> "仅 30 天内可还原"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.appColors.onSurfaceMuted,
-                    )
+                    // 已压缩页一级、未压缩页二级不展示提示：分支保留但输出空值，
+                    // 连同 Text 一起不渲染（否则会留下一行空白高度）。
+                    // 注意不能直接删分支——删掉 isTodo 那条会让未压缩二级掉进
+                    // else 分支、错显「仅 30 天内可还原」。
+                    val hint = when {
+                        !summary.empty && isTodo ->
+                            "预计可节约约 ${formatSize((summary.bytes * 0.37).toLong())}（按平衡档估算）"
+                        !summary.empty && !isTodo -> "将恢复原始画质与体积"
+                        level == 1 && isTodo -> "勾选图集或图片后开始压缩"
+                        level == 1 -> ""
+                        isTodo -> ""
+                        else -> "仅 30 天内可还原"
+                    }
+                    if (hint.isNotEmpty()) {
+                        Text(
+                            hint,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.appColors.onSurfaceMuted,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(12.dp))
