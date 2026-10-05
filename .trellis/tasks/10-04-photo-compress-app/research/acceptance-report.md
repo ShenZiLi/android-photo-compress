@@ -293,3 +293,67 @@ Room 升到 v2 并提供 `MIGRATION_1_2`（新增 `originalPath`、`excludedAlbu
 
 > **教训**：验证元数据搬运时，「存在性」检查是不够的——
 > 产物自带的同名空框会让它误判通过，**必须逐字节比对内容**。
+
+## 八、实况照片压缩后相册无法播放（根因已定位）
+
+### 现象
+
+实况照片压缩后，ColorOS 相册无法播放其动态部分。
+
+### 结论一：文件本身完全正确
+
+对同一条实况照片的压缩前后做逐项比对（25,064,354 → 8,893,299）：
+
+| 检查项 | 结果 |
+|---|---|
+| 段边界（主图 / GainMap / MotionPhoto） | ✅ XMP 声明与实际 `ftyp` 位置**完全吻合** |
+| XMP 结构 | ✅ 只改了 `OpCamera:VideoLength` 与 `Item:Length` 两个数字，oplus 识别属性（`MotionPhotoOwner=oplus`、`OLivePhotoVersion=2`、两个时间戳）**全部保留** |
+| MPF 索引 | ✅ offset 基准（TIFF 起点）正确，2 个条目均指向实际位置 |
+| 主视频 MP4 | ✅ `ftyp`/`free`/`mdat`/`moov` 完美闭合，727,763 字节无剩余 |
+| 尾块索引 | ✅ 8 个条目的 offset 相对尾块起点自洽 |
+| APP 段 | ✅ EXIF / MPF / ICC / QTI Debug Metadata 全部保留（APP4 逐字节一致） |
+
+### 结论二：根因在 MediaStore 的 `o_video_size`
+
+用一条**未压缩、可正常播放**的实况照片验证该字段语义：
+
+```
+IMG20261005145900.jpg
+  _size        = 12,651,333
+  o_video_size =  8,224,204
+  验算：12,651,333 − 4,427,129（MotionPhoto 段起始偏移）= 8,224,204  ✓ 精确吻合
+```
+
+→ **`o_video_size` = 文件内 MotionPhoto 段的长度**，oplus 相册靠它定位内嵌视频。
+
+而压缩后的那条：
+
+| 字段 | MediaStore 记录 | 文件实际 |
+|---|---|---|
+| `_size` | 25,064,354 | 8,893,299 |
+| `o_video_size` | **17,377,612** | **5,864,993** |
+
+相册按 `o_video_size` 去文件里读 17.4 MB 的视频段，而那里只剩 5.9 MB → **越界 → 播放失败**。
+
+### 结论三：常规手段改不动这个字段
+
+| 手段 | 结果 |
+|---|---|
+| `contentResolver.update`（`_size` / `o_video_size` / `o_cover_time_stamps`） | **影响行数 = 0**，被 MediaProvider 拒绝 |
+| `MediaScannerConnection.scanFile`（原地改写后 mtime 已恢复原值） | 扫描器认为文件未变，**跳过重解析** |
+| 人为改成新 mtime 后再 `scanFile` | **仍然不更新** |
+
+推测 oplus 的 MediaProvider 只在**插入新行**时计算 `o_video_size`，已有行不重算。
+
+> 附带发现：**「原地改写 + 恢复 mtime」这个组合与 MediaStore 天然冲突** ——
+> 恢复 mtime 正是扫描器判定「文件未变」的依据。AC4（时间一致）与「让媒体库感知变更」在此直接对立。
+
+### 待决策的修复方向
+
+| 方案 | 代价 |
+|---|---|
+| A 压缩后重建 MediaStore 条目（改名→扫描→删旧行） | 删行有**连带删文件**的风险（代码里已警告），实现复杂 |
+| B 放弃原地改写，改为「写新文件 + 删旧文件」 | 丢 `DATE_ADDED` 与相册条目位置，违背 AC4 |
+| C 实况照片暂不支持压缩（保守回退） | 放弃实况的收益，但绝不破坏 |
+
+诊断探针见 `LivePhotoProbeTest` / `MediaRescanProbeTest` / `OplusColumnUpdateProbeTest`。
