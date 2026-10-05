@@ -190,3 +190,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: 首页双卡布局与占用文案调整
+<!-- trellis-session: v=2 fp=37c67c4b5c61582e -->
+
+**Date**: 2026-10-05
+**Task**: 首页双卡布局与占用文案调整
+**Branch**: `master`
+
+### Summary
+
+已节约改已省，移除共字和压缩率整卡，未压缩与已压缩改为两张等宽卡片，体积对比改占用对比；0.1.6 已安装真机。
+
+### Main Changes
+
+- 双卡内容内边距与下方对比图例对齐，统计口径沿用现有值。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad0616b` | fix(ui): simplify home summary to two equal statistics cards |
+
+### Testing
+
+- [OK] assembleDebug 编译通过（5 秒）、差异检查通过；安装 Success，读回 0.1.6 / versionCode 7；未运行测试，真机布局由用户自行验收。
+
+### Status
+
+[OK] **Completed**
