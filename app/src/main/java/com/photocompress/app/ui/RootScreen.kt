@@ -211,7 +211,7 @@ fun AppRoot(vm: AppViewModel) {
                 AppPage.ALBUM_FILTER -> AlbumFilterScreen(
                     state = state,
                     onBack = { vm.go(AppPage.SETTINGS) },
-                    onToggle = { name, excluded -> vm.setAlbumExcluded(name, excluded) },
+                    onSetShown = { name, shown -> vm.setAlbumShown(name, shown) },
                 )
             }
 

@@ -72,9 +72,9 @@ fun SettingsScreen(
                     icon = Icons.Filled.FilterAlt,
                     title = "图集过滤",
                     subtitle = if (state.excludedAlbums.isEmpty()) {
-                        "被排除的图集不会出现在未压缩 / 已压缩页"
+                        "关闭的图集不会出现在未压缩 / 已压缩页"
                     } else {
-                        "已排除 ${formatCount(state.excludedAlbums.size)} 个图集"
+                        "已隐藏 ${formatCount(state.excludedAlbums.size)} 个图集"
                     },
                     onClick = onOpenAlbumFilter,
                 )

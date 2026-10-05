@@ -358,14 +358,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         MediaKind.VIDEO -> QualityTier.fromName(s.videoTier)
     }
 
-    /** 图集过滤（F9/F10 的补充）：被排除的图集不出现在未压缩 / 已压缩页。 */
-    fun setAlbumExcluded(name: String, excluded: Boolean) {
+    /** 图集过滤（F9/F10 的补充）：关闭的图集不出现在未压缩 / 已压缩页。 */
+    fun setAlbumShown(name: String, shown: Boolean) {
         viewModelScope.launch {
             val current = settingsDao.get() ?: SettingsEntity()
             val set = current.excludedSet.toMutableSet()
-            if (excluded) set += name else set -= name
+            if (shown) set -= name else set += name
             settingsDao.upsert(current.copy(excludedAlbums = set.sorted().joinToString("\n")))
-            _messages.trySend(if (excluded) "已排除图集「$name」" else "已恢复显示图集「$name」")
+            _messages.trySend(if (shown) "已显示图集「$name」" else "已隐藏图集「$name」")
         }
     }
 
