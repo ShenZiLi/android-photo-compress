@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.photocompress.app.ui.theme.appColors
 
 /** 页面顶栏：可选返回按钮 + 标题/副标题 + 右侧操作。 */
@@ -40,6 +41,7 @@ fun AppBar(
     subtitle: String? = null,
     smallTitle: Boolean = false,
     navigation: (@Composable () -> Unit)? = null,
+    navigationSpacing: Dp = 0.dp,
     actions: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -48,7 +50,10 @@ fun AppBar(
             .padding(horizontal = if (navigation == null) 20.dp else 8.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        navigation?.invoke()
+        navigation?.let {
+            it()
+            Spacer(Modifier.width(navigationSpacing))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,

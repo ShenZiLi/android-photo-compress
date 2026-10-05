@@ -36,7 +36,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import com.photocompress.app.ui.components.GlassIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -279,17 +279,15 @@ fun TodoLevel2(
             subtitle = "${formatCount(album.count)} 项 · ${formatSize(album.bytes)}",
             smallTitle = true,
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
+            navigationSpacing = 12.dp,
+            actions = {
+                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll)
+            },
         )
         FilterChips(
             options = listOf("all" to "全部", "photo" to "照片", "live" to "实况", "video" to "视频", "skip" to "不支持"),
             selected = level.filter,
             onSelect = onFilter,
-        )
-        ToolbarRow(
-            note = "显示 ${filtered.size} 项 · 可压缩 ${actionable.size} 项",
-            selectAllLabel = if (allSelected) "取消全选" else "全选",
-            selectAllEnabled = actionable.isNotEmpty(),
-            onSelectAll = onSelectAll,
         )
         if (filtered.isEmpty()) {
             EmptyState("该筛选下没有条目", "换一个筛选条件看看")
@@ -352,17 +350,15 @@ fun DoneLevel2(
             subtitle = album.sizeLine,
             smallTitle = true,
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
+            navigationSpacing = 12.dp,
+            actions = {
+                SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll)
+            },
         )
         FilterChips(
             options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已超期"),
             selected = level.filter,
             onSelect = onFilter,
-        )
-        ToolbarRow(
-            note = "显示 ${filtered.size} 项 · 可还原 ${actionable.size} 项",
-            selectAllLabel = if (allSelected) "取消全选" else "全选",
-            selectAllEnabled = actionable.isNotEmpty(),
-            onSelectAll = onSelectAll,
         )
         if (filtered.isEmpty()) {
             EmptyState("该筛选下没有条目", "换一个筛选条件看看")
@@ -491,42 +487,39 @@ private fun FilterChips(
             val active = value == selected
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(
-                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
-                    )
-                    .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.12f), RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .selectable(selected = active, role = Role.Tab, onClick = { onSelect(value) })
-                    .heightIn(min = 48.dp)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .heightIn(min = 48.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.onSurfaceMuted,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                )
+                // 视觉胶囊 32dp；保留外层 48dp 触摸范围，文字与胶囊共同居中。
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+                        .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.12f), RoundedCornerShape(16.dp))
+                        .heightIn(min = 32.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.appColors.onSurfaceMuted,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ToolbarRow(
-    note: String,
-    selectAllLabel: String,
-    selectAllEnabled: Boolean,
-    onSelectAll: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(note, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.appColors.onSurfaceMuted)
-        Spacer(Modifier.width(8.dp))
-        OutlinedButton(onClick = onSelectAll, enabled = selectAllEnabled) {
-            Text(selectAllLabel, style = MaterialTheme.typography.labelMedium)
+private fun SelectAllAction(allSelected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    GlassSurface(modifier = Modifier.padding(end = 12.dp), radius = 24.dp, blur = false) {
+        TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(if (allSelected) "取消全选" else "全选", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
