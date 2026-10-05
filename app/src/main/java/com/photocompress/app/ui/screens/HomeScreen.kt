@@ -81,7 +81,9 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(20.dp))
             CardSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                // 只留垂直内边距：水平内边距交给 CompareMetric 自己分配，
+                // 好让下方图例与 StatsRow 的卡片共用同一条水平网格（见 CompareMetric）。
+                Column(modifier = Modifier.padding(vertical = 16.dp)) {
                     CompareMetric(
                         title = "数量",
                         total = "${formatCount(totals.todoCount + totals.doneCount)} 项",
@@ -263,7 +265,7 @@ private fun CompareMetric(
     val (todoRatio, doneRatio) = comparisonRatios(todoRaw, doneRaw)
     Column {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -274,6 +276,7 @@ private fun CompareMetric(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .height(12.dp)
                 .clip(CircleShape),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -288,16 +291,23 @@ private fun CompareMetric(
             )
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LegendItem(todoColor, "未压缩 $todoValue")
-            LegendItem(doneColor, "已压缩 $doneValue")
+        // 图例与 StatsRow 的卡片共用同一条水平网格——同宽（外层已无水平内边距，
+        // 故可直接 fillMaxWidth）、同间隔（12dp）、同内容内缩（16dp）。
+        // 这样两处图例的「已压缩」就会和顶部统计卡的「已压缩」落在同一条竖直线上；
+        // 若改用 spacedBy 紧挨排列，右栏起点会随左栏文字长度浮动，上下互不对齐。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            LegendItem(todoColor, "未压缩 $todoValue", Modifier.weight(1f).padding(start = 16.dp))
+            LegendItem(doneColor, "已压缩 $doneValue", Modifier.weight(1f).padding(start = 16.dp))
         }
     }
 }
 
 @Composable
-private fun LegendItem(color: Color, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun LegendItem(color: Color, text: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(color))
         Spacer(Modifier.width(6.dp))
         Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.appColors.onSurfaceMuted)
