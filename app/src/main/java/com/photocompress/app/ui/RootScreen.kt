@@ -181,7 +181,6 @@ fun AppRoot(vm: AppViewModel) {
                         state = state,
                         onOpenAlbum = { vm.openAlbum(AppPage.DONE, it) },
                         onToggleAlbum = { vm.toggleAlbum(AppPage.DONE, it) },
-                        onOpenTrash = { vm.go(AppPage.TRASH) },
                     )
                 } else {
                     DoneLevel2(

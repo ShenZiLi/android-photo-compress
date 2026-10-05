@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import com.photocompress.app.ui.components.GlassIconButton as IconButton
@@ -132,7 +131,6 @@ fun DoneLevel1(
     state: UiState,
     onOpenAlbum: (String) -> Unit,
     onToggleAlbum: (String) -> Unit,
-    onOpenTrash: () -> Unit,
 ) {
     val albums = state.albumDoneAll()
     val count = albums.sumOf { it.count }
@@ -144,11 +142,6 @@ fun DoneLevel1(
             title = "已压缩",
             subtitle = if (knownBefore == 0) "${formatCount(count)} 项 · ${formatSize(after)}"
             else "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}",
-            actions = {
-                IconButton(onClick = onOpenTrash) {
-                    Icon(Icons.Filled.Delete, contentDescription = "打开回收站")
-                }
-            },
         )
         // 暂无可处理图集时留空（不再显示占位文案）
         if (albums.isEmpty()) return
