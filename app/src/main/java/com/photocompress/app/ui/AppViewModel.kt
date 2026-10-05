@@ -235,10 +235,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 reloadLedger()
                 _messages.trySend(
                     buildString {
-                        append("压缩成功 · $done 项")
-                        if (savedBytes > 0) append(" · 节省 ${formatSize(savedBytes)}")
-                        if (skipped > 0) append(" · 跳过 $skipped 项")
-                        if (failed > 0) append(" · 失败 $failed 项")
+                        append("压缩${done}项")
+                        if (savedBytes > 0) append("，节省${formatSize(savedBytes).replace(" ", "")}")
+                        if (skipped > 0) append("，跳过${skipped}项")
+                        if (failed > 0) append("，失败${failed}项")
                     }
                 )
                 if (failures.isNotEmpty()) {
@@ -261,7 +261,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val touched = LinkedHashSet<String>()
             try {
                 var done = 0
-                var freedBytes = 0L
+                var addedBytes = 0L
                 var failed = 0
                 _batch.value = BatchState("正在还原", 0f, 0, targets.size)
                 for ((index, dm) in targets.withIndex()) {
@@ -275,7 +275,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             touched += dm.record.dataPath
                             if (dm.record.originalPath.isNotBlank()) touched += dm.record.originalPath
                             done++
-                            freedBytes += dm.compressedSize
+                            addedBytes += (dm.record.originalSize - dm.compressedSize).coerceAtLeast(0L)
                         }
                         is RestoreOutcome.Failed -> {
                             failed++
@@ -288,9 +288,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 reloadLedger()
                 _messages.trySend(
                     buildString {
-                        append("还原成功 · $done 项")
-                        if (freedBytes > 0) append(" · 占用 +${formatSize(freedBytes)}")
-                        if (failed > 0) append(" · 失败 $failed 项")
+                        append("还原${done}项")
+                        if (addedBytes > 0) append("，新增${formatSize(addedBytes).replace(" ", "")}")
+                        if (failed > 0) append("，失败${failed}项")
                     }
                 )
             } finally {
