@@ -9,11 +9,13 @@ import com.photocompress.app.core.compress.RestoreOutcome
 import com.photocompress.app.data.ledger.AppDatabase
 import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.data.ledger.SettingsEntity
+import com.photocompress.app.data.media.CACHE_LOGIC_VERSION
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.MediaRepository
 import com.photocompress.app.data.media.QualityTier
 import com.photocompress.app.data.media.StorageAccess
+import com.photocompress.app.data.media.needsFullScan
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,8 +62,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (writing) return
         viewModelScope.launch {
             val settings = settingsDao.get() ?: SettingsEntity()
-            // lastScanSec > 0 表示缓存已就绪：只需增量扫描，不再全量枚举
-            val warm = settings.lastScanSec > 0L
+            // 缓存可用需同时满足两条：扫描水位已推进 + 判类逻辑版本未变。
+            // 只看 lastScanSec 会漏掉「判类规则已改但文件没变」的情况——
+            // 那样旧 skipReason 会被一直复用（D11 修订后 52 条 HDR 视频即由此被卡住）。
+            val warm = !needsFullScan(settings.lastScanSec, settings.cacheLogicVersion)
             _ui.update {
                 it.copy(
                     scanning = true,
@@ -84,7 +88,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val ledger = ledgerDao.observeAll().first()
                 // 缓存写入成功后再推进扫描水位；中途退出时水位不变，下次仍会重扫
                 val latest = settingsDao.get() ?: settings
-                settingsDao.upsert(latest.copy(lastScanSec = System.currentTimeMillis() / 1000))
+                settingsDao.upsert(
+                    latest.copy(
+                        lastScanSec = System.currentTimeMillis() / 1000,
+                        cacheLogicVersion = CACHE_LOGIC_VERSION,
+                    ),
+                )
                 android.util.Log.i(TAG, "scan ${if (warm) "incremental" else "full"}: ${items.size} items")
                 _ui.update {
                     it.copy(

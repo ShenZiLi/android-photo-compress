@@ -1,6 +1,7 @@
 package com.photocompress.app.data.media
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,5 +76,36 @@ class MediaCacheDiffTest {
         )
         assertEquals(setOf("image:1", "video:2"), diff.changedKeys)
         assertTrue(diff.removedKeys.isEmpty())
+    }
+
+    // ---------------------------------------------------------------- 全量重扫判定
+
+    @Test
+    fun `首次启动无扫描水位时全量重扫`() {
+        assertTrue(needsFullScan(lastScanSec = 0L, cachedLogicVersion = CACHE_LOGIC_VERSION))
+    }
+
+    @Test
+    fun `水位已推进且逻辑版本一致时走增量`() {
+        assertFalse(needsFullScan(lastScanSec = 1000L, cachedLogicVersion = CACHE_LOGIC_VERSION))
+    }
+
+    @Test
+    fun `判类逻辑版本变化时强制全量重扫`() {
+        // 关键回归：D11 修订后 52 条 HDR 视频因缓存复用旧 skipReason 而一直显示旧文案
+        assertTrue(
+            "会话水位足够，但判类版本已过期，必须重扫",
+            needsFullScan(lastScanSec = 1000L, cachedLogicVersion = CACHE_LOGIC_VERSION - 1),
+        )
+        assertTrue(
+            "缓存里的版本高于当前（降级安装）同样要重扫",
+            needsFullScan(lastScanSec = 1000L, cachedLogicVersion = CACHE_LOGIC_VERSION + 1),
+        )
+    }
+
+    @Test
+    fun `默认逻辑版本取自常量`() {
+        assertTrue(needsFullScan(lastScanSec = 0L, cachedLogicVersion = CACHE_LOGIC_VERSION))
+        assertFalse(needsFullScan(lastScanSec = 1L, cachedLogicVersion = CACHE_LOGIC_VERSION))
     }
 }

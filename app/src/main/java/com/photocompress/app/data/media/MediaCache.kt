@@ -76,6 +76,29 @@ data class CacheSnapshot(
     val dateModifiedSec: Long,
 )
 
+/**
+ * **判类逻辑版本号**——缓存的有效性还取决于它，而不是只看文件指纹。
+ *
+ * 文件没变不代表判类结果没变：判类规则（可处理格式、编码能力门槛、HDR 策略等）
+ * 一旦调整，旧的 `skipReason` 会被 `diffCache` 当作「未变化」一直复用，
+ * 导致新逻辑永远不生效（实测踩过：D11 修订后，52 条 HDR 视频仍显示旧文案）。
+ *
+ * **凡改动判类 / 探测逻辑（`MediaClassifier`、`VideoProbeRunner`、编码能力判定），
+ * 必须把此值 +1**，强制下一次启动走全量重扫。
+ */
+const val CACHE_LOGIC_VERSION = 1
+
+/**
+ * 是否需要走全量重扫：扫描水位还没推进，**或**判类逻辑版本已变化。
+ *
+ * 纯函数，便于单元测试。缓存「可用」（warm）的判定即 `!needsFullScan(...)`。
+ */
+fun needsFullScan(
+    lastScanSec: Long,
+    cachedLogicVersion: Int,
+    currentLogicVersion: Int = CACHE_LOGIC_VERSION,
+): Boolean = lastScanSec <= 0L || cachedLogicVersion != currentLogicVersion
+
 /** 增量扫描的差异结果。 */
 data class CacheDiff(
     /** 新增或指纹变化、需要重新做文件级探测的条目。 */

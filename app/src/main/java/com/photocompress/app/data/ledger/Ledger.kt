@@ -76,6 +76,13 @@ data class SettingsEntity(
      * 后续启动只需增量扫描，不再做全量扫描。
      */
     val lastScanSec: Long = 0L,
+    /**
+     * 上次完成扫描时所用的**判类逻辑版本**（见 `CACHE_LOGIC_VERSION`）。
+     *
+     * 与当前常量不一致时，即使 [lastScanSec] > 0 也必须走一次全量重扫——
+     * 否则判类规则调整后，未变化的文件会一直沿用旧的 `skipReason`。
+     */
+    val cacheLogicVersion: Int = 0,
 ) {
     val excludedSet: Set<String>
         get() = excludedAlbums.split('\n').filter { it.isNotBlank() }.toSet()
@@ -131,7 +138,7 @@ interface SettingsDao {
 
 @Database(
     entities = [CompressedItemEntity::class, SettingsEntity::class, CachedMediaEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -175,12 +182,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v4 → v5：新增判类逻辑版本号。
+         *
+         * 判类规则变更后需要让旧的媒体缓存失效（否则未变化的文件会沿用旧判类结果）。
+         * 默认 0 必然不等于当前 [CACHE_LOGIC_VERSION]，故升级后会自动触发一次全量重扫。
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN cacheLogicVersion INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }
