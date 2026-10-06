@@ -724,3 +724,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 用户手机已经丢失的照片未直接恢复，旧备份尚在时可通过新版回收站找回；HEIC原格式压缩与MPF扩展仍待后续实现。本次未推送或发布。
+
+
+## Session 24: 弹出报错同批次与文本行去重
+<!-- trellis-session: v=2 fp=4e114f7da5a2fa7c -->
+
+**Date**: 2026-10-07
+**Task**: 弹出报错同批次与文本行去重
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.22：相同批次原因按首次出现顺序去重，弹出提示重复行合并。
+
+### Main Changes
+
+- AppViewModel使用LinkedHashSet收集原因；RootScreen去空白空行和重复文本行；项目计数及下一次操作反馈保留。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66f14e6` | fix(ui): deduplicate repeated batch error messages |
+
+### Testing
+
+- [OK] Debug和签名Release构建、lintVital、正式APK签名验证及git diff --check通过。未新增或运行测试，未进行真机视觉验收。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 安装包本地交付；MPF扩展待继续，未推送或发布。
