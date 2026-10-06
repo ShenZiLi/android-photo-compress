@@ -8,6 +8,8 @@
 - [液态玻璃 UI](ui-style.md)：材质、透明容器文字、禁用状态、触摸目标与用户已确认文案。
 - [原地改写后的媒体库同步](media-store-refresh.md)：原厂实况索引、日期与条目身份校验。
 
+- [媒体错误恢复](media-recovery.md)：持久恢复记录、异常备份保护、HEIC 安全跳过与恢复故障验收。
+
 ## 开发前检查
 
 1. 阅读当前任务 `prd.md`、`design.md`、`implement.md` 及对应资料。

@@ -63,6 +63,8 @@ import com.photocompress.app.ui.daysLeft
 import com.photocompress.app.ui.formatCount
 import com.photocompress.app.ui.formatSize
 import com.photocompress.app.ui.theme.appColors
+import com.photocompress.app.core.rewrite.RecoveryJournal
+import com.photocompress.app.ui.components.GlassButton
 
 @Composable
 fun SettingsScreen(
@@ -291,6 +293,8 @@ fun TrashScreen(
     state: UiState,
     onBack: () -> Unit,
     onPurgeAll: () -> Unit,
+    onRecover: (RecoveryJournal.Entry) -> Unit,
+    onExportLegacy: () -> Unit,
     busy: Boolean = false,
 ) {
     val now = System.currentTimeMillis()
@@ -343,7 +347,28 @@ fun TrashScreen(
             item(key = "heading", contentType = "heading") {
                 SectionTitle("原始文件备份", modifier = Modifier.padding(horizontal = 0.dp))
             }
-            if (backups.isEmpty()) {
+            if (state.untrackedBackupCount > 0) {
+                item(key = "legacy-recovery", contentType = "recovery") {
+                    CardSurface(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("${formatCount(state.untrackedBackupCount)} 份历史异常备份已保护", fontWeight = FontWeight.SemiBold)
+                            Text("可能包含旧版处理失败的原片。可复制到“轻存恢复”图集，原备份不会删除。",
+                                style = MaterialTheme.typography.bodySmall)
+                            GlassButton(onClick = onExportLegacy, enabled = !busy) { Text("找回照片") }
+                        }
+                    }
+                }
+            }
+            items(state.recoveryEntries, key = { "recovery-${it.id}" }, contentType = { "recovery" }) { entry ->
+                CardSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(entry.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                        Text("处理未完成，原始备份已保护", style = MaterialTheme.typography.bodySmall)
+                        GlassButton(onClick = { onRecover(entry) }, enabled = !busy) { Text("恢复原片") }
+                    }
+                }
+            }
+            if (backups.isEmpty() && state.recoveryEntries.isEmpty() && state.untrackedBackupCount == 0) {
                 item(key = "empty", contentType = "empty") {
                     CardSurface(modifier = Modifier.fillMaxWidth()) {
                         EmptyState("回收站是空的", "压缩照片后，原文件会保留在这里 30 天")

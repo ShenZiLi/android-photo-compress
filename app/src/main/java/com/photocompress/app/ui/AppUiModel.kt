@@ -5,6 +5,7 @@ import com.photocompress.app.data.ledger.SettingsEntity
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
+import com.photocompress.app.core.rewrite.RecoveryJournal
 
 enum class AppPage { HOME, TODO, DONE, TRASH, SETTINGS, ALBUM_FILTER, COMPRESS_RATIO }
 
@@ -29,6 +30,8 @@ data class UiState(
     val hasAllFilesAccess: Boolean = false,
     val items: List<MediaItem> = emptyList(),
     val ledger: List<CompressedItemEntity> = emptyList(),
+    val recoveryEntries: List<RecoveryJournal.Entry> = emptyList(),
+    val untrackedBackupCount: Int = 0,
     val settings: SettingsEntity = SettingsEntity(),
     val todo: LevelState = LevelState(),
     val done: LevelState = LevelState(),

@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.photocompress.app.core.rewrite.RecoveryJournal
 
 data class BatchState(
     val label: String,
@@ -99,6 +101,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     mediaRepo.fullScan(onProgress)
                 }
                 val ledger = ledgerDao.observeAll().first()
+                val recoveryState = withContext(Dispatchers.IO) {
+                    engine.pendingRecovery() to engine.untrackedBackups(ledger).size
+                }
                 // 缓存写入成功后再推进扫描水位；中途退出时水位不变，下次仍会重扫
                 val latest = settingsDao.get() ?: settings
                 settingsDao.upsert(
@@ -114,6 +119,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         fullScan = false,
                         items = items,
                         ledger = ledger,
+                        recoveryEntries = recoveryState.first,
+                        untrackedBackupCount = recoveryState.second,
                         lastScanAt = System.currentTimeMillis(),
                         hasAllFilesAccess = StorageAccess.hasAllFilesAccess(getApplication()),
                     )
@@ -248,6 +255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             failed++
                             failures += "${item.displayName}：${outcome.reason}"
                             android.util.Log.w(TAG, "${item.displayName}: FAIL ${outcome.reason}")
+                            break // 错误可能来自存储或媒体库；保留已完成项，及时停止后续改写。
                         }
                         is CompressOutcome.Cancelled -> {
                             touched += item.dataPath
@@ -267,7 +275,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         append("压缩${done}项")
                         if (savedBytes > 0) append("，节省${formatSize(savedBytes).replace(" ", "")}")
                         if (skipped > 0) append("，跳过${skipped}项")
-                        if (failed > 0) append("，失败${failed}项")
+                        if (failed > 0) append("，失败${failed}项，已停止后续处理")
                     }
                 )
                 if (failures.isNotEmpty()) {
@@ -303,13 +311,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 var failed = 0
                 _batch.value = BatchState("正在还原", 0f, 0, targets.size)
                 for ((index, dm) in targets.withIndex()) {
-                    when (val outcome = engine.restore(dm.record)) {
+                    touched += dm.record.dataPath
+                    if (dm.record.originalPath.isNotBlank()) touched += dm.record.originalPath
+                    when (val outcome = engine.restore(dm.record, onRestored = ledgerDao::deleteById)) {
                         is RestoreOutcome.Success -> {
-                            ledgerDao.deleteById(dm.record.id)
-                            ledgerDao.deleteByPath(dm.record.dataPath)
-                            if (dm.record.originalPath.isNotBlank()) {
-                                ledgerDao.deleteByPath(dm.record.originalPath)
-                            }
                             touched += dm.record.dataPath
                             if (dm.record.originalPath.isNotBlank()) touched += dm.record.originalPath
                             done++
@@ -318,6 +323,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         is RestoreOutcome.Failed -> {
                             failed++
                             _messages.trySend("${dm.displayName}：${outcome.reason}")
+                            break
                         }
                     }
                     _batch.value = BatchState("正在还原", (index + 1f) / targets.size, index + 1, targets.size)
@@ -359,11 +365,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         onProgress = { done, total ->
                             _batch.value = BatchState("正在清理备份", done.toFloat() / total.coerceAtLeast(1), done, total)
                         },
-                        clearUntracked = true,
                     )
                     _messages.trySend(
                         if (result.failedCount == 0) "已清理备份，释放 ${formatSize(result.freedBytes)}"
-                        else "释放 ${formatSize(result.freedBytes)}，${formatCount(result.failedCount)} 项备份未能删除，请重试",
+                        else "释放 ${formatSize(result.freedBytes)}，${formatCount(result.failedCount)} 项异常备份已保留，请先恢复原片",
                     )
                 }
             } catch (failure: Exception) {
@@ -393,6 +398,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------------------------------------------------------- 设置
+
+    fun recoverOriginal(entry: RecoveryJournal.Entry) {
+        if (writing || _batch.value != null) return
+        writing = true
+        _batch.value = BatchState("正在恢复原片", 0f, 0, 1)
+        viewModelScope.launch {
+            try {
+                when (val result = engine.recover(entry, ledgerDao::deleteById)) {
+                    is RestoreOutcome.Success -> _messages.trySend("原片已恢复，原始备份继续保留")
+                    is RestoreOutcome.Failed -> _messages.trySend(result.reason)
+                }
+            } finally {
+                finishBatch(listOf(entry.path))
+            }
+        }
+    }
+
+    fun exportLegacyBackups() {
+        if (writing || _batch.value != null) return
+        writing = true
+        _batch.value = BatchState("正在找回照片", 0f, 0, _ui.value.untrackedBackupCount)
+        viewModelScope.launch {
+            try {
+                val count = engine.exportUntracked(ledgerDao.observeAll().first())
+                _messages.trySend("已找回${count}项，存入“轻存恢复”图集；原始备份继续保留")
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _messages.trySend("导出未完成，原始备份继续保留：${failure.message}")
+            } finally {
+                finishBatch(emptyList())
+            }
+        }
+    }
 
     fun setTier(kind: MediaKind, tier: QualityTier) {
         viewModelScope.launch {
@@ -451,7 +489,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun reloadLedger() {
-        _ui.update { it.copy(ledger = ledgerDao.observeAll().first()) }
+        val ledger = ledgerDao.observeAll().first()
+        val recoveryState = withContext(Dispatchers.IO) {
+            engine.pendingRecovery() to engine.untrackedBackups(ledger).size
+        }
+        _ui.update { it.copy(ledger = ledger, recoveryEntries = recoveryState.first,
+            untrackedBackupCount = recoveryState.second) }
     }
 
     fun refreshPermission() = _ui.update {

@@ -1,7 +1,6 @@
 package com.photocompress.app.core.compress
 
 import android.content.Context
-import com.photocompress.app.core.jpeg.HeicCompressor
 import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
@@ -11,9 +10,9 @@ import com.photocompress.app.core.rewrite.FileUtils
 import com.photocompress.app.core.rewrite.InPlaceRewriter
 import com.photocompress.app.core.rewrite.MediaStoreUpdater
 import com.photocompress.app.core.rewrite.RecycleBin
+import com.photocompress.app.core.rewrite.RecoveryJournal
 import com.photocompress.app.core.video.MediaClassifierCodec
 import com.photocompress.app.core.video.VideoTranscoder
-import com.photocompress.app.core.xmp.MarkerStripper
 import com.photocompress.app.core.xmp.Mp4XmpMarker
 import com.photocompress.app.core.xmp.PcXmp
 import com.photocompress.app.data.ledger.CompressedItemEntity
@@ -57,6 +56,7 @@ sealed interface RestoreOutcome {
 class CompressionEngine(private val context: Context) {
 
     private val recycle = RecycleBin(context)
+    private val recovery = RecoveryJournal(context)
 
     private class Attempt(
         private val context: Context,
@@ -95,9 +95,12 @@ class CompressionEngine(private val context: Context) {
         val attempt = Attempt(context, control, currentCoroutineContext()[Job], onCommit, onRollback)
         try {
             attempt.checkCancelled()
+            check(recovery.entries().none { it.path == item.dataPath }) {
+                "此照片有待恢复记录，请先到回收站恢复原片"
+            }
             when (item.kind) {
                 MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
-                    compressHeic(item, tier, attempt)
+                    CompressOutcome.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
                 } else {
                     compressPhoto(item, tier, videoTier, attempt)
                 }
@@ -112,135 +115,6 @@ class CompressionEngine(private val context: Context) {
             CompressOutcome.Failed("异常 ${t.javaClass.simpleName}: ${t.message}")
         } finally {
             attempt.cleanup()
-        }
-    }
-
-    // ---------------------------------------------------------------- HEIC（格式转换）
-
-    /**
-     * HEIC/HEIF 压缩：平台无法把元信息写回 HEIF 容器，因此只能**转为 JPEG**。
-     * 同目录、同图集，文件名扩展名由 .heic 变为 .jpg；原文件进回收站，还原时按原路径写回。
-     */
-    private suspend fun compressHeic(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
-        val file = File(item.dataPath)
-        if (!file.exists()) return CompressOutcome.Failed("文件不存在")
-        val originalSize = file.length()
-        val mtimeMs = file.lastModified()
-        val originalMtime = Files.getLastModifiedTime(file.toPath())
-        val originalModifiedSec = (mtimeMs / 1000L).takeIf { it > 0 } ?: item.dateModifiedSec
-        val originalDates = MediaStoreUpdater.captureDates(context, item.uri)
-        var originalSha = ""
-        val id = UUID.randomUUID().toString()
-        // HEIC 的编码效率高于 JPEG：用同等质量转 JPEG 往往会变大，
-        // 因此这里在同档位上再降一档质量，尽量取得体积收益（仍保留「不变小就跳过」的保护）。
-        val quality = (JpegCompressor.qualityFor(tier) - 12).coerceAtLeast(70)
-
-        val temp = attempt.temp(".jpg")
-        val convertError = HeicCompressor.convert(file, temp, quality)
-        attempt.checkCancelled()
-        if (convertError != null) {
-            temp.delete()
-            return CompressOutcome.Skipped(convertError)
-        }
-        if (temp.length() >= originalSize) {
-            val outSize = temp.length()
-            temp.delete()
-            return CompressOutcome.Skipped("压缩后体积未减小（$originalSize → $outSize）")
-        }
-        // 注入自有标记（转换后的 JPEG 通过 ExifInterface 写整包 XMP）
-        runCatching {
-            val exif = androidx.exifinterface.media.ExifInterface(temp.absolutePath)
-            val xmp = runCatching {
-                exif.getAttributeBytes(androidx.exifinterface.media.ExifInterface.TAG_XMP)
-            }.getOrNull()?.toString(Charsets.UTF_8)
-            exif.setAttribute(
-                androidx.exifinterface.media.ExifInterface.TAG_XMP,
-                PcXmp.injectAttributes(xmp, newMarker()),
-            )
-            exif.saveAttributes()
-        }
-
-        val target = HeicCompressor.uniqueSibling(file, ".jpg")
-        var backupRel: String? = null
-        var sourceRemoved = false
-        var newUri: android.net.Uri? = null
-        return try {
-            val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
-            backupRel = backup.relativePath
-            originalSha = backup.sha256
-            val backupSize = backup.size
-
-            FileUtils.copyWithSha256(temp, target, attempt::checkCancelled, calculateDigest = false)
-            check(target.length() == temp.length()) { "转换产物写入长度不一致" }
-            restoreMtime(target, originalMtime)
-            attempt.checkCancelled()
-
-            // 先物理删除原 HEIC，再重建媒体库索引（删除旧行会连带删文件，顺序不能颠倒）
-            check(file.delete()) { "原 HEIC 删除失败" }
-            sourceRemoved = true
-            newUri = checkNotNull(MediaStoreUpdater.reindex(context, item.uri, target.absolutePath)) { "转换后媒体库索引失败" }
-            MediaStoreUpdater.restoreDates(context, newUri, originalDates)
-            val newId = android.content.ContentUris.parseId(newUri)
-            attempt.checkCancelled()
-
-            val now = System.currentTimeMillis()
-            val record = CompressedItemEntity(
-                id = id,
-                mediaStoreId = newId,
-                dataPath = target.absolutePath,
-                originalPath = item.dataPath,
-                volumeName = item.volumeName,
-                bucketName = item.bucketName,
-                displayName = target.name,
-                mediaKind = MediaKind.PHOTO.name,
-                mimeType = "image/jpeg",
-                containerFormat = ContainerFormat.JPEG.name,
-                videoCodec = null,
-                originalSize = originalSize,
-                compressedSize = target.length(),
-                originalSha256 = originalSha,
-                originalDateTakenMs = item.dateTakenMs,
-                originalDateAddedSec = item.dateAddedSec,
-                originalDateModifiedSec = originalModifiedSec,
-                qualityTier = tier.name,
-                codecUsed = "HEIC→JPEG q=$quality",
-                compressedAtMs = now,
-                restoreDeadlineMs = now + TimeUnit.DAYS.toMillis(RETENTION_DAYS),
-                backupRelPath = backupRel,
-                backupSize = backupSize,
-                status = CompressedItemEntity.STATUS_DONE,
-            )
-            attempt.publish(record)
-            CompressOutcome.Success(record)
-        } catch (t: Throwable) {
-            attempt.cleanup()
-            val rollback = withContext(NonCancellable) {
-                val fileRollback = runCatching {
-                    if (sourceRemoved) {
-                        recycle.restore(checkNotNull(backupRel), file, mtimeMs)
-                        restoreMtime(file, originalMtime)
-                        check(FileUtils.sha256(file) == originalSha) { "HEIC 回滚内容不一致" }
-                    }
-                    if (target.exists()) check(target.delete()) { "转换临时产物清理失败" }
-                    if (sourceRemoved) {
-                        val restoredUri = checkNotNull(MediaStoreUpdater.reindex(context, newUri, file.absolutePath)) { "HEIC 索引恢复失败" }
-                        MediaStoreUpdater.restoreDates(context, restoredUri, originalDates)
-                    }
-                }
-                if (fileRollback.isSuccess) runCatching { attempt.forgetPublished() } else fileRollback
-            }
-            if (t is CancellationException && rollback.isSuccess) {
-                backupRel?.let { recycle.delete(it) }
-                if (t !is CompressionCancelledException) throw t
-                CompressOutcome.Cancelled()
-            } else if (t is CompressionCancelledException) {
-                CompressOutcome.Cancelled("当前 HEIC 回退未通过，原始备份已保留：${rollback.exceptionOrNull()?.message}")
-            } else {
-                if (t is CancellationException) throw t
-                CompressOutcome.Failed("HEIC 转换失败${if (rollback.isFailure) "，回退未通过，备份已保留" else "，原文件已保留或恢复"}：${t.message}")
-            }
-        } finally {
-            temp.delete()
         }
     }
 
@@ -536,11 +410,19 @@ class CompressionEngine(private val context: Context) {
         var writeStarted = false
 
         return try {
+            val originalDates = MediaStoreUpdater.captureDates(context, item.uri)
             val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
             backupRel = backup.relativePath
             originalSha = backup.sha256
             val backupSize = backup.size
 
+            recovery.begin(RecoveryJournal.Entry(
+                id, item.dataPath, backup.relativePath, backup.sha256, originalMtime.toString(),
+                item.uri.toString(), originalDates.getAsLong(android.provider.MediaStore.Images.Media.DATE_TAKEN) ?: 0L,
+                originalDates.getAsLong(android.provider.MediaStore.MediaColumns.DATE_ADDED) ?: item.dateAddedSec,
+                originalDates.getAsLong(android.provider.MediaStore.MediaColumns.DATE_MODIFIED) ?: item.dateModifiedSec,
+                dateTakenWasNull = originalDates.getAsLong(android.provider.MediaStore.Images.Media.DATE_TAKEN) == null,
+            ))
             attempt.checkCancelled()
             writeStarted = true
             InPlaceRewriter.writeFrom(file, tempContent, mtimeMs, attempt::checkCancelled)
@@ -585,6 +467,7 @@ class CompressionEngine(private val context: Context) {
                 status = CompressedItemEntity.STATUS_DONE,
             )
             attempt.publish(record)
+            recovery.finish(id)
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
             // 刷新未通过同样不能记为成功。保留备份，并分别报告文件恢复与相册同步结果。
@@ -592,16 +475,19 @@ class CompressionEngine(private val context: Context) {
             var bytesRestored = false
             val rollback = withContext(NonCancellable) {
                 val fileRollback = backupRel?.takeIf { writeStarted }?.let { backupPath -> runCatching {
-                    recycle.restore(backupPath, file, mtimeMs)
-                    restoreMtime(file, originalMtime)
+                    recycle.restore(backupPath, file, 0)
                     check(FileUtils.sha256(file) == originalSha) { "回滚内容与原文件不一致" }
                     bytesRestored = true
+                    restoreMtime(file, originalMtime)
                     MediaStoreUpdater.refresh(
                         context, item.uri, item.dataPath,
                         item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec,
                     )
                 } } ?: Result.success(Unit)
-                if (fileRollback.isSuccess) runCatching { attempt.forgetPublished() } else fileRollback
+                if (fileRollback.isSuccess) runCatching {
+                    attempt.forgetPublished()
+                    recovery.finish(id)
+                } else fileRollback
             }
             val state = when {
                 !writeStarted -> "原文件未改动"
@@ -626,50 +512,184 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 还原
 
-    suspend fun restore(record: CompressedItemEntity): RestoreOutcome = withContext(Dispatchers.IO) {
-        runCatching {
-            val backupRel = record.backupRelPath
-                ?: return@runCatching RestoreOutcome.Failed("备份已清理，无法还原")
-            val backup = recycle.fileOf(backupRel)
-            if (!backup.exists()) return@runCatching RestoreOutcome.Failed("备份文件缺失，无法还原")
-
-            // 格式转换（HEIC→JPEG）时需写回原路径，并删除转换产物
-            val originalPath = record.originalPath.ifBlank { record.dataPath }
-            val target = File(originalPath)
-            target.parentFile?.mkdirs()
-            val mtimeMs = record.originalDateModifiedSec * 1000L
-
-            InPlaceRewriter.writeFrom(target, backup, mtimeMs)
-
-            // 以备份自身为校验基准：备份就是压缩前的原文件
-            val backupSha = FileUtils.sha256(backup)
-            val restoredSha = FileUtils.sha256(target)
-            if (backupSha != restoredSha) {
-                return@runCatching RestoreOutcome.Failed("还原校验失败，文件与备份不一致")
+    suspend fun restore(
+        record: CompressedItemEntity,
+        onRestored: suspend (String) -> Unit = {},
+    ): RestoreOutcome = withContext(Dispatchers.IO) {
+        val rel = record.backupRelPath
+            ?: return@withContext RestoreOutcome.Failed("备份已清理，无法还原")
+        val backup = recycle.fileOf(rel)
+        if (!backup.isFile) return@withContext RestoreOutcome.Failed("备份文件缺失，原片未改动")
+        val originalPath = record.originalPath.ifBlank { record.dataPath }
+        val target = File(originalPath)
+        val converted = originalPath != record.dataPath
+        var safety: RecycleBin.Backup? = null
+        val previousTime = target.takeIf { it.isFile }?.let { Files.getLastModifiedTime(it.toPath()) }
+        val restoreTime = previousTime?.takeIf { it.toMillis() / 1000L == record.originalDateModifiedSec }
+            ?: java.nio.file.attribute.FileTime.fromMillis(record.originalDateModifiedSec * 1000L)
+        var wrote = false
+        var originalRestored = false
+        val journalId = "RESTORE-${UUID.randomUUID()}"
+        try {
+            val originalSha = FileUtils.sha256(backup)
+            check(record.originalSha256.isBlank() || originalSha == record.originalSha256) {
+                "备份校验失败，原片未改动"
             }
-            // 防御：历史版本可能把自有标记写进了备份，还原后必须清掉，
-            // 否则该照片会被误判为「已压缩」而回不到未压缩页
-            MarkerStripper.strip(target)
-
-            val convertedPath = record.dataPath.takeIf { it != originalPath }
-            if (convertedPath != null) {
-                // 格式转换（HEIC→JPEG）：删除转换产物与它的媒体库行，再为新路径建索引。
-                // 注意：MediaProvider 删除行时会一并删除磁盘文件，因此这里必须先物理删除，
-                // 且**不能**对原地还原的路径调用 reindex（会误删刚还原的文件）。
-                runCatching { File(convertedPath).delete() }
-                MediaStoreUpdater.reindex(context, mediaUriOf(record), originalPath)
-            } else {
-                // 原地还原：媒体库行仍然有效，只需同步大小与时间字段
-                MediaStoreUpdater.refresh(
-                    context, mediaUriOf(record), originalPath,
-                    record.originalDateTakenMs, record.originalDateAddedSec, record.originalDateModifiedSec,
-                )
+            if (converted && target.exists()) {
+                check(target.isFile && FileUtils.sha256(target) == originalSha) {
+                    "原路径已存在其他文件，未覆盖"
+                }
             }
-            recycle.delete(backupRel)
+            // 还原写入失败时，仍能回退到操作前的可用压缩图片/视频。
+            if (target.isFile) safety = recycle.backupWithDigest("SAFE-${UUID.randomUUID()}", target)
+            val entry = RecoveryJournal.Entry(
+                journalId, originalPath, rel, originalSha,
+                restoreTime.toString(),
+                mediaUriOf(record).toString(), record.originalDateTakenMs, record.originalDateAddedSec,
+                record.originalDateModifiedSec, safety?.relativePath, record.id,
+            )
+            recovery.begin(entry)
+            withContext(NonCancellable) {
+                wrote = true
+                target.parentFile?.let { check(it.isDirectory || it.mkdirs()) { "无法恢复原目录" } }
+                recycle.restore(rel, target, 0)
+                check(FileUtils.sha256(target) == originalSha) { "还原校验失败" }
+                originalRestored = true
+                restoreMtime(target, java.nio.file.attribute.FileTime.from(java.time.Instant.parse(entry.modifiedTime)))
+                if (converted || !MediaStoreUpdater.pointsTo(context, mediaUriOf(record), originalPath)) {
+                    val uri = MediaStoreUpdater.scanExisting(context, originalPath)
+                    MediaStoreUpdater.restoreDates(context, uri, android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.DATE_TAKEN, record.originalDateTakenMs)
+                        put(android.provider.MediaStore.MediaColumns.DATE_ADDED, record.originalDateAddedSec)
+                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, record.originalDateModifiedSec)
+                    })
+                } else {
+                    MediaStoreUpdater.refresh(context, mediaUriOf(record), originalPath,
+                        record.originalDateTakenMs, record.originalDateAddedSec, record.originalDateModifiedSec)
+                }
+                // 先登记还原结果；失败时两份文件和恢复入口都留下。
+                onRestored(record.id)
+                recovery.finish(journalId)
+                // 历史 HEIC 转换产物保留，避免旧 URI 别名或时间恢复失败造成再次丢图。
+                recycle.delete(rel)
+                safety?.let { recycle.delete(it.relativePath) }
+            }
             RestoreOutcome.Success(record.id)
-        }.getOrElse { t ->
-            RestoreOutcome.Failed("异常 ${t.javaClass.simpleName}: ${t.message}")
+        } catch (failure: Throwable) {
+            val rollback = withContext(NonCancellable) {
+                runCatching {
+                    if (wrote && !originalRestored && safety != null) {
+                        recycle.restore(checkNotNull(safety).relativePath, target, 0)
+                        check(FileUtils.sha256(target) == checkNotNull(safety).sha256) { "还原失败后的回退校验失败" }
+                        previousTime?.let { restoreMtime(target, it) }
+                    }
+                }
+            }
+            if (!wrote) {
+                runCatching { recovery.finish(journalId) }
+                safety?.let { recycle.delete(it.relativePath) }
+            }
+            if (failure is CancellationException) throw failure
+            val state = when {
+                !wrote -> "原片未改动"
+                originalRestored -> "原片已还原，日期或相册同步未通过；备份已保护，可在回收站重试恢复"
+                rollback.isSuccess && safety != null -> "还原失败，操作前的照片已恢复；原始备份已保护"
+                else -> "还原未完成；原始备份已保护，可在回收站重试恢复"
+            }
+            RestoreOutcome.Failed("$state：${failure.message}")
         }
+    }
+
+    fun pendingRecovery(): List<RecoveryJournal.Entry> = recovery.entries()
+
+    /** 明确点击后重试原片恢复；不删除 URI、转换产物或唯一原始备份。 */
+    suspend fun recover(entry: RecoveryJournal.Entry, onRecovered: suspend (String) -> Unit): RestoreOutcome =
+        withContext(Dispatchers.IO + NonCancellable) {
+            var bytesRestored = false
+            var safety: RecycleBin.Backup? = null
+            var previousTime: FileTime? = null
+            var target: File? = null
+            var wrote = false
+            try {
+                val known = recovery.entries().firstOrNull { it.id == entry.id }
+                    ?: return@withContext RestoreOutcome.Failed("恢复记录已处理，请刷新")
+                val backup = recycle.fileOf(known.backupRelPath)
+                check(backup.isFile && FileUtils.sha256(backup) == known.sha256) { "原始备份校验失败，未覆盖照片" }
+                val file = File(known.path)
+                target = file
+                file.parentFile?.let { check(it.isDirectory || it.mkdirs()) { "无法恢复原目录，备份继续保留" } }
+                if (file.isFile && FileUtils.sha256(file) != known.sha256) {
+                    previousTime = Files.getLastModifiedTime(file.toPath())
+                    safety = recycle.backupWithDigest("SAFE-${UUID.randomUUID()}", file)
+                    recovery.begin(known.copy(safetyBackupRelPath = checkNotNull(safety).relativePath))
+                    wrote = true
+                    recycle.restore(known.backupRelPath, file, 0)
+                } else if (!file.exists()) {
+                    wrote = true
+                    recycle.restore(known.backupRelPath, file, 0)
+                }
+                check(FileUtils.sha256(file) == known.sha256) { "原片恢复校验失败" }
+                bytesRestored = true
+                restoreMtime(file, java.nio.file.attribute.FileTime.from(java.time.Instant.parse(known.modifiedTime)))
+                val oldUri = android.net.Uri.parse(known.mediaUri)
+                if (MediaStoreUpdater.pointsTo(context, oldUri, known.path)) {
+                    MediaStoreUpdater.refresh(context, oldUri, known.path, known.dateTakenMs,
+                        known.dateAddedSec, known.dateModifiedSec)
+                } else {
+                    val uri = MediaStoreUpdater.scanExisting(context, known.path)
+                    MediaStoreUpdater.restoreDates(context, uri, android.content.ContentValues().apply {
+                        if (known.dateTakenWasNull) putNull(android.provider.MediaStore.Images.Media.DATE_TAKEN)
+                        else put(android.provider.MediaStore.Images.Media.DATE_TAKEN, known.dateTakenMs)
+                        put(android.provider.MediaStore.MediaColumns.DATE_ADDED, known.dateAddedSec)
+                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, known.dateModifiedSec)
+                    })
+                }
+                onRecovered(known.ledgerId)
+                recovery.finish(known.id)
+                listOfNotNull(known.safetyBackupRelPath, safety?.relativePath).distinct()
+                    .filter { it != known.backupRelPath }.forEach(recycle::delete)
+                RestoreOutcome.Success(known.id)
+            } catch (failure: Exception) {
+                if (wrote && !bytesRestored && safety != null && target != null) {
+                    runCatching {
+                        recycle.restore(checkNotNull(safety).relativePath, checkNotNull(target), 0)
+                        check(FileUtils.sha256(checkNotNull(target)) == checkNotNull(safety).sha256)
+                        previousTime?.let { restoreMtime(checkNotNull(target), it) }
+                    }
+                }
+                RestoreOutcome.Failed(if (bytesRestored) "原片已恢复，相册或日期同步未通过；备份继续保护：${failure.message}"
+                    else "恢复未完成，原始备份继续保护：${failure.message}")
+            }
+        }
+
+    fun untrackedBackups(records: List<CompressedItemEntity>): List<File> {
+        val known = records.mapNotNull { it.backupRelPath }.toSet() +
+            recovery.entries().flatMap { listOfNotNull(it.backupRelPath, it.safetyBackupRelPath) }
+        return recycle.untracked(known)
+    }
+
+    /** 旧版本异常备份缺少原路径：复制到独立图集，不删除备份、不覆盖已有照片。 */
+    suspend fun exportUntracked(records: List<CompressedItemEntity>): Int = withContext(Dispatchers.IO) {
+        val directory = File(android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_PICTURES), "轻存恢复")
+        check(directory.isDirectory || directory.mkdirs()) { "无法建立恢复图集，备份仍保留" }
+        var exported = 0
+        for (backup in untrackedBackups(records)) {
+            var target = File(directory, backup.name)
+            var suffix = 1
+            while (!target.createNewFile()) target = File(directory,
+                "${backup.nameWithoutExtension}_${suffix++}.${backup.extension}")
+            try {
+                val sha = FileUtils.copyWithSha256(backup, target)
+                check(FileUtils.sha256(target) == sha) { "恢复副本校验失败，原始备份仍保留" }
+            } catch (failure: Exception) {
+                target.delete() // 仅清理本次 CREATE_NEW 创建的未完成副本。
+                throw failure
+            }
+            MediaStoreUpdater.scanExisting(context, target.absolutePath)
+            exported++
+        }
+        exported
     }
 
     /** 清理备份：只删备份，已压缩文件保持不动（E 需求：清理后仍显示为已压缩）。 */
@@ -677,12 +697,11 @@ class CompressionEngine(private val context: Context) {
         records: List<CompressedItemEntity>,
         onPurged: suspend (List<String>) -> Unit,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
-        clearUntracked: Boolean = false,
     ): RecycleBin.PurgeResult = withContext(Dispatchers.IO) {
         var freed = 0L
         var failed = 0
         val pending = ArrayList<String>(64)
-        val protectedPaths = mutableSetOf<String>()
+        val protectedPaths = recovery.entries().flatMap { listOfNotNull(it.backupRelPath, it.safetyBackupRelPath) }.toSet()
         suspend fun flush() {
             if (pending.isEmpty()) return
             withContext(NonCancellable) { onPurged(pending.toList()) }
@@ -694,11 +713,19 @@ class CompressionEngine(private val context: Context) {
                 val rel = record.backupRelPath
                 if (rel != null) {
                     try {
+                        check(rel !in protectedPaths) { "异常恢复备份禁止清理" }
+                        val mediaPath = if (record.status == CompressedItemEntity.STATUS_RESTORED)
+                            record.originalPath.ifBlank { record.dataPath } else record.dataPath
+                        val media = File(mediaPath)
+                        val expectedSize = if (record.status == CompressedItemEntity.STATUS_RESTORED)
+                            record.originalSize else record.compressedSize
+                        check(media.isFile && media.length() > 0 && media.length() == expectedSize) {
+                            "原照片缺失或已变化，可能仅剩备份，禁止清理"
+                        }
                         freed += recycle.deleteBackupChecked(rel)
                         pending += record.id
                     } catch (_: Exception) {
                         failed++
-                        protectedPaths += File(rel).normalize().path.replace(File.separatorChar, '/')
                     }
                 }
                 if (pending.size >= 64) flush()
@@ -709,11 +736,6 @@ class CompressionEngine(private val context: Context) {
         } finally {
             // 生命周期取消也必须登记本轮已删除的备份，不能把它们继续标成可还原。
             flush()
-        }
-        if (clearUntracked) {
-            val residual = recycle.purgeUntracked(protectedPaths)
-            freed += residual.freedBytes
-            failed += residual.failedCount
         }
         RecycleBin.PurgeResult(freed, failed)
     }

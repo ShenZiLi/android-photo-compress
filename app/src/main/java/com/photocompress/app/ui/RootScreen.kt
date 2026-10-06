@@ -252,11 +252,19 @@ fun AppRoot(vm: AppViewModel) {
                         state = state,
                         busy = batch != null,
                         onBack = { vm.go(AppPage.SETTINGS) },
+                        onRecover = { entry ->
+                            dialog = DialogData("恢复原片", "从受保护备份恢复这张照片并同步相册。原始备份继续保留。",
+                                "恢复", onConfirm = { vm.recoverOriginal(entry) })
+                        },
+                        onExportLegacy = {
+                            dialog = DialogData("找回照片", "将历史异常备份复制到“轻存恢复”图集。旧备份缺少原路径和系统日期记录，导出不会覆盖照片或删除备份。",
+                                "找回", onConfirm = { vm.exportLegacyBackups() })
+                        },
                         onPurgeAll = {
                             val backups = state.ledger.filter { it.backupRelPath != null }
                             dialog = DialogData(
                                 title = "清理回收站",
-                                body = "将永久删除 ${formatCount(backups.size)} 份原始备份，释放约 ${formatSize(backups.sumOf { it.backupSize })}。此操作不可撤销；已压缩的照片本身不受影响，但这些照片将无法再还原到压缩前的状态。",
+                                body = "将清理 ${formatCount(backups.size)} 份已登记备份中可安全删除的内容。异常恢复备份及原片缺失时可能唯一剩下的备份会保留。删除不可撤销；已压缩照片不受影响，已删除的备份将无法再用于还原。",
                                 okLabel = "永久删除备份",
                                 danger = true,
                                 onConfirm = { vm.purgeAllBackups() },

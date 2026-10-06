@@ -30,12 +30,13 @@ object MediaStoreUpdater {
     }
 
     fun restoreDates(context: Context, uri: Uri, dates: ContentValues) {
-        check(context.contentResolver.update(uri, dates, null, null) == 1) { "无法恢复媒体日期" }
-        val row = readRow(context, uri)
-        check(row.dateTaken == dates.getAsLong(MediaStore.Images.Media.DATE_TAKEN) &&
+        fun matches(row: Row): Boolean = row.dateTaken == dates.getAsLong(MediaStore.Images.Media.DATE_TAKEN) &&
             row.dateAdded == dates.getAsLong(MediaStore.MediaColumns.DATE_ADDED) &&
             row.dateModified == dates.getAsLong(MediaStore.MediaColumns.DATE_MODIFIED)
-        ) { "媒体日期恢复校验失败" }
+        if (matches(readRow(context, uri))) return
+        context.contentResolver.update(uri, dates, null, null)
+        val row = readRow(context, uri)
+        check(matches(row)) { "无法恢复媒体日期；文件已保留" }
     }
 
     private data class Row(
@@ -49,6 +50,9 @@ object MediaStoreUpdater {
         val oemVideoSize: Long?,
         val hasOemVideoSize: Boolean,
     )
+
+    fun pointsTo(context: Context, uri: Uri, path: String): Boolean =
+        runCatching { readRow(context, uri).let { it.path == path && it.pending == 0 } }.getOrDefault(false)
 
     private fun readRow(context: Context, uri: Uri): Row =
         checkNotNull(context.contentResolver.query(uri, null, null, null, null)) {
@@ -120,7 +124,7 @@ object MediaStoreUpdater {
                 keep(MediaStore.MediaColumns.DATE_ADDED, before.dateAdded)
                 keep(MediaStore.MediaColumns.DATE_MODIFIED, before.dateModified)
             }
-            check(resolver.update(uri, dates, null, null) == 1) { "无法恢复媒体日期" }
+            resolver.update(uri, dates, null, null)
             after = readRow(context, uri)
             checkIdentity()
         }
@@ -138,28 +142,19 @@ object MediaStoreUpdater {
         }
     }
 
-    /** 通知媒体库某条记录已失效（文件被移出媒体库时使用）。 */
-    fun notifyDeleted(context: Context, uri: Uri) {
-        runCatching { context.contentResolver.delete(uri, null, null) }
-    }
-
-    /**
-     * 路径变化后重建媒体库记录（HEIC→JPEG 转换后使用）。
-     *
-     * ⚠️ MediaProvider 删除行时会**连带删除磁盘文件**，因此调用前必须先物理删除旧文件，
-     * 且**绝不能**对「需要保留的文件」调用本方法 —— 原地还原请用 [refresh]。
-     */
-    suspend fun reindex(context: Context, oldUri: Uri?, newPath: String): Uri? = withContext(Dispatchers.IO) {
-        val file = File(newPath)
-        val newUri = scanFileForUri(context, newPath)
-        if (newUri != null && file.exists()) {
-            val values = ContentValues().apply { put(MediaStore.MediaColumns.SIZE, file.length()) }
-            runCatching { context.contentResolver.update(newUri, values, null, null) }
+    /** 只扫描现存原片，绝不通过删除旧 URI 重建索引（不同 URI 可能指向同一文件）。 */
+    suspend fun scanExisting(context: Context, path: String): Uri = withContext(Dispatchers.IO) {
+        val file = File(path)
+        check(file.isFile && file.length() > 0) { "待恢复原片不存在" }
+        val before = Files.getLastModifiedTime(file.toPath())
+        val size = file.length()
+        val uri = checkNotNull(scanFileForUri(context, path)) { "原片已保留，相册扫描未完成" }
+        val row = readRow(context, uri)
+        check(row.path == path && row.pending == 0 && row.size == size) { "原片已保留，相册索引校验失败" }
+        check(file.isFile && file.length() == size && Files.getLastModifiedTime(file.toPath()) == before) {
+            "扫描改变了原片，恢复备份已保留"
         }
-        if (oldUri != null && oldUri != newUri) {
-            runCatching { context.contentResolver.delete(oldUri, null, null) }
-        }
-        newUri
+        uri
     }
 
     private suspend fun scanFileForUri(context: Context, path: String): Uri? =

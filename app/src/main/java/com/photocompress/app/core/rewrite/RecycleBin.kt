@@ -22,6 +22,7 @@ internal object FileUtils {
         checkCancelled: () -> Unit = {},
         calculateDigest: Boolean = true,
     ): String {
+        require(source.isFile && source.canonicalFile != target.canonicalFile) { "源文件与目标不合法，未写入" }
         target.parentFile?.mkdirs()
         val digest = if (calculateDigest) MessageDigest.getInstance("SHA-256") else null
         FileInputStream(source).use { input ->
@@ -68,7 +69,15 @@ class RecycleBin(private val context: Context) {
 
     private val root: File get() = File(context.filesDir, "recycle").apply { mkdirs() }
 
-    fun fileOf(relPath: String): File = File(root, relPath)
+    fun fileOf(relPath: String): File {
+        val directory = root.canonicalFile.toPath()
+        val requested = directory.resolve(relPath).normalize()
+        val file = requested.toFile().canonicalFile
+        require(file.toPath().startsWith(directory) && file.toPath() != directory && file.toPath() == requested) {
+            "备份路径越界或包含符号链接，未操作文件"
+        }
+        return file
+    }
 
     /** 备份原文件，返回相对路径。 */
     fun backup(id: String, source: File): String {
@@ -122,32 +131,12 @@ class RecycleBin(private val context: Context) {
 
     data class PurgeResult(val freedBytes: Long, val failedCount: Int)
 
-    /** 手动清空同时处理无账本的残留；保留删除失败的备份，不跟随符号链接。 */
-    fun purgeUntracked(protectedPaths: Set<String>): PurgeResult {
-        val directory = root.canonicalFile
-        var freed = 0L
-        var failed = 0
-        Files.walk(directory.toPath()).use { paths ->
-            paths.sorted(Comparator.reverseOrder()).forEach { path ->
-                val file = path.toFile()
-                if (file == directory) return@forEach
-                val relative = directory.toPath().relativize(path).toString().replace(File.separatorChar, '/')
-                if (protectedPaths.any { relative == it || relative.startsWith("$it/") }) return@forEach
-                if (Files.isSymbolicLink(path)) {
-                    failed++
-                } else if (file.isDirectory) {
-                    // 失败备份所在的非空目录保留；空目录不计入释放体积。
-                    file.delete()
-                } else {
-                    try {
-                        freed += deleteBackupChecked(relative)
-                    } catch (_: Exception) {
-                        failed++
-                    }
-                }
-            }
-        }
-        return PurgeResult(freed, failed)
+    /** 无账本文件可能是旧版失败后唯一剩余原片：只列出，不清理。 */
+    fun untracked(knownPaths: Set<String>): List<File> = Files.walk(root.canonicalFile.toPath()).use { paths ->
+        paths.iterator().asSequence().filter { !Files.isSymbolicLink(it) && Files.isRegularFile(it) }
+            .map { it.toFile() }.filter { file ->
+                file.relativeTo(root.canonicalFile).invariantSeparatorsPath !in knownPaths
+            }.toList()
     }
 
     fun totalSize(): Long {
@@ -168,6 +157,7 @@ object InPlaceRewriter {
 
     /** 把 [source] 的内容原地写入 [target]，并恢复 [mtimeMs]。 */
     fun writeFrom(target: File, source: File, mtimeMs: Long, checkCancelled: () -> Unit = {}) {
+        require(source.isFile && source.canonicalFile != target.canonicalFile) { "原片与备份路径冲突，未写入" }
         checkCancelled()
         RandomAccessFile(target, "rw").use { raf ->
             FileInputStream(source).use { input ->

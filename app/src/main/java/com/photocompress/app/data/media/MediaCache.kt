@@ -86,7 +86,7 @@ data class CacheSnapshot(
  * **凡改动判类 / 探测逻辑（`MediaClassifier`、`VideoProbeRunner`、编码能力判定），
  * 必须把此值 +1**，强制下一次启动走全量重扫。
  */
-const val CACHE_LOGIC_VERSION = 1
+const val CACHE_LOGIC_VERSION = 2
 
 /**
  * 是否需要走全量重扫：扫描水位还没推进，**或**判类逻辑版本已变化。

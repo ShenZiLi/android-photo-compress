@@ -107,8 +107,7 @@ object MediaClassifier {
     /** 图片（含实况主图）的支持判定。 */
     fun decideImage(format: ContainerFormat, isLivePhoto: Boolean): SupportDecision = when (format) {
         ContainerFormat.JPEG -> SupportDecision.Supported
-        // HEIF 无法把 EXIF/XMP 写回容器，改为「转为 JPEG 并搬运元信息」的方式压缩（见 HeicCompressor）
-        ContainerFormat.HEIC -> SupportDecision.Supported
+        ContainerFormat.HEIC -> SupportDecision.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
         ContainerFormat.PNG -> SupportDecision.Skipped("PNG 是无损格式，本版本不处理")
         ContainerFormat.BMP -> SupportDecision.Skipped("BMP 非相机原生格式，本版本不处理")
         ContainerFormat.WEBP -> SupportDecision.Skipped("WebP 属第三方来源，本版本不处理")
