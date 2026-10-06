@@ -794,3 +794,39 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 由用户在真机检查HDR观感；文件创建时间须单独验收，虚拟机日期身份核对不替代该要求。
+
+
+## Session 26: 无收益图片移入已压缩并标记已跳过
+<!-- trellis-session: v=2 fp=85437457b4116a74 -->
+
+**Date**: 2026-10-07
+**Task**: 无收益图片移入已压缩并标记已跳过
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.24统一无收益提示，普通和实况图片原片不改写，仅持久登记SKIPPED，移入已压缩页，提供标记和筛选；构建、签名与API36原生验收通过。
+
+### Main Changes
+
+- 无收益结果使用类型标记；沿用v5账本字段保存零收益无备份的SKIPPED记录，原文件不写XMP、不创建备份。
+- 两页共用有效账本规则，跳过筛选、图集摘要和信息面板区分已跳过与超期/已清理；更新README、需求、设计与执行规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d0078e` | feat(media): archive photos skipped without size reduction |
+
+### Testing
+
+- [OK] 合成低质量JPEG无收益归类SKIPPED，高质量JPEG成功归类DONE，PNG无处理记录；摘要、inode、纳秒mtime、媒体库ID和日期保持。重启与筛选通过，混合图集还原仅处理成功项，字节恢复一致。
+- [OK] 调试/正式构建、发布必需Lint、正式签名、虚拟机覆盖安装及diff检查通过。全量lintDebug失败：既有VideoTranscoder 358/377两处WrongConstant，HEAD原文与零差异已确认，按Trellis范围规则记录而不扩大修复。未新增或运行测试套件。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 过去未登记的无收益图片需下一次尝试才生成跳过记录；登记取消时序、数据库故障和外部改写等专项边界未宣称已验证。
