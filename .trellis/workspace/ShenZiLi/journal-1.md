@@ -654,3 +654,38 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机速度、OEM/HDR播放、HEIC取消、写入/落账时取消和故障恢复仍需实测；整体应用任务继续进行。
+
+
+## Session 22: 回收站大量内容闪退与全部清理修复
+<!-- trellis-session: v=2 fp=111792e6b6208f31 -->
+
+**Date**: 2026-10-06
+**Task**: 回收站大量内容闪退与全部清理修复
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.20：固定回收站顶栏、按需绘制备份列表，统一全部清理范围并核验文件删除结果。
+
+### Main Changes
+
+- LazyColumn稳定编号、固定删除按钮；IO清理、64项登记与进度；失败保留索引，到期Worker复用。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9665780` | fix(recycle): virtualize backup list and verify bulk deletion |
+
+### Testing
+
+- [OK] Android16独立虚拟机复现旧版5018条布局异常；新版5019条正常打开滚动并清理，模拟失败保留1项，重试清空；29个媒体SHA256不变。
+- [OK] Debug及签名Release构建通过，lintVital通过，版本21/0.1.20，正式签名一致，git diff --check通过。未运行自动化测试套件。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户自行真机验收；本次仅本地APK与Git提交，不推送或发布。
