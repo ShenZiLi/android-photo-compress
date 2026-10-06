@@ -4,6 +4,7 @@ import android.content.Context
 import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
+import com.photocompress.app.core.jpeg.MpfPhotoContainer
 import com.photocompress.app.core.livephoto.LivePhotoContainer
 import com.photocompress.app.core.mp4.Mp4Metadata
 import com.photocompress.app.core.rewrite.FileUtils
@@ -131,13 +132,16 @@ class CompressionEngine(private val context: Context) {
         if (!JpegSegments.isJpeg(original)) return CompressOutcome.Skipped("不是有效 JPEG")
 
         val mpfPayload = JpegSegments.mpfPayloadOf(original)
+        val xmp = JpegSegments.xmpTextOf(original)
+        val containerItems = LivePhotoDetector.parseContainerItems(xmp ?: "")
         if (mpfPayload != null) {
             val n = MpfRewriter.numberOfImages(mpfPayload)
+            if (n == 2 && containerItems.none { it.semantic == "MotionPhoto" }) {
+                return compressMpfPhoto(item, original, xmp, tier, attempt)
+            }
             if (n != 1) return CompressOutcome.Skipped("含${n}图 MPF 多图结构，本版本不处理。")
         }
 
-        val xmp = JpegSegments.xmpTextOf(original)
-        val containerItems = LivePhotoDetector.parseContainerItems(xmp ?: "")
         if (containerItems.any { it.semantic == "MotionPhoto" } || containerItems.any { it.semantic == "GainMap" }) {
             // 实况照片 / Ultra HDR 被误判为普通照片时，走容器重组路径
             return compressLivePhoto(item, tier, videoTier, attempt)
@@ -175,6 +179,35 @@ class CompressionEngine(private val context: Context) {
         val temp = attempt.temp(".jpg")
         temp.writeBytes(finalBytes)
         return commit(item, temp, tier, codecUsed = "JPEG q=${quality}", attempt = attempt)
+    }
+
+    private suspend fun compressMpfPhoto(
+        item: MediaItem, original: ByteArray, xmp: String?, tier: QualityTier, attempt: Attempt,
+    ): CompressOutcome {
+        val plan = MpfPhotoContainer.plan(original)
+            ?: return CompressOutcome.Skipped("MPF 图片边界或偏移无效，已保留原片")
+        val primary = original.copyOfRange(0, plan.primaryEnd)
+        val originalDimensions = JpegCompressor.probeSize(primary)
+            ?: return CompressOutcome.Skipped("MPF 主图无法解码，已保留原片")
+        val quality = JpegCompressor.qualityFor(tier)
+        // 只解码主图，避免平台解码整个 HDR 容器后将增益映射结果烘焙进 SDR 基图。
+        val encoded = JpegCompressor.compressJpeg(primary, quality)
+            ?: return CompressOutcome.Skipped("MPF 主图无法重编码，已保留原片")
+        attempt.checkCancelled()
+        val xmpOut = PcXmp.injectAttributes(xmp, newMarker())
+        if (xmp != null && PcXmp.removeOwn(xmpOut) != PcXmp.removeOwn(xmp)) {
+            return CompressOutcome.Skipped("MPF 的 XMP 无法完整保留，已保留原片")
+        }
+        val out = MpfPhotoContainer.rebuild(original, plan, encoded, xmpOut)
+            ?: return CompressOutcome.Skipped("MPF 重组校验未通过，已保留原片")
+        if (JpegCompressor.probeSize(out) != originalDimensions) {
+            return CompressOutcome.Skipped("MPF 输出尺寸校验未通过，已保留原片")
+        }
+        if (out.size >= original.size) return CompressOutcome.Skipped("压缩后体积未减小")
+        attempt.checkCancelled()
+        val temp = attempt.temp(".jpg")
+        temp.writeBytes(out)
+        return commit(item, temp, tier, codecUsed = "MPF 双图 JPEG q=$quality + 辅助图与尾部原样", attempt = attempt)
     }
 
     // ---------------------------------------------------------------- 实况照片

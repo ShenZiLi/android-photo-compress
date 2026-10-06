@@ -14,6 +14,19 @@ object MpfRewriter {
     const val TAG_MP_ENTRY = 0xB002
     const val TAG_NUMBER_OF_IMAGES = 0xB001
 
+    data class Entry(val attributes: Long, val size: Long, val offset: Long, val dependent1: Int, val dependent2: Int)
+
+    fun entries(payload: ByteArray): List<Entry>? {
+        val ctx = readContext(payload) ?: return null
+        return List(ctx.numberOfImages) { index ->
+            val at = ctx.mpEntryOffset + index * 16
+            Entry(u32(payload, at, ctx.littleEndian).toLong() and 0xFFFFFFFFL,
+                u32(payload, at + 4, ctx.littleEndian).toLong() and 0xFFFFFFFFL,
+                u32(payload, at + 8, ctx.littleEndian).toLong() and 0xFFFFFFFFL,
+                u16(payload, at + 12, ctx.littleEndian), u16(payload, at + 14, ctx.littleEndian))
+        }
+    }
+
     /** 读取 MPF 声明的图像张数；无法解析返回 -1。 */
     fun numberOfImages(payload: ByteArray): Int {
         val ctx = readContext(payload) ?: return -1
@@ -46,10 +59,13 @@ object MpfRewriter {
         for (i in sizes.indices) {
             val entry = mpEntry + i * 16
             if (entry + 16 > out.size) return null
+            if (sizes[i] !in 1L..0xFFFFFFFFL) return null
+            val relative = if (i == 0 && offsets[i] == 0L) 0L else offsets[i] - base
+            if (relative !in 0L..0xFFFFFFFFL) return null
             writeU32(out, entry + 4, sizes[i], ctx.littleEndian)
             // 首图的绝对位置是 0（规范特例），减基准后为负，统一按 0 记，
             // 与 oplus 原文件中的写法一致。
-            writeU32(out, entry + 8, (offsets[i] - base).coerceAtLeast(0L), ctx.littleEndian)
+            writeU32(out, entry + 8, relative, ctx.littleEndian)
         }
         return out
     }
@@ -68,21 +84,37 @@ object MpfRewriter {
             payload[base] == 'M'.code.toByte() && payload[base + 1] == 'M'.code.toByte() -> false
             else -> return null
         }
-        val firstIfd = u32(payload, base + 4, little)
-        var ifd = base + firstIfd
-        if (ifd + 2 > payload.size) return null
+        if (u16(payload, base + 2, little) != 42) return null
+        val firstIfd = u32(payload, base + 4, little).toLong() and 0xFFFFFFFFL
+        if (firstIfd < 8 || firstIfd > payload.size - base - 2L) return null
+        val ifd = base + firstIfd.toInt()
         val count = u16(payload, ifd, little)
+        if (ifd + 2L + count * 12L + 4 > payload.size) return null
         var numberOfImages = -1
         var mpEntryOffset = -1
+        var mpEntryLength = -1L
         for (i in 0 until count) {
             val entry = ifd + 2 + i * 12
             if (entry + 12 > payload.size) return null
             when (u16(payload, entry, little)) {
-                TAG_NUMBER_OF_IMAGES -> numberOfImages = u32(payload, entry + 8, little)
-                TAG_MP_ENTRY -> mpEntryOffset = base + u32(payload, entry + 8, little)
+                TAG_NUMBER_OF_IMAGES -> {
+                    if (numberOfImages != -1 || u16(payload, entry + 2, little) != 4 ||
+                        u32(payload, entry + 4, little) != 1) return null
+                    val number = u32(payload, entry + 8, little)
+                    if (number <= 0) return null
+                    numberOfImages = number
+                }
+                TAG_MP_ENTRY -> {
+                    if (mpEntryOffset != -1 || u16(payload, entry + 2, little) != 7) return null
+                    val offset = u32(payload, entry + 8, little).toLong() and 0xFFFFFFFFL
+                    if (offset < 8 || offset > payload.size - base) return null
+                    mpEntryOffset = base + offset.toInt()
+                    mpEntryLength = u32(payload, entry + 4, little).toLong() and 0xFFFFFFFFL
+                }
             }
         }
         if (mpEntryOffset < 0 || numberOfImages <= 0) return null
+        if (numberOfImages * 16L != mpEntryLength || mpEntryOffset + mpEntryLength > payload.size) return null
         return Context(little, numberOfImages, mpEntryOffset)
     }
 

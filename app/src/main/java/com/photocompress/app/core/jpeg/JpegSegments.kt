@@ -29,6 +29,37 @@ object JpegSegments {
     fun isJpeg(bytes: ByteArray): Boolean =
         bytes.size > 4 && (bytes[0].toInt() and 0xFF) == 0xFF && (bytes[1].toInt() and 0xFF) == MARKER_SOI
 
+    /** 按段长度和熵流转义寻找真实 EOI，支持多扫描 JPEG；不匹配 EXIF/熵数据中的伪标记。 */
+    fun imageEnd(bytes: ByteArray, start: Int = 0, limit: Int = bytes.size): Int? {
+        if (start < 0 || limit > bytes.size || limit - start < 4 ||
+            (bytes[start].toInt() and 255) != 255 || (bytes[start + 1].toInt() and 255) != MARKER_SOI) return null
+        var at = start + 2
+        var entropy = false
+        while (at < limit) {
+            if (entropy) {
+                if ((bytes[at].toInt() and 255) != 255) { at++; continue }
+                if (at + 1 >= limit) return null
+                val next = bytes[at + 1].toInt() and 255
+                if (next == 0 || next in 0xD0..0xD7) { at += 2; continue }
+                if (next == 255) { at++; continue }
+                entropy = false
+            }
+            if ((bytes[at].toInt() and 255) != 255) return null
+            while (at < limit && (bytes[at].toInt() and 255) == 255) at++
+            if (at >= limit) return null
+            val marker = bytes[at++].toInt() and 255
+            if (marker == MARKER_EOI) return at
+            if (marker == 0 || marker == MARKER_SOI) return null
+            if (marker == 1 || marker in 0xD0..0xD7) continue
+            if (limit - at < 2) return null
+            val length = ((bytes[at].toInt() and 255) shl 8) or (bytes[at + 1].toInt() and 255)
+            if (length < 2 || length > limit - at) return null
+            at += length
+            if (marker == MARKER_SOS) entropy = true
+        }
+        return null
+    }
+
     /**
      * 拆分为 [SOI 后的各段] 与 [从 SOS 段开始的剩余字节]。
      * 遇到 SOS 即停止扫描（其后为熵编码数据，按字节透传）。
@@ -52,6 +83,8 @@ object JpegSegments {
     }
 
     private class Walk(val segments: List<Segment>, val starts: IntArray, val tailStart: Int)
+
+    fun headerSegments(bytes: ByteArray): List<Segment> = walk(bytes).segments
 
     /** 段扫描：split 与 mpfPayloadOffset 共用，保证两者的边界判定完全一致。 */
     private fun walk(bytes: ByteArray): Walk {
