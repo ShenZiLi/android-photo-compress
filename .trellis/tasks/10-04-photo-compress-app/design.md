@@ -52,7 +52,7 @@
 | `qualityTier` / `codecUsed` | 本次使用的档位与编码 |
 | `compressedAt` / `restoreDeadline` | `compressedAt + 30 天`（D1 / F10） |
 | `backupRelPath` / `backupSize` | 应用私有回收站中的原文件位置 |
-| `status` | PENDING / COMPRESSING / DONE / FAILED / RESTORED / PURGED |
+| `status` | PENDING / COMPRESSING / DONE / FAILED / RESTORED / PURGED / SKIPPED（无收益原片，未改写） |
 | `failureReason` | 跳过或失败原因（C4 / AC12） |
 
 其余表：`media_scan_cache`（未压缩项缓存：大小、类型、mtime）、`settings`（三类质量档位）。
@@ -88,7 +88,7 @@
 - 元信息以原文件为基准整体搬运，只更新必要字段（尺寸等）。
 - 静态双图 MPF / Ultra HDR 使用 `MpfPhotoContainer`：按真实 JPEG EOI 提取主图，重编码主图后原样搬运辅助图及所有尾部数据，按 TIFF 基准重算 MPF 索引（D10 / D14）。辅助图不重编码，避免改变 HDR 增益关系；不能从文件末尾倒推带厂商尾部的附加图位置。
 - **跳过判别**：PNG、BMP、WebP、AVIF、GIF / 动态 WebP / 动态 AVIF 一律跳过并给出原因（D12）。
-- 若结果体积 ≥ 原体积 → 跳过并记录原因，不改动文件。
+- 若结果体积 ≥ 原体积 → 提示“压缩后体积未减小”，不改动文件，登记 SKIPPED 并移入已压缩页（D15）。使用现有账本字段，原始与当前大小相等、无备份、零节省；共享有效记录规则决定两页归类，图片变化或缺失时旧记录失效。
 
 ### 4.3 HEIC 普通照片（高风险）
 

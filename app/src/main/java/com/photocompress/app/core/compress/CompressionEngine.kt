@@ -38,7 +38,11 @@ import java.nio.file.attribute.FileTime
 
 sealed interface CompressOutcome {
     data class Success(val record: CompressedItemEntity) : CompressOutcome
-    data class Skipped(val reason: String) : CompressOutcome
+    data class Skipped(val reason: String, val noSizeReduction: Boolean = false) : CompressOutcome {
+        companion object {
+            fun noSizeReduction() = Skipped("压缩后体积未减小", noSizeReduction = true)
+        }
+    }
     data class Failed(val reason: String) : CompressOutcome
     data class Cancelled(val reason: String? = null) : CompressOutcome
 }
@@ -77,6 +81,11 @@ class CompressionEngine(private val context: Context) {
             checkCancelled()
         }
         suspend fun forgetPublished() { publishedId?.let { onRollback(it) }; publishedId = null }
+        /** 原片未改写；登记完成即为已处理项，取消只阻止尚未开始的下一项。 */
+        suspend fun publishUnchanged(record: CompressedItemEntity) {
+            checkCancelled()
+            withContext(NonCancellable) { onCommit(record) }
+        }
         fun cleanup() { temps.forEach { it.delete() } }
     }
 
@@ -99,7 +108,10 @@ class CompressionEngine(private val context: Context) {
             check(recovery.entries().none { it.path == item.dataPath }) {
                 "此照片有待恢复记录，请先到回收站恢复原片"
             }
-            when (item.kind) {
+            val source = File(item.dataPath)
+            val originalSize = source.length()
+            val originalModified = source.lastModified()
+            val outcome = when (item.kind) {
                 MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
                     CompressOutcome.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
                 } else {
@@ -108,6 +120,10 @@ class CompressionEngine(private val context: Context) {
                 MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier, attempt)
                 MediaKind.VIDEO -> compressVideo(item, videoTier, attempt)
             }
+            if (outcome is CompressOutcome.Skipped && outcome.noSizeReduction && item.kind != MediaKind.VIDEO) {
+                attempt.publishUnchanged(skippedRecord(item, tier, originalSize, originalModified))
+            }
+            outcome
         } catch (_: CompressionCancelledException) {
             CompressOutcome.Cancelled()
         } catch (t: CancellationException) {
@@ -171,7 +187,7 @@ class CompressionEngine(private val context: Context) {
         }
 
         if (finalBytes.size >= original.size) {
-            return CompressOutcome.Skipped("压缩后体积未减小（${original.size} → ${finalBytes.size}）")
+            return CompressOutcome.Skipped.noSizeReduction()
         }
         JpegCompressor.probeSize(finalBytes)
             ?: return CompressOutcome.Failed("输出无法解码")
@@ -203,7 +219,7 @@ class CompressionEngine(private val context: Context) {
         if (JpegCompressor.probeSize(out) != originalDimensions) {
             return CompressOutcome.Skipped("MPF 输出尺寸校验未通过，已保留原片")
         }
-        if (out.size >= original.size) return CompressOutcome.Skipped("压缩后体积未减小")
+        if (out.size >= original.size) return CompressOutcome.Skipped.noSizeReduction()
         attempt.checkCancelled()
         val temp = attempt.temp(".jpg")
         temp.writeBytes(out)
@@ -366,7 +382,7 @@ class CompressionEngine(private val context: Context) {
                 }
             }
             if (assembled.size >= original.size) {
-                return CompressOutcome.Skipped("压缩后体积未减小（${original.size} → ${assembled.size}）")
+                return CompressOutcome.Skipped.noSizeReduction()
             }
 
             attempt.checkCancelled()
@@ -405,9 +421,8 @@ class CompressionEngine(private val context: Context) {
         // 搬运源文件的 moov 元数据（相机信息 / 拍摄时间），并修正 chunk 偏移
         Mp4Metadata.inject(dst, file)
         if (dst.length() >= file.length()) {
-            val outSize = dst.length()
             dst.delete()
-            return CompressOutcome.Skipped("压缩后体积未减小（${file.length()} → $outSize）")
+            return CompressOutcome.Skipped.noSizeReduction()
         }
         val probe = VideoProbeRunner.probe(dst.absolutePath)
         if (probe.codec == null || probe.durationMs <= 0) {
@@ -418,6 +433,42 @@ class CompressionEngine(private val context: Context) {
         // HDR 源的处置结论（保真 / 已转 SDR）随编码信息写入账本，便于识别与追溯
         val codecUsed = res.hdrNote?.let { "$codecLabel · $it" } ?: codecLabel
         return commit(item, dst, tier, codecUsed = codecUsed, attempt = attempt)
+    }
+
+    /** 无收益仅记录原片身份，不写 XMP、不创建备份、不修改媒体库。 */
+    private fun skippedRecord(item: MediaItem, tier: QualityTier, size: Long, modified: Long): CompressedItemEntity {
+        val file = File(item.dataPath)
+        fun verifyUnchanged() = check(file.isFile && size == item.size && file.length() == size &&
+            file.lastModified() == modified) { "处理期间原片已变化，未登记跳过，请重新扫描" }
+        verifyUnchanged()
+        val sha256 = FileUtils.sha256(file)
+        verifyUnchanged()
+        return CompressedItemEntity(
+            id = UUID.nameUUIDFromBytes("skip:${item.volumeName}:${item.id}:${item.dataPath}".toByteArray(Charsets.UTF_8)).toString(),
+            mediaStoreId = item.id,
+            dataPath = item.dataPath,
+            volumeName = item.volumeName,
+            bucketName = item.bucketName,
+            displayName = item.displayName,
+            mediaKind = item.kind.name,
+            mimeType = item.mimeType,
+            containerFormat = item.format.name,
+            videoCodec = item.videoCodec,
+            originalSize = size,
+            compressedSize = size,
+            originalSha256 = sha256,
+            originalDateTakenMs = item.dateTakenMs,
+            originalDateAddedSec = item.dateAddedSec,
+            originalDateModifiedSec = item.dateModifiedSec,
+            qualityTier = tier.name,
+            codecUsed = null,
+            compressedAtMs = System.currentTimeMillis(),
+            restoreDeadlineMs = 0L,
+            backupRelPath = null,
+            backupSize = 0L,
+            status = CompressedItemEntity.STATUS_SKIPPED,
+            failureReason = CompressOutcome.Skipped.noSizeReduction().reason,
+        )
     }
 
     // ---------------------------------------------------------------- 提交（备份 → 原地替换 → 校验 → 回滚）

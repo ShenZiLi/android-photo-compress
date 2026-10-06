@@ -546,7 +546,11 @@ private fun DoneMedia.toSheet(): SheetData = SheetData(
         add("文件名" to displayName)
         add("类型" to kind.fullLabel)
         add("所在图集" to bucketName)
-        if (adopted) {
+        if (skipped) {
+            add("大小" to formatSize(compressedSize))
+            add("处理状态" to "已跳过")
+            record.failureReason?.let { add("跳过原因" to it) }
+        } else if (adopted) {
             add("大小" to "${formatSize(compressedSize)}（压缩前大小未知）")
             add("识别方式" to "由文件内压缩标记识别（账本已丢失）")
         } else {
@@ -555,11 +559,12 @@ private fun DoneMedia.toSheet(): SheetData = SheetData(
         }
         add("拍摄时间" to formatDateTime(dateTakenMs))
         if (!adopted) {
-            add("压缩时间" to formatDateTime(record.compressedAtMs))
+            add((if (skipped) "处理时间" else "压缩时间") to formatDateTime(record.compressedAtMs))
             record.codecUsed?.let { add("编码/档位" to "$it · ${qualityTier.label}") }
         }
         add(
             "备份状态" to when {
+                skipped -> "原片未改动，无需还原"
                 adopted -> "无备份（由文件标记识别）"
                 record.status == com.photocompress.app.data.ledger.CompressedItemEntity.STATUS_PURGED -> "已清理，无法还原"
                 !restorable -> "已超期，无法还原"

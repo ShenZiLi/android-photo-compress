@@ -174,8 +174,8 @@ fun DoneLevel1(
                     coverUris = album.items.take(4).mapNotNull { it.item?.uri },
                     name = album.name,
                     line2 = album.sizeLine,
-                    line3 = if (album.restorableCount > 0) "可还原 ${formatCount(album.restorableCount)} 项" else "备份已不可还原",
-                    line3Warn = album.restorableCount == 0,
+                    line3 = album.statusLine,
+                    line3Warn = album.restorableCount == 0 && album.skippedCount == 0,
                     picked = album.name in state.done.pickedAlbums,
                     onOpen = { onOpenAlbum(album.name) },
                     onTogglePick = { onToggleAlbum(album.name) },
@@ -370,7 +370,7 @@ fun DoneLevel2(
             },
         )
         FilterChips(
-            options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已超期"),
+            options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已超期", "skipped" to "已跳过"),
             selected = level.filter,
             onSelect = onFilter,
         )
@@ -393,14 +393,15 @@ fun DoneLevel2(
                     picked = dm.record.mediaStoreId in level.pickedItems,
                     selectable = restorable,
                     badge = when {
+                        dm.skipped -> "已跳过" to Color(0x9E000000)
                         dm.adopted -> "已压缩" to Color(0x9E000000)
                         dm.record.status == CompressedItemEntity.STATUS_PURGED -> "已清理" to Color(0xB8000000)
                         days < 0 -> "已超期" to Color(0xB8000000)
                         else -> "已压缩" to MaterialTheme.appColors.success
                     },
                     isVideo = dm.kind == MediaKind.VIDEO,
-                    grayed = !restorable,
-                    metaLeft = if (dm.adopted) "—" else formatSize(dm.originalSize),
+                    grayed = !restorable && !dm.skipped,
+                    metaLeft = if (dm.skipped) dm.kind.label else if (dm.adopted) "—" else formatSize(dm.originalSize),
                     metaRight = formatSize(dm.compressedSize),
                     onClick = { if (restorable) onToggleItem(dm.record.mediaStoreId) else onShowInfo(dm) },
                     onLongClick = { onShowInfo(dm) },

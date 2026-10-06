@@ -41,20 +41,22 @@ data class CompressedItemEntity(
     val codecUsed: String?,
     val compressedAtMs: Long,
     val restoreDeadlineMs: Long,
-    /** 应用私有回收站中的原文件相对路径；为 null 表示备份已清理。 */
+    /** 应用私有回收站中的原文件相对路径；null 表示无备份（已清理或 SKIPPED 原片未改写）。 */
     val backupRelPath: String?,
     val backupSize: Long,
-    /** DONE / RESTORED / PURGED */
+    /** DONE / RESTORED / PURGED / SKIPPED（无收益，原片未改写） */
     val status: String,
     val failureReason: String? = null,
 ) {
     val restorable: Boolean get() = status == STATUS_DONE && backupRelPath != null
-    val savedBytes: Long get() = originalSize - compressedSize
+    val skipped: Boolean get() = status == STATUS_SKIPPED
+    val savedBytes: Long get() = if (skipped) 0L else originalSize - compressedSize
 
     companion object {
         const val STATUS_DONE = "DONE"
         const val STATUS_RESTORED = "RESTORED"
         const val STATUS_PURGED = "PURGED"
+        const val STATUS_SKIPPED = "SKIPPED"
     }
 }
 

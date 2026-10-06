@@ -64,6 +64,7 @@ data class DoneMedia(
     val originalSize: Long get() = record.originalSize
     val compressedSize: Long get() = record.compressedSize
     val saved: Long get() = record.savedBytes
+    val skipped: Boolean get() = record.skipped
     val restorable: Boolean get() = record.restorable
     val dateTakenMs: Long get() = item?.dateTakenMs ?: record.originalDateTakenMs
     val qualityTier: QualityTier get() = QualityTier.fromName(record.qualityTier)
@@ -79,12 +80,18 @@ data class AlbumTodoUi(val name: String, val items: List<MediaItem>) {
 
 data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
     val count: Int get() = items.size
-    /** 压缩前大小已知的条目数（由文件标记识别的条目没有该信息）。 */
-    val knownBeforeCount: Int get() = items.count { !it.adopted }
+    /** 实际压缩且压缩前大小已知的条目数；仅跳过时不显示相同大小的箭头对比。 */
+    val knownBeforeCount: Int get() = items.count { !it.adopted && !it.skipped }
     val before: Long get() = items.sumOf { it.originalSize }
     val after: Long get() = items.sumOf { it.compressedSize }
     val restorableItems: List<DoneMedia> get() = items.filter { it.restorable }
     val restorableCount: Int get() = restorableItems.size
+    val skippedCount: Int get() = items.count { it.skipped }
+    val statusLine: String
+        get() = buildList {
+            if (restorableCount > 0) add("可还原 ${formatCount(restorableCount)} 项")
+            if (skippedCount > 0) add("已跳过 ${formatCount(skippedCount)} 项")
+        }.joinToString(" · ").ifEmpty { "备份已不可还原" }
 
     /** 全部条目都只有标记、压缩前大小未知时只显示当前体积，避免「0 B →」的误导性展示。 */
     val sizeLine: String
@@ -116,7 +123,20 @@ data class Totals(
 private val ACTIVE_STATUSES = setOf(
     CompressedItemEntity.STATUS_DONE,
     CompressedItemEntity.STATUS_PURGED,
+    CompressedItemEntity.STATUS_SKIPPED,
 )
+
+/** 无收益判断只适用于仍然存在且身份/大小/日期一致的原片，不隐藏改过或替换过的图片。 */
+private fun UiState.activeLedger(): List<CompressedItemEntity> {
+    val byPath = items.associateBy { it.dataPath }
+    return ledger.filter { record ->
+        record.status in ACTIVE_STATUSES && (!record.skipped || byPath[record.dataPath]?.let { item ->
+            item.id == record.mediaStoreId && item.volumeName == record.volumeName &&
+                item.size == record.originalSize && item.dateModifiedSec == record.originalDateModifiedSec &&
+                item.xmpCompressId == null
+        } == true)
+    }
+}
 
 /** 批量操作前的统计与目标（口径唯一，按钮文案与确认框共用）。 */
 data class SelectionSummary(
@@ -192,7 +212,7 @@ fun UiState.doneSelection(): SelectionSummary {
 fun UiState.todoItems(): List<MediaItem> {
     val excluded = excludedAlbums
     val compressedPaths = HashSet<String>()
-    ledger.asSequence().filter { it.status in ACTIVE_STATUSES }.forEach { compressedPaths += it.dataPath }
+    activeLedger().forEach { compressedPaths += it.dataPath }
     // 文件内标记优先：账本丢失（重装 / 清数据）时仍能识别，避免二次压缩（F7 / AC5）
     items.asSequence().filter { it.xmpCompressId != null }.forEach { compressedPaths += it.dataPath }
     return items.filter { it.dataPath !in compressedPaths && it.bucketName !in excluded }
@@ -201,7 +221,7 @@ fun UiState.todoItems(): List<MediaItem> {
 fun UiState.doneItems(): List<DoneMedia> {
     val excluded = excludedAlbums
     val byPath = items.associateBy { it.dataPath }
-    val fromLedger = ledger.filter { it.status in ACTIVE_STATUSES }
+    val fromLedger = activeLedger()
         .map { DoneMedia(it, byPath[it.dataPath]) }
         .filter { it.bucketName !in excluded }
     val known = fromLedger.map { it.dataPath }.toHashSet()
@@ -300,7 +320,8 @@ fun List<MediaItem>.applyTodoFilter(filter: String): List<MediaItem> = when (fil
 
 fun List<DoneMedia>.applyDoneFilter(filter: String): List<DoneMedia> = when (filter) {
     "restorable" -> filter { it.restorable }
-    "expired" -> filter { !it.restorable }
+    "expired" -> filter { !it.restorable && !it.skipped }
+    "skipped" -> filter { it.skipped }
     else -> this
 }
 
