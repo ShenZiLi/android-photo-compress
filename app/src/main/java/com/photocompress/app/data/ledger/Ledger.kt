@@ -105,6 +105,9 @@ interface LedgerDao {
     @Query("SELECT * FROM compressed_item WHERE status = 'DONE' AND backupRelPath IS NOT NULL")
     suspend fun findRestorable(): List<CompressedItemEntity>
 
+    @Query("SELECT * FROM compressed_item WHERE backupRelPath IS NOT NULL")
+    suspend fun findWithBackups(): List<CompressedItemEntity>
+
     @Query("SELECT * FROM compressed_item WHERE status = 'DONE' AND backupRelPath IS NOT NULL AND restoreDeadlineMs < :now")
     suspend fun findExpired(now: Long): List<CompressedItemEntity>
 
@@ -120,8 +123,8 @@ interface LedgerDao {
     @Query("UPDATE compressed_item SET status = :status, backupRelPath = NULL, backupSize = 0 WHERE dataPath = :path")
     suspend fun markBackupGone(path: String, status: String)
 
-    @Query("UPDATE compressed_item SET backupRelPath = NULL, backupSize = 0, status = 'PURGED' WHERE status = 'DONE' AND backupRelPath IS NOT NULL")
-    suspend fun purgeAllBackups(): Int
+    @Query("UPDATE compressed_item SET backupRelPath = NULL, backupSize = 0, status = CASE WHEN status = 'DONE' THEN 'PURGED' ELSE status END WHERE id IN (:ids) AND backupRelPath IS NOT NULL")
+    suspend fun markBackupsGone(ids: List<String>): Int
 }
 
 @Dao

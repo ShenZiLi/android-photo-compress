@@ -9,15 +9,19 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -40,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.BuildConfig
@@ -289,13 +294,15 @@ fun TrashScreen(
     busy: Boolean = false,
 ) {
     val now = System.currentTimeMillis()
-    val backups = state.ledger.filter { it.backupRelPath != null }
-    val restorable = backups.filter { it.restoreDeadlineMs > now }
+    val backups = remember(state.ledger) { state.ledger.filter { it.backupRelPath != null } }
+    val restorableCount = remember(backups, now / 60_000) {
+        backups.count { it.restorable && it.restoreDeadlineMs > now }
+    }
 
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxSize()) {
         AppBar(
             title = "回收站",
-            subtitle = "${formatCount(restorable.size)} 份备份可还原",
+            subtitle = "${formatCount(restorableCount)} 份备份可还原",
             navigation = {
                 com.photocompress.app.ui.components.GlassIconButton(onClick = onBack) {
                     Icon(
@@ -318,55 +325,75 @@ fun TrashScreen(
                 }
             },
         )
-        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            CardSurface(color = MaterialTheme.colorScheme.secondaryContainer) {
-                Text(
-                    "压缩成功后原文件会保留在这里 30 天，期间可随时还原。超期或手动清理后，备份不可恢复，已压缩的照片不受影响。",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(16.dp),
-                )
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item(key = "intro", contentType = "intro") {
+                CardSurface(color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text(
+                        "压缩成功后原文件会保留在这里 30 天，期间可随时还原。超期或手动清理后，备份不可恢复，已压缩的照片不受影响。",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
             }
-            SectionTitle("原始文件备份", modifier = Modifier.padding(horizontal = 0.dp))
-            CardSurface(modifier = Modifier.fillMaxWidth()) {
-                Column {
-                    if (backups.isEmpty()) {
+            item(key = "heading", contentType = "heading") {
+                SectionTitle("原始文件备份", modifier = Modifier.padding(horizontal = 0.dp))
+            }
+            if (backups.isEmpty()) {
+                item(key = "empty", contentType = "empty") {
+                    CardSurface(modifier = Modifier.fillMaxWidth()) {
                         EmptyState("回收站是空的", "压缩照片后，原文件会保留在这里 30 天")
-                    } else {
-                        backups.forEach { record ->
-                            val days = daysLeft(record.restoreDeadlineMs, now)
-                            val expired = days < 0
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        record.displayName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                    )
-                                    Text(
-                                        "${record.bucketName} · ${formatSize(record.originalSize)} · " +
-                                            if (expired) "已超期，等待自动清理" else "剩余 $days 天可还原",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.appColors.onSurfaceMuted,
-                                        maxLines = 1,
-                                    )
-                                }
+                    }
+                }
+            } else {
+                items(backups, key = { it.id }, contentType = { "backup" }) { record ->
+                    CardSurface(modifier = Modifier.fillMaxWidth()) {
+                        val days = daysLeft(record.restoreDeadlineMs, now)
+                        val expired = record.restoreDeadlineMs <= now
+                        val available = record.restorable && !expired
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                                 Text(
-                                    if (expired) "超期" else "可还原",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    record.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (expired) MaterialTheme.appColors.danger else MaterialTheme.appColors.success,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    "${record.bucketName} · ${formatSize(record.backupSize)} · " + when {
+                                        expired -> "已超期，等待自动清理"
+                                        available -> "剩余 $days 天可还原"
+                                        else -> "残留备份，可手动清理"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.appColors.onSurfaceMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
+                            Text(
+                                when {
+                                    expired -> "超期"
+                                    available -> "可还原"
+                                    else -> "待清理"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (available) MaterialTheme.appColors.success
+                                    else MaterialTheme.appColors.danger,
+                            )
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 }

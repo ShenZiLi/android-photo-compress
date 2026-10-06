@@ -10,7 +10,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.photocompress.app.core.compress.CompressionEngine
 import com.photocompress.app.data.ledger.AppDatabase
-import com.photocompress.app.data.ledger.CompressedItemEntity
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -23,14 +23,18 @@ class RecycleCleanupWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val dao = AppDatabase.get(applicationContext).ledgerDao()
-        val expired = dao.findExpired(System.currentTimeMillis())
-        if (expired.isEmpty()) return Result.success()
-
-        val engine = CompressionEngine(applicationContext)
-        engine.purgeBackups(expired)
-        expired.forEach { dao.markBackupGone(it.dataPath, CompressedItemEntity.STATUS_PURGED) }
-        return Result.success()
+        return try {
+            val dao = AppDatabase.get(applicationContext).ledgerDao()
+            val expired = dao.findExpired(System.currentTimeMillis())
+            if (expired.isEmpty()) return Result.success()
+            val result = CompressionEngine(applicationContext).purgeBackups(
+                expired, onPurged = { dao.markBackupsGone(it) },
+            )
+            if (result.failedCount == 0) Result.success() else Result.retry()
+        } catch (failure: Exception) {
+            if (failure is CancellationException) throw failure
+            Result.retry()
+        }
     }
 
     companion object {

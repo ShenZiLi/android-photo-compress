@@ -6,6 +6,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
+import java.nio.file.Files
+import java.io.IOException
 
 internal object FileUtils {
 
@@ -101,19 +103,51 @@ class RecycleBin(private val context: Context) {
         f.parentFile?.takeIf { it != root }?.delete()
     }
 
-    /** 清理所有备份目录，返回释放的字节数。 */
-    fun purgeAll(): Long {
+    /** 清理账本备份时校验目录边界与删除结果；失败不能清空还原索引。 */
+    fun deleteBackupChecked(relPath: String): Long {
+        val directory = root.canonicalFile
+        val requested = File(directory, relPath).absoluteFile.toPath().normalize()
+        val file = requested.toFile().canonicalFile
+        require(file != directory && file.toPath().startsWith(directory.toPath())) {
+            "备份路径不在回收站内"
+        }
+        require(requested == file.toPath()) { "备份路径包含符号链接" }
+        if (!file.exists()) return 0L
+        check(file.isFile) { "备份路径不是文件" }
+        val size = file.length()
+        if (!file.delete() || file.exists()) throw IOException("无法删除原始备份")
+        file.parentFile?.takeIf { it != directory }?.delete()
+        return size
+    }
+
+    data class PurgeResult(val freedBytes: Long, val failedCount: Int)
+
+    /** 手动清空同时处理无账本的残留；保留删除失败的备份，不跟随符号链接。 */
+    fun purgeUntracked(protectedPaths: Set<String>): PurgeResult {
+        val directory = root.canonicalFile
         var freed = 0L
-        root.listFiles()?.forEach { child ->
-            if (child.isDirectory) {
-                child.walkBottomUp().forEach { f ->
-                    if (f.isFile) freed += f.length()
-                    f.delete()
+        var failed = 0
+        Files.walk(directory.toPath()).use { paths ->
+            paths.sorted(Comparator.reverseOrder()).forEach { path ->
+                val file = path.toFile()
+                if (file == directory) return@forEach
+                val relative = directory.toPath().relativize(path).toString().replace(File.separatorChar, '/')
+                if (protectedPaths.any { relative == it || relative.startsWith("$it/") }) return@forEach
+                if (Files.isSymbolicLink(path)) {
+                    failed++
+                } else if (file.isDirectory) {
+                    // 失败备份所在的非空目录保留；空目录不计入释放体积。
+                    file.delete()
+                } else {
+                    try {
+                        freed += deleteBackupChecked(relative)
+                    } catch (_: Exception) {
+                        failed++
+                    }
                 }
             }
-            child.delete()
         }
-        return freed
+        return PurgeResult(freed, failed)
     }
 
     fun totalSize(): Long {

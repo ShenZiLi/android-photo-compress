@@ -344,22 +344,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun purgeAllBackups() {
         if (writing || _batch.value != null) return
-        val records = _ui.value.ledger.filter {
-            it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null
-        }
-        if (records.isEmpty()) return
+        val count = _ui.value.ledger.count { it.backupRelPath != null }
+        if (count == 0) return
         writing = true
-        _batch.value = BatchState("正在清理备份", 0f, 0, records.size)
+        _batch.value = BatchState("正在清理备份", 0f, 0, count)
         viewModelScope.launch {
             try {
-                val freed = engine.purgeBackups(records)
-                ledgerDao.purgeAllBackups()
-                reloadLedger()
-                _messages.trySend("已清理备份，释放 ${formatSize(freed)}")
+                // 清理不可撤销；开始后即使退出页面也完成删除及账本登记。
+                withContext(NonCancellable) {
+                    val records = ledgerDao.findWithBackups()
+                    val result = engine.purgeBackups(
+                        records,
+                        onPurged = { ledgerDao.markBackupsGone(it) },
+                        onProgress = { done, total ->
+                            _batch.value = BatchState("正在清理备份", done.toFloat() / total.coerceAtLeast(1), done, total)
+                        },
+                        clearUntracked = true,
+                    )
+                    _messages.trySend(
+                        if (result.failedCount == 0) "已清理备份，释放 ${formatSize(result.freedBytes)}"
+                        else "释放 ${formatSize(result.freedBytes)}，${formatCount(result.failedCount)} 项备份未能删除，请重试",
+                    )
+                }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _messages.trySend("备份清理未完成，请重试")
             } finally {
-                writing = false
-                _batch.value = null
-                refresh()
+                finishBatch(emptyList())
             }
         }
     }
@@ -367,13 +378,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** 到期自动清理（F11）：删除超期备份，已压缩照片不受影响。 */
     fun purgeExpired() {
         if (writing || _batch.value != null) return
+        writing = true
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val expired = ledgerDao.findExpired(now)
-            if (expired.isEmpty()) return@launch
-            engine.purgeBackups(expired)
-            expired.forEach { ledgerDao.markBackupGone(it.dataPath, CompressedItemEntity.STATUS_PURGED) }
-            reloadLedger()
+            try {
+                val expired = ledgerDao.findExpired(System.currentTimeMillis())
+                engine.purgeBackups(expired, onPurged = { ledgerDao.markBackupsGone(it) })
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _messages.trySend("到期备份清理未完成，请重试")
+            } finally {
+                finishBatch(emptyList())
+            }
         }
     }
 

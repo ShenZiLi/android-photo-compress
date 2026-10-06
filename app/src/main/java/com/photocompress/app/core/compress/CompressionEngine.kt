@@ -673,16 +673,49 @@ class CompressionEngine(private val context: Context) {
     }
 
     /** 清理备份：只删备份，已压缩文件保持不动（E 需求：清理后仍显示为已压缩）。 */
-    suspend fun purgeBackups(records: List<CompressedItemEntity>): Long = withContext(Dispatchers.IO) {
+    suspend fun purgeBackups(
+        records: List<CompressedItemEntity>,
+        onPurged: suspend (List<String>) -> Unit,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        clearUntracked: Boolean = false,
+    ): RecycleBin.PurgeResult = withContext(Dispatchers.IO) {
         var freed = 0L
-        records.forEach { record ->
-            record.backupRelPath?.let { rel ->
-                val f = recycle.fileOf(rel)
-                if (f.exists()) freed += f.length()
-                recycle.delete(rel)
-            }
+        var failed = 0
+        val pending = ArrayList<String>(64)
+        val protectedPaths = mutableSetOf<String>()
+        suspend fun flush() {
+            if (pending.isEmpty()) return
+            withContext(NonCancellable) { onPurged(pending.toList()) }
+            pending.clear()
         }
-        freed
+        try {
+            records.forEachIndexed { index, record ->
+                currentCoroutineContext().ensureActive()
+                val rel = record.backupRelPath
+                if (rel != null) {
+                    try {
+                        freed += recycle.deleteBackupChecked(rel)
+                        pending += record.id
+                    } catch (_: Exception) {
+                        failed++
+                        protectedPaths += File(rel).normalize().path.replace(File.separatorChar, '/')
+                    }
+                }
+                if (pending.size >= 64) flush()
+                if ((index + 1) % 64 == 0 || index == records.lastIndex) {
+                    onProgress(index + 1, records.size)
+                }
+            }
+        } finally {
+            // 生命周期取消也必须登记本轮已删除的备份，不能把它们继续标成可还原。
+            flush()
+        }
+        if (clearUntracked) {
+            val residual = recycle.purgeUntracked(protectedPaths)
+            freed += residual.freedBytes
+            failed += residual.failedCount
+        }
+        RecycleBin.PurgeResult(freed, failed)
     }
 
     fun recycleBinSize(): Long = recycle.totalSize()
