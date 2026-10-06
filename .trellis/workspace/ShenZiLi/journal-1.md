@@ -617,3 +617,40 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机正式版安装与播放由使用者按签名兼容性安排；当前未卸载调试版，整体应用任务保持进行中。
+
+
+## Session 21: 压缩优化、单项取消与回收站顶栏
+<!-- trellis-session: v=2 fp=b9aafeb812564e5a -->
+
+**Date**: 2026-10-06
+**Task**: 压缩优化、单项取消与回收站顶栏
+**Branch**: `master`
+
+### Summary
+
+完成0.1.19/code20：合并备份摘要读取、减少JPEG大块拷贝和全库分组开销，匹配硬件编码器；压缩支持仅当前项取消回退，回收站删除入口移至右上角。
+
+### Main Changes
+
+- 取消用协作信号和NonCancellable回退，当前项账本发布回调纳入提交边界，历史记录保留；临时文件和编解码资源释放，当前事务按FileTime保留修改时间精度，补齐HEIC取消恢复路径。
+- 统一跨页面取消栏，取消中禁用；回收站顶栏删除图标保留含数量/体积的永久清理确认；README和UI规范同步，APK保存在忽略目录。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `18db85f` | feat(compress): reduce processing overhead and safely cancel current item |
+
+### Testing
+
+- [OK] 最终assembleDebug/assembleRelease成功（53秒）、签名校验和git diff --check通过；本地模拟器安装成功。未新增或运行自动化测试套件。
+- [OK] 合成素材手动验收：同批次已完成图片保留、取消编码中的视频及后续视频内容/mtime秒值/inode不变；首页取消复验后17条完成账本不变；JPEG熵数据与旧组装器相同、原元数据段相同；顶栏清理弹窗核对17份/114.2MB后取消。
+- [OK] 60秒软件视频样本旧11.971秒、最终12.482秒，没有证实模拟器视频提速；撤回13.781秒的1ms轮询尝试，保留减少读取/拷贝/分组与硬件匹配优化。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机速度、OEM/HDR播放、HEIC取消、写入/落账时取消和故障恢复仍需实测；整体应用任务继续进行。

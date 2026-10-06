@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~619 | Active |
+| `journal-1.md` | ~656 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-10-06 | 压缩优化、单项取消与回收站顶栏 | `18db85f` | `master` |
 | 20 | 2026-10-06 | GitHub 图文 README 与正式 APK 发布 | `1d490f7`, `0178c78` | `master` |
 | 19 | 2026-10-06 | 轻存全应用交互动效 | `472f63e` | `master` |
 | 18 | 2026-10-06 | 设置二级页间距与返回路径、已压缩图标 | `7c12910` | `master` |
