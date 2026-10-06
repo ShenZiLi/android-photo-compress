@@ -52,7 +52,6 @@ import com.photocompress.app.ui.components.LocalMotionEnabled
 import com.photocompress.app.ui.components.motionFloat
 import com.photocompress.app.ui.components.CardSurface
 import com.photocompress.app.ui.components.EmptyState
-import com.photocompress.app.ui.components.GlassButton
 import com.photocompress.app.ui.components.SectionTitle
 import com.photocompress.app.ui.components.SegmentedControl
 import com.photocompress.app.ui.daysLeft
@@ -287,11 +286,11 @@ fun TrashScreen(
     state: UiState,
     onBack: () -> Unit,
     onPurgeAll: () -> Unit,
+    busy: Boolean = false,
 ) {
     val now = System.currentTimeMillis()
     val backups = state.ledger.filter { it.backupRelPath != null }
     val restorable = backups.filter { it.restoreDeadlineMs > now }
-    val totalBefore = backups.sumOf { it.originalSize }
 
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(
@@ -302,6 +301,19 @@ fun TrashScreen(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回设置",
+                    )
+                }
+            },
+            actions = {
+                com.photocompress.app.ui.components.GlassIconButton(
+                    onClick = onPurgeAll,
+                    enabled = backups.isNotEmpty() && !busy,
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "清理全部备份",
+                        tint = if (backups.isNotEmpty() && !busy) MaterialTheme.appColors.danger
+                            else MaterialTheme.appColors.onSurfaceMuted,
                     )
                 }
             },
@@ -353,16 +365,6 @@ fun TrashScreen(
                         }
                     }
                 }
-            }
-            Spacer(Modifier.height(16.dp))
-            GlassButton(
-                onClick = onPurgeAll,
-                enabled = backups.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.appColors.danger,
-                contentColor = MaterialTheme.appColors.onDanger,
-            ) {
-                Text(if (backups.isEmpty()) "暂无可清理备份" else "清理全部备份（释放 ${formatSize(totalBefore)}）")
             }
             Spacer(Modifier.height(24.dp))
         }

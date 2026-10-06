@@ -10,13 +10,33 @@ import java.security.MessageDigest
 internal object FileUtils {
 
     fun copy(source: File, target: File) {
+        copyWithSha256(source, target, calculateDigest = false)
+    }
+
+    /** 一次顺序读取完成耐久复制和摘要；每块检查取消，避免重复完整读取大文件。 */
+    fun copyWithSha256(
+        source: File,
+        target: File,
+        checkCancelled: () -> Unit = {},
+        calculateDigest: Boolean = true,
+    ): String {
         target.parentFile?.mkdirs()
+        val digest = if (calculateDigest) MessageDigest.getInstance("SHA-256") else null
         FileInputStream(source).use { input ->
             FileOutputStream(target).use { output ->
-                input.copyTo(output, 1 shl 16)
+                val buffer = ByteArray(1 shl 18)
+                while (true) {
+                    checkCancelled()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                    digest?.update(buffer, 0, count)
+                }
                 output.fd.sync()
             }
         }
+        checkCancelled()
+        return digest?.digest()?.joinToString("") { "%02x".format(it) } ?: ""
     }
 
     fun sha256(file: File): String {
@@ -42,17 +62,30 @@ internal object FileUtils {
  */
 class RecycleBin(private val context: Context) {
 
+    data class Backup(val relativePath: String, val sha256: String, val size: Long)
+
     private val root: File get() = File(context.filesDir, "recycle").apply { mkdirs() }
 
     fun fileOf(relPath: String): File = File(root, relPath)
 
     /** 备份原文件，返回相对路径。 */
     fun backup(id: String, source: File): String {
+        return backupWithDigest(id, source).relativePath
+    }
+
+    fun backupWithDigest(id: String, source: File, checkCancelled: () -> Unit = {}): Backup {
         val dir = File(root, id).apply { mkdirs() }
         val target = File(dir, source.name)
-        if (target.exists()) target.delete()
-        FileUtils.copy(source, target)
-        return "$id/${source.name}"
+        check(!target.exists()) { "备份编号已存在，不能覆盖" }
+        return try {
+            val digest = FileUtils.copyWithSha256(source, target, checkCancelled)
+            check(target.length() == source.length()) { "备份长度不一致" }
+            Backup("$id/${source.name}", digest, target.length())
+        } catch (failure: Throwable) {
+            target.delete()
+            dir.delete()
+            throw failure
+        }
     }
 
     /** 用备份原地还原。 */
@@ -100,12 +133,14 @@ class RecycleBin(private val context: Context) {
 object InPlaceRewriter {
 
     /** 把 [source] 的内容原地写入 [target]，并恢复 [mtimeMs]。 */
-    fun writeFrom(target: File, source: File, mtimeMs: Long) {
+    fun writeFrom(target: File, source: File, mtimeMs: Long, checkCancelled: () -> Unit = {}) {
+        checkCancelled()
         RandomAccessFile(target, "rw").use { raf ->
             FileInputStream(source).use { input ->
-                val buf = ByteArray(1 shl 16)
+                val buf = ByteArray(1 shl 18)
                 var n = input.read(buf)
                 while (n > 0) {
+                    checkCancelled()
                     raf.write(buf, 0, n)
                     n = input.read(buf)
                 }
@@ -113,7 +148,8 @@ object InPlaceRewriter {
             raf.setLength(source.length())
             raf.fd.sync()
         }
-        if (mtimeMs > 0) target.setLastModified(mtimeMs)
+        if (mtimeMs > 0) check(target.setLastModified(mtimeMs)) { "无法恢复文件修改时间" }
+        checkCancelled()
     }
 
     fun writeBytes(target: File, bytes: ByteArray, mtimeMs: Long) {

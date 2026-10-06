@@ -16,6 +16,28 @@ import kotlin.coroutines.resume
 /** 原地改写后强制扫描同一条目，并核验厂商实况缓存和媒体日期。 */
 object MediaStoreUpdater {
 
+    /** 格式转换前保存数据库原始日期（含 null），取消时随原文件恢复。 */
+    fun captureDates(context: Context, uri: Uri): ContentValues {
+        val row = readRow(context, uri)
+        return ContentValues().apply {
+            fun keep(column: String, value: Long?) {
+                if (value == null) putNull(column) else put(column, value)
+            }
+            keep(MediaStore.Images.Media.DATE_TAKEN, row.dateTaken)
+            keep(MediaStore.MediaColumns.DATE_ADDED, row.dateAdded)
+            keep(MediaStore.MediaColumns.DATE_MODIFIED, row.dateModified)
+        }
+    }
+
+    fun restoreDates(context: Context, uri: Uri, dates: ContentValues) {
+        check(context.contentResolver.update(uri, dates, null, null) == 1) { "无法恢复媒体日期" }
+        val row = readRow(context, uri)
+        check(row.dateTaken == dates.getAsLong(MediaStore.Images.Media.DATE_TAKEN) &&
+            row.dateAdded == dates.getAsLong(MediaStore.MediaColumns.DATE_ADDED) &&
+            row.dateModified == dates.getAsLong(MediaStore.MediaColumns.DATE_MODIFIED)
+        ) { "媒体日期恢复校验失败" }
+    }
+
     private data class Row(
         val id: Long,
         val path: String,

@@ -1,7 +1,5 @@
 package com.photocompress.app.core.jpeg
 
-import java.io.ByteArrayOutputStream
-
 /**
  * JPEG 段级解析与重组。
  *
@@ -76,17 +74,29 @@ object JpegSegments {
     }
 
     /** 组装：SOI + 各段 + tail。 */
-    fun assemble(segments: List<Segment>, tail: ByteArray): ByteArray {
-        val out = ByteArrayOutputStream()
-        out.write(0xFF); out.write(MARKER_SOI)
+    fun assemble(segments: List<Segment>, tail: ByteArray): ByteArray = assembleRange(segments, tail, 0)
+
+    /** 直接复制需要的熵数据范围，避免先复制 tail 再扩容输出流再复制输出。 */
+    private fun assembleRange(segments: List<Segment>, tail: ByteArray, tailStart: Int): ByteArray {
+        require(tailStart in 0..tail.size)
+        val length = 2L + segments.sumOf { it.payload.size.toLong() + 4 } + tail.size - tailStart
+        require(length <= Int.MAX_VALUE) { "JPEG 超出可处理大小" }
+        val out = ByteArray(length.toInt())
+        out[0] = 0xFF.toByte()
+        out[1] = MARKER_SOI.toByte()
+        var at = 2
         for (s in segments) {
-            out.write(0xFF); out.write(s.marker)
             val len = s.payload.size + 2
-            out.write((len ushr 8) and 0xFF); out.write(len and 0xFF)
-            out.write(s.payload)
+            require(len <= 0xFFFF) { "JPEG 元数据段超出长度限制" }
+            out[at++] = 0xFF.toByte()
+            out[at++] = s.marker.toByte()
+            out[at++] = (len ushr 8).toByte()
+            out[at++] = len.toByte()
+            s.payload.copyInto(out, at)
+            at += s.payload.size
         }
-        out.write(tail)
-        return out.toByteArray()
+        tail.copyInto(out, at, tailStart)
+        return out
     }
 
     fun startWith(payload: ByteArray, prefix: ByteArray): Boolean {
@@ -109,11 +119,11 @@ object JpegSegments {
 
     /** 取原图第一个 EXIF 段的完整字节（含 "Exif\0\0" 前缀）。 */
     fun exifPayload(bytes: ByteArray): ByteArray? =
-        split(bytes).segments.firstOrNull { isExif(it) }?.payload
+        walk(bytes).segments.firstOrNull { isExif(it) }?.payload
 
     /** 取原图 XMP 文本。 */
     fun xmpTextOf(bytes: ByteArray): String? =
-        split(bytes).segments.firstOrNull { isXmp(it) }?.let { xmpText(it) }
+        walk(bytes).segments.firstOrNull { isXmp(it) }?.let { xmpText(it) }
 
     /**
      * 以**原图的全部元信息段为骨架**（保持原始顺序与内容），
@@ -128,8 +138,8 @@ object JpegSegments {
         xmpOverride: String?,
         mpfOverride: ByteArray? = null,
     ): ByteArray {
-        val enc = split(encoded)
-        val orig = split(original)
+        val enc = walk(encoded)
+        val orig = walk(original)
 
         val meta = ArrayList<Segment>(orig.segments.size + 2)
         for (s in orig.segments) {
@@ -150,10 +160,10 @@ object JpegSegments {
         val encRest = enc.segments.filter {
             it.marker !in MARKER_APP0..MARKER_APP15 && it.marker != MARKER_COM
         }
-        return assemble(meta + encRest, enc.tail)
+        return assembleRange(meta + encRest, encoded, enc.tailStart)
     }
 
     /** 取原图 MPF 段 payload（含 "MPF\0" 前缀）。 */
     fun mpfPayloadOf(bytes: ByteArray): ByteArray? =
-        split(bytes).segments.firstOrNull { isMpf(it) }?.payload
+        walk(bytes).segments.firstOrNull { isMpf(it) }?.payload
 }

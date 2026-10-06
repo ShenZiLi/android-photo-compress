@@ -14,6 +14,7 @@ import com.photocompress.app.data.media.VideoProbe
 import com.photocompress.app.data.media.VideoProbeRunner
 import java.io.File
 import java.nio.ByteBuffer
+import kotlinx.coroutines.CancellationException
 
 /**
  * 视频重编码（F3 / design.md §4.5）：保持分辨率、帧率、时长不变，只调整编码与码率。
@@ -22,7 +23,8 @@ import java.nio.ByteBuffer
 object VideoTranscoder {
 
     private const val TAG = "VideoTranscoder"
-    private const val TIMEOUT_US = 10_000L
+    private const val IDLE_TIMEOUT_US = 10_000L
+    private val codecInfos by lazy { MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.toList() }
 
     data class Result(
         val success: Boolean,
@@ -76,9 +78,11 @@ object VideoTranscoder {
         output: File,
         tier: QualityTier,
         profile: BitrateProfile = BitrateProfile.STANDARD,
+        checkCancelled: () -> Unit = {},
     ): Result {
+        checkCancelled()
         val source = VideoProbeRunner.probe(input.absolutePath)
-        if (!source.isHdr) return transcodeOnce(input, output, tier, profile, HdrMode.DEFAULT)
+        if (!source.isHdr) return transcodeOnce(input, output, tier, profile, HdrMode.DEFAULT, checkCancelled)
 
         val kind = source.hdrKind.label
         if (!hasMain10Encoder()) {
@@ -86,7 +90,8 @@ object VideoTranscoder {
             return Result(false, reason = "无 HEVC Main10 编码器，无法保真压缩 HDR（$kind），已跳过")
         }
 
-        val preserved = transcodeOnce(input, output, tier, profile, HdrMode.PRESERVE)
+        val preserved = transcodeOnce(input, output, tier, profile, HdrMode.PRESERVE, checkCancelled)
+        checkCancelled()
         if (preserved.success && isHdrPreserved(input, output)) {
             return preserved.copy(hdrNote = "HDR 保真（$kind）")
         }
@@ -103,12 +108,15 @@ object VideoTranscoder {
         tier: QualityTier,
         profile: BitrateProfile,
         hdrMode: HdrMode,
+        checkCancelled: () -> Unit,
     ): Result {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         var encoder: MediaCodec? = null
         var muxer: MediaMuxer? = null
+        var surface: android.view.Surface? = null
         try {
+            checkCancelled()
             extractor.setDataSource(input.absolutePath)
             val video = findVideoTrack(extractor)
                 ?: return Result(false, reason = "无视频轨道")
@@ -123,7 +131,7 @@ object VideoTranscoder {
                     },
                 )
 
-            val targetBitrate = chooseBitrate(video, tier, target.mime, profile, hdr = requireMain10)
+            val targetBitrate = chooseBitrate(video, tier, target, profile, hdr = requireMain10)
             if (targetBitrate <= 0) return Result(false, reason = "无法确定目标码率")
 
             val frameRate = video.frameRate.takeIf { it in 1..240 } ?: 30
@@ -138,7 +146,7 @@ object VideoTranscoder {
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
                 if (video.durationUs > 0) setLong(MediaFormat.KEY_DURATION, video.durationUs)
                 // 码率模式：优先 CBR（软件编码器上更接近目标码率）
-                val mode = pickBitrateMode(target.mime)
+                val mode = pickBitrateMode(target)
                 if (mode >= 0) setInteger(MediaFormat.KEY_BITRATE_MODE, mode)
                 // 保真模式：声明 Main10 主档 + 沿用源的色彩 signaling，让编码器产出 10bit HDR 码流
                 if (requireMain10) {
@@ -148,10 +156,10 @@ object VideoTranscoder {
             }
             Log.i(TAG, "target=${target.name} mime=${target.mime} ${target.width}x${target.height} bitrate=$targetBitrate fps=$frameRate hdr=$hdrMode scaled=${target.scaled}")
 
-            encoder = MediaCodec.createEncoderByType(target.mime).apply {
+            encoder = MediaCodec.createByCodecName(target.name).apply {
                 configure(encFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             }
-            val surface = encoder.createInputSurface()
+            surface = encoder.createInputSurface()
             encoder.start()
 
             decoder = MediaCodec.createDecoderByType(video.mime)
@@ -161,7 +169,8 @@ object VideoTranscoder {
             muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             if (video.rotation != 0) muxer.setOrientationHint(video.rotation)
 
-            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input, colorPatch)
+            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input, colorPatch, checkCancelled)
+            checkCancelled()
 
             if (!ok) {
                 return Result(false, reason = "编码管线执行失败")
@@ -171,6 +180,7 @@ object VideoTranscoder {
             }
             return Result(true, output.absolutePath, MediaClassifierCodec.label(target.mime))
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             Log.w(TAG, "transcode failed", t)
             return Result(false, reason = "转码异常 ${t.javaClass.simpleName}: ${t.message}")
         } finally {
@@ -178,6 +188,7 @@ object VideoTranscoder {
             runCatching { decoder?.release() }
             runCatching { encoder?.stop() }
             runCatching { encoder?.release() }
+            runCatching { surface?.release() }
             runCatching { muxer?.stop() }
             runCatching { muxer?.release() }
             runCatching { extractor.release() }
@@ -192,6 +203,7 @@ object VideoTranscoder {
         muxer: MediaMuxer,
         input: File,
         colorPatch: ColorPatch?,
+        checkCancelled: () -> Unit,
     ): Boolean {
         val bufferInfo = MediaCodec.BufferInfo()
         val encInfo = MediaCodec.BufferInfo()
@@ -215,105 +227,119 @@ object VideoTranscoder {
             if (audioTrackIndex >= 0) audioExtractor.selectTrack(audioTrackIndex)
         }
 
-        var muxerStarted = false
-        var videoTrack = -1
-        var decoderInputDone = false
-        var decoderOutputDone = false
-        var encoderOutputDone = false
-        var eosSignaled = false
+        try {
+            var muxerStarted = false
+            var videoTrack = -1
+            var decoderInputDone = false
+            var decoderOutputDone = false
+            var encoderOutputDone = false
+            var eosSignaled = false
 
-        val audioBuf = ByteBuffer.allocate(256 * 1024)
-        val audioInfo = MediaCodec.BufferInfo()
+            val audioBuf = ByteBuffer.allocate(256 * 1024)
+            val audioInfo = MediaCodec.BufferInfo()
 
-        var guard = 0L
-        val maxIterations = 400_000L
+            var lastProgressNs = System.nanoTime()
 
-        while (!encoderOutputDone && guard++ < maxIterations) {
-            // 1) 送解码输入
-            if (!decoderInputDone) {
-                val inIndex = decoder.dequeueInputBuffer(TIMEOUT_US)
-                if (inIndex >= 0) {
-                    val buf = decoder.getInputBuffer(inIndex)!!
-                    val size = extractor.readSampleData(buf, 0)
-                    if (size < 0) {
-                        decoder.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        decoderInputDone = true
-                    } else {
-                        decoder.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
-                        extractor.advance()
-                    }
-                }
-            }
-
-            // 2) 解码输出 → Surface
-            if (!decoderOutputDone) {
-                val outIndex = decoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
-                if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    // 部分源把 HDR10 静态元数据只暴露在解码器输出格式里，保真模式下补进 muxer
-                    if (colorPatch != null) {
-                        runCatching { colorPatch.captureHdrStaticInfo(decoder.outputFormat) }
-                    }
-                } else if (outIndex >= 0) {
-                    val eos = bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
-                    decoder.releaseOutputBuffer(outIndex, true)
-                    if (eos) decoderOutputDone = true
-                }
-            }
-
-            // 2b) 解码结束后必须告知编码器输入流结束，否则编码器永不产出 EOS
-            if (decoderOutputDone && !eosSignaled) {
-                runCatching { encoder.signalEndOfInputStream() }
-                eosSignaled = true
-            }
-
-            // 3) 排空编码输出
-            while (true) {
-                val encIndex = encoder.dequeueOutputBuffer(encInfo, 0)
-                when {
-                    encIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> break
-                    encIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        muxerStarted = true
-                        // 把色彩 / HDR10 元数据打进 track format：MediaMuxer 据此写 colr / clli box，
-                        // 绕开「厂商编码器 outputFormat 是否回显色彩键」的不确定性
-                        val trackFormat = encoder.outputFormat
-                        colorPatch?.applyTo(trackFormat)
-                        videoTrack = muxer.addTrack(trackFormat)
-                        if (audioFormat != null) muxAudioTrack = muxer.addTrack(audioFormat!!)
-                        muxer.start()
-                        if (audioTrackIndex >= 0) audioBuf.clear()
-                    }
-                    encIndex >= 0 -> {
-                        val encoded = encoder.getOutputBuffer(encIndex)!!
-                        if (encInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-                            encInfo.size = 0
-                        }
-                        if (encInfo.size > 0 && muxerStarted) {
-                            encoded.position(encInfo.offset)
-                            encoded.limit(encInfo.offset + encInfo.size)
-                            muxer.writeSampleData(videoTrack, encoded, encInfo)
-                        }
-                        encoder.releaseOutputBuffer(encIndex, false)
-                        if (encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                            encoderOutputDone = true
-                            break
+            while (!encoderOutputDone) {
+                checkCancelled()
+                var progressed = false
+                // 1) 送解码输入
+                if (!decoderInputDone) {
+                    val inIndex = decoder.dequeueInputBuffer(0)
+                    if (inIndex >= 0) {
+                        progressed = true
+                        val buf = decoder.getInputBuffer(inIndex)!!
+                        val size = extractor.readSampleData(buf, 0)
+                        if (size < 0) {
+                            decoder.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            decoderInputDone = true
+                        } else {
+                            decoder.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
+                            extractor.advance()
                         }
                     }
                 }
+
+                // 2) 解码输出 → Surface
+                if (!decoderOutputDone) {
+                    val outIndex = decoder.dequeueOutputBuffer(bufferInfo, if (progressed) 0 else IDLE_TIMEOUT_US)
+                    if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        progressed = true
+                        // 部分源把 HDR10 静态元数据只暴露在解码器输出格式里，保真模式下补进 muxer
+                        if (colorPatch != null) {
+                            runCatching { colorPatch.captureHdrStaticInfo(decoder.outputFormat) }
+                        }
+                    } else if (outIndex >= 0) {
+                        progressed = true
+                        val eos = bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                        decoder.releaseOutputBuffer(outIndex, true)
+                        if (eos) decoderOutputDone = true
+                    }
+                }
+
+                // 2b) 解码结束后必须告知编码器输入流结束，否则编码器永不产出 EOS
+                if (decoderOutputDone && !eosSignaled) {
+                    encoder.signalEndOfInputStream()
+                    eosSignaled = true
+                    progressed = true
+                }
+
+                // 3) 排空编码输出
+                while (true) {
+                    checkCancelled()
+                    // 解码阶段已负责空闲等待；只有解码 EOS 后才等待编码器，避免高频轮询。
+                    val encIndex = encoder.dequeueOutputBuffer(encInfo, if (decoderOutputDone && !progressed) IDLE_TIMEOUT_US else 0)
+                    when {
+                        encIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> break
+                        encIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            progressed = true
+                            muxerStarted = true
+                            // 把色彩 / HDR10 元数据打进 track format：MediaMuxer 据此写 colr / clli box，
+                            // 绕开「厂商编码器 outputFormat 是否回显色彩键」的不确定性
+                            val trackFormat = encoder.outputFormat
+                            colorPatch?.applyTo(trackFormat)
+                            videoTrack = muxer.addTrack(trackFormat)
+                            if (audioFormat != null) muxAudioTrack = muxer.addTrack(audioFormat!!)
+                            muxer.start()
+                            if (audioTrackIndex >= 0) audioBuf.clear()
+                        }
+                        encIndex >= 0 -> {
+                            progressed = true
+                            val encoded = encoder.getOutputBuffer(encIndex)!!
+                            if (encInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                                encInfo.size = 0
+                            }
+                            if (encInfo.size > 0 && muxerStarted) {
+                                encoded.position(encInfo.offset)
+                                encoded.limit(encInfo.offset + encInfo.size)
+                                muxer.writeSampleData(videoTrack, encoded, encInfo)
+                            }
+                            encoder.releaseOutputBuffer(encIndex, false)
+                            if (encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                                encoderOutputDone = true
+                                break
+                            }
+                        }
+                    }
+                }
+
+                // 4) 音频直通（视频尚未结束时逐步推进）
+                if (audioTrackIndex >= 0 && muxAudioTrack >= 0 && !encoderOutputDone) {
+                    copyAudioSamples(audioExtractor, muxer, muxAudioTrack, audioBuf, audioInfo, checkCancelled)
+                }
+                if (progressed) lastProgressNs = System.nanoTime()
+                else check(System.nanoTime() - lastProgressNs < 30_000_000_000L) { "视频编码管线长时间无进展" }
             }
 
-            // 4) 音频直通（视频尚未结束时逐步推进）
-            if (audioTrackIndex >= 0 && muxAudioTrack >= 0 && !encoderOutputDone) {
-                copyAudioSamples(audioExtractor, muxer, muxAudioTrack, audioBuf, audioInfo)
+            // 收尾：把剩余音频写完
+            if (audioTrackIndex >= 0 && muxAudioTrack >= 0) {
+                copyAllAudio(audioExtractor, muxer, muxAudioTrack, audioBuf, audioInfo, checkCancelled)
             }
+
+            return encoderOutputDone && muxerStarted && videoTrack >= 0
+        } finally {
+            runCatching { audioExtractor.release() }
         }
-
-        // 收尾：把剩余音频写完
-        if (audioTrackIndex >= 0 && muxAudioTrack >= 0) {
-            copyAllAudio(audioExtractor, muxer, muxAudioTrack, audioBuf, audioInfo)
-        }
-
-        runCatching { audioExtractor.release() }
-        return muxerStarted && videoTrack >= 0
     }
 
     private fun copyAudioSamples(
@@ -322,8 +348,10 @@ object VideoTranscoder {
         track: Int,
         buf: ByteBuffer,
         info: MediaCodec.BufferInfo,
+        checkCancelled: () -> Unit,
     ) {
         repeat(4) {
+            checkCancelled()
             buf.clear()
             val size = extractor.readSampleData(buf, 0)
             if (size < 0) return
@@ -339,14 +367,15 @@ object VideoTranscoder {
         track: Int,
         buf: ByteBuffer,
         info: MediaCodec.BufferInfo,
+        checkCancelled: () -> Unit,
     ) {
-        var guard = 0
-        while (guard++ < 200_000) {
+        while (true) {
+            checkCancelled()
             buf.clear()
             val size = extractor.readSampleData(buf, 0)
             if (size < 0) break
             info.set(0, size, extractor.sampleTime, extractor.sampleFlags)
-            runCatching { muxer.writeSampleData(track, buf, info) }
+            muxer.writeSampleData(track, buf, info)
             extractor.advance()
         }
     }
@@ -400,10 +429,11 @@ object VideoTranscoder {
             }.distinct()
         }
         // 第一轮：必须支持原始分辨率（保持分辨率不变，满足 F3）
-        for (mime in candidates) {
+        for (hardwareOnly in listOf(true, false)) for (mime in candidates) {
             findEncoderSupporting(
                 mime, video.width, video.height, video.frameRate,
                 allowScale = false, requireMain10 = requireMain10,
+                hardwareOnly = hardwareOnly,
             )?.let { return it }
         }
         // HDR 保真不接受降分辨率：宁可交给上层降级为 SDR，也不丢分辨率
@@ -426,11 +456,13 @@ object VideoTranscoder {
         fps: Int,
         allowScale: Boolean,
         requireMain10: Boolean = false,
+        hardwareOnly: Boolean = false,
     ): TargetEnc? {
-        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        for (info in list.codecInfos) {
+        for (info in codecInfos.sortedByDescending { it.isHardwareAccelerated }) {
             if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
+            if (hardwareOnly && !info.isHardwareAccelerated) continue
             val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
+            if (MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface !in caps.colorFormats) continue
             if (requireMain10 && caps.profileLevels?.any { it.profile in VideoProbe.MAIN10_PROFILES } != true) continue
             val vc = caps.videoCapabilities ?: continue
             val size = fitSize(vc, width, height, fps, allowScale) ?: continue
@@ -570,7 +602,7 @@ object VideoTranscoder {
     private fun chooseBitrate(
         video: VideoTrack,
         tier: QualityTier,
-        targetMime: String,
+        targetEncoder: TargetEnc,
         profile: BitrateProfile = BitrateProfile.STANDARD,
         hdr: Boolean = false,
     ): Int {
@@ -602,17 +634,16 @@ object VideoTranscoder {
             if (target < floor) target = floor
         }
         // 目标编码器码率上限约束
-        val caps = encoderBitrateRange(targetMime)
+        val caps = encoderBitrateRange(targetEncoder)
         if (caps != null) target = target.coerceIn(caps.first, caps.second)
         return target
     }
 
     /** 选择码率模式：优先 CBR，其次 VBR；都不支持返回 -1。 */
-    private fun pickBitrateMode(mime: String): Int {
-        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        for (info in list.codecInfos) {
-            if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
-            val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
+    private fun pickBitrateMode(target: TargetEnc): Int {
+        for (info in codecInfos) {
+            if (info.name != target.name) continue
+            val caps = runCatching { info.getCapabilitiesForType(target.mime) }.getOrNull() ?: continue
             val ec = caps.encoderCapabilities ?: continue
             if (runCatching { ec.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) }.getOrDefault(false)) {
                 return MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
@@ -624,11 +655,10 @@ object VideoTranscoder {
         return -1
     }
 
-    private fun encoderBitrateRange(mime: String): Pair<Int, Int>? {
-        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        for (info in list.codecInfos) {
-            if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
-            val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
+    private fun encoderBitrateRange(target: TargetEnc): Pair<Int, Int>? {
+        for (info in codecInfos) {
+            if (info.name != target.name) continue
+            val caps = runCatching { info.getCapabilitiesForType(target.mime) }.getOrNull() ?: continue
             val vc = caps.videoCapabilities ?: continue
             return vc.bitrateRange.lower to vc.bitrateRange.upper
         }

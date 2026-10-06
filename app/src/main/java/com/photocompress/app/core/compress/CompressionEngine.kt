@@ -24,15 +24,23 @@ import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
 import com.photocompress.app.data.media.VideoProbeRunner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 
 sealed interface CompressOutcome {
     data class Success(val record: CompressedItemEntity) : CompressOutcome
     data class Skipped(val reason: String) : CompressOutcome
     data class Failed(val reason: String) : CompressOutcome
+    data class Cancelled(val reason: String? = null) : CompressOutcome
 }
 
 sealed interface RestoreOutcome {
@@ -50,6 +58,27 @@ class CompressionEngine(private val context: Context) {
 
     private val recycle = RecycleBin(context)
 
+    private class Attempt(
+        private val context: Context,
+        private val control: CompressionControl,
+        private val job: Job?,
+        private val onCommit: suspend (CompressedItemEntity) -> Unit,
+        private val onRollback: suspend (String) -> Unit,
+    ) {
+        private val temps = mutableListOf<File>()
+        private var publishedId: String? = null
+        fun checkCancelled() { control.checkCancelled(); job?.ensureActive() }
+        fun temp(suffix: String): File = File.createTempFile("pc_", suffix, context.cacheDir).also { temps += it }
+        suspend fun publish(record: CompressedItemEntity) {
+            checkCancelled()
+            publishedId = record.id
+            onCommit(record)
+            checkCancelled()
+        }
+        suspend fun forgetPublished() { publishedId?.let { onRollback(it) }; publishedId = null }
+        fun cleanup() { temps.forEach { it.delete() } }
+    }
+
     /**
      * [tier] 决定图像质量档（主图 92/85/76）；
      * [videoTier] 决定视频档位——调用方按媒体类型传入（普通视频取「视频」档，
@@ -59,19 +88,30 @@ class CompressionEngine(private val context: Context) {
         item: MediaItem,
         tier: QualityTier,
         videoTier: QualityTier = tier,
+        control: CompressionControl = CompressionControl(),
+        onCommit: suspend (CompressedItemEntity) -> Unit = {},
+        onRollback: suspend (String) -> Unit = {},
     ): CompressOutcome = withContext(Dispatchers.IO) {
-        runCatching {
+        val attempt = Attempt(context, control, currentCoroutineContext()[Job], onCommit, onRollback)
+        try {
+            attempt.checkCancelled()
             when (item.kind) {
                 MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
-                    compressHeic(item, tier)
+                    compressHeic(item, tier, attempt)
                 } else {
-                    compressPhoto(item, tier, videoTier)
+                    compressPhoto(item, tier, videoTier, attempt)
                 }
-                MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier)
-                MediaKind.VIDEO -> compressVideo(item, videoTier)
+                MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier, attempt)
+                MediaKind.VIDEO -> compressVideo(item, videoTier, attempt)
             }
-        }.getOrElse { t ->
+        } catch (_: CompressionCancelledException) {
+            CompressOutcome.Cancelled()
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Throwable) {
             CompressOutcome.Failed("异常 ${t.javaClass.simpleName}: ${t.message}")
+        } finally {
+            attempt.cleanup()
         }
     }
 
@@ -81,19 +121,23 @@ class CompressionEngine(private val context: Context) {
      * HEIC/HEIF 压缩：平台无法把元信息写回 HEIF 容器，因此只能**转为 JPEG**。
      * 同目录、同图集，文件名扩展名由 .heic 变为 .jpg；原文件进回收站，还原时按原路径写回。
      */
-    private suspend fun compressHeic(item: MediaItem, tier: QualityTier): CompressOutcome {
+    private suspend fun compressHeic(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         val originalSize = file.length()
-        val originalModifiedSec = (file.lastModified() / 1000L).takeIf { it > 0 } ?: item.dateModifiedSec
-        val originalSha = FileUtils.sha256(file)
+        val mtimeMs = file.lastModified()
+        val originalMtime = Files.getLastModifiedTime(file.toPath())
+        val originalModifiedSec = (mtimeMs / 1000L).takeIf { it > 0 } ?: item.dateModifiedSec
+        val originalDates = MediaStoreUpdater.captureDates(context, item.uri)
+        var originalSha = ""
         val id = UUID.randomUUID().toString()
         // HEIC 的编码效率高于 JPEG：用同等质量转 JPEG 往往会变大，
         // 因此这里在同档位上再降一档质量，尽量取得体积收益（仍保留「不变小就跳过」的保护）。
         val quality = (JpegCompressor.qualityFor(tier) - 12).coerceAtLeast(70)
 
-        val temp = File(context.cacheDir, "pc_heic_${System.currentTimeMillis()}.jpg")
+        val temp = attempt.temp(".jpg")
         val convertError = HeicCompressor.convert(file, temp, quality)
+        attempt.checkCancelled()
         if (convertError != null) {
             temp.delete()
             return CompressOutcome.Skipped(convertError)
@@ -118,17 +162,26 @@ class CompressionEngine(private val context: Context) {
 
         val target = HeicCompressor.uniqueSibling(file, ".jpg")
         var backupRel: String? = null
+        var sourceRemoved = false
+        var newUri: android.net.Uri? = null
         return try {
-            backupRel = recycle.backup(id, file)
-            val backupSize = recycle.fileOf(backupRel).length()
+            val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
+            backupRel = backup.relativePath
+            originalSha = backup.sha256
+            val backupSize = backup.size
 
-            FileUtils.copy(temp, target)
-            target.setLastModified(file.lastModified())
+            FileUtils.copyWithSha256(temp, target, attempt::checkCancelled, calculateDigest = false)
+            check(target.length() == temp.length()) { "转换产物写入长度不一致" }
+            restoreMtime(target, originalMtime)
+            attempt.checkCancelled()
 
             // 先物理删除原 HEIC，再重建媒体库索引（删除旧行会连带删文件，顺序不能颠倒）
-            file.delete()
-            val newUri = MediaStoreUpdater.reindex(context, item.uri, target.absolutePath)
-            val newId = newUri?.let { runCatching { android.content.ContentUris.parseId(it) }.getOrNull() } ?: 0L
+            check(file.delete()) { "原 HEIC 删除失败" }
+            sourceRemoved = true
+            newUri = checkNotNull(MediaStoreUpdater.reindex(context, item.uri, target.absolutePath)) { "转换后媒体库索引失败" }
+            MediaStoreUpdater.restoreDates(context, newUri, originalDates)
+            val newId = android.content.ContentUris.parseId(newUri)
+            attempt.checkCancelled()
 
             val now = System.currentTimeMillis()
             val record = CompressedItemEntity(
@@ -157,11 +210,35 @@ class CompressionEngine(private val context: Context) {
                 backupSize = backupSize,
                 status = CompressedItemEntity.STATUS_DONE,
             )
+            attempt.publish(record)
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
-            runCatching { target.delete() }
-            runCatching { MediaStoreUpdater.reindex(context, null, item.dataPath) }
-            CompressOutcome.Failed("HEIC 转换失败：${t.javaClass.simpleName}: ${t.message}")
+            attempt.cleanup()
+            val rollback = withContext(NonCancellable) {
+                val fileRollback = runCatching {
+                    if (sourceRemoved) {
+                        recycle.restore(checkNotNull(backupRel), file, mtimeMs)
+                        restoreMtime(file, originalMtime)
+                        check(FileUtils.sha256(file) == originalSha) { "HEIC 回滚内容不一致" }
+                    }
+                    if (target.exists()) check(target.delete()) { "转换临时产物清理失败" }
+                    if (sourceRemoved) {
+                        val restoredUri = checkNotNull(MediaStoreUpdater.reindex(context, newUri, file.absolutePath)) { "HEIC 索引恢复失败" }
+                        MediaStoreUpdater.restoreDates(context, restoredUri, originalDates)
+                    }
+                }
+                if (fileRollback.isSuccess) runCatching { attempt.forgetPublished() } else fileRollback
+            }
+            if (t is CancellationException && rollback.isSuccess) {
+                backupRel?.let { recycle.delete(it) }
+                if (t !is CompressionCancelledException) throw t
+                CompressOutcome.Cancelled()
+            } else if (t is CompressionCancelledException) {
+                CompressOutcome.Cancelled("当前 HEIC 回退未通过，原始备份已保留：${rollback.exceptionOrNull()?.message}")
+            } else {
+                if (t is CancellationException) throw t
+                CompressOutcome.Failed("HEIC 转换失败${if (rollback.isFailure) "，回退未通过，备份已保留" else "，原文件已保留或恢复"}：${t.message}")
+            }
         } finally {
             temp.delete()
         }
@@ -169,13 +246,14 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 普通照片
 
-    private suspend fun compressPhoto(item: MediaItem, tier: QualityTier, videoTier: QualityTier): CompressOutcome {
+    private suspend fun compressPhoto(item: MediaItem, tier: QualityTier, videoTier: QualityTier, attempt: Attempt): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         if (item.format != ContainerFormat.JPEG) {
             return CompressOutcome.Skipped("${item.format.label} 本版本不处理")
         }
         val original = file.readBytes()
+        attempt.checkCancelled()
         if (!JpegSegments.isJpeg(original)) return CompressOutcome.Skipped("不是有效 JPEG")
 
         val mpfPayload = JpegSegments.mpfPayloadOf(original)
@@ -188,12 +266,13 @@ class CompressionEngine(private val context: Context) {
         val containerItems = LivePhotoDetector.parseContainerItems(xmp ?: "")
         if (containerItems.any { it.semantic == "MotionPhoto" } || containerItems.any { it.semantic == "GainMap" }) {
             // 实况照片 / Ultra HDR 被误判为普通照片时，走容器重组路径
-            return compressLivePhoto(item, tier, videoTier)
+            return compressLivePhoto(item, tier, videoTier, attempt)
         }
 
         val quality = JpegCompressor.qualityFor(tier)
         val encoded = JpegCompressor.compressJpeg(original, quality)
             ?: return CompressOutcome.Failed("JPEG 解码失败")
+        attempt.checkCancelled()
 
         // 自有标记以属性形式并入原 XMP，尽量不改动文档结构（D5）
         val xmpOut = PcXmp.injectAttributes(xmp, newMarker())
@@ -219,9 +298,9 @@ class CompressionEngine(private val context: Context) {
         JpegCompressor.probeSize(finalBytes)
             ?: return CompressOutcome.Failed("输出无法解码")
 
-        val temp = File(context.cacheDir, "pc_photo_${System.currentTimeMillis()}.jpg")
+        val temp = attempt.temp(".jpg")
         temp.writeBytes(finalBytes)
-        return commit(item, temp, tier, codecUsed = "JPEG q=${quality}")
+        return commit(item, temp, tier, codecUsed = "JPEG q=${quality}", attempt = attempt)
     }
 
     // ---------------------------------------------------------------- 实况照片
@@ -230,10 +309,12 @@ class CompressionEngine(private val context: Context) {
         item: MediaItem,
         tier: QualityTier,
         videoTier: QualityTier,
+        attempt: Attempt,
     ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         val original = file.readBytes()
+        attempt.checkCancelled()
         if (!JpegSegments.isJpeg(original)) return CompressOutcome.Skipped("不是有效 JPEG")
 
         val xmp = JpegSegments.xmpTextOf(original) ?: return CompressOutcome.Skipped("缺少 XMP，无法解析实况结构")
@@ -264,6 +345,7 @@ class CompressionEngine(private val context: Context) {
         val quality = JpegCompressor.qualityFor(tier)
         val encodedPrimary = JpegCompressor.compressJpeg(primaryBytes, quality)
             ?: return CompressOutcome.Failed("主图解码失败")
+        attempt.checkCancelled()
 
         // 2) 内嵌视频：按 OpCamera:VideoLength 只重编码「主视频」，其后的厂商私有尾块逐字节保留。
         //    无法切分时退回旧逻辑（仅当整个区段本身就是单个普通 MP4 才整段重编码）。
@@ -285,12 +367,12 @@ class CompressionEngine(private val context: Context) {
         var motionDst: File? = null
         var motionNote: String = if (!plan.hasMotion) "无内嵌视频" else "内嵌视频原样保留（厂商私有封装）"
         if (videoPart != null) {
-            val ts = System.currentTimeMillis()
-            val srcVideo = File(context.cacheDir, "pc_motion_src_$ts.mp4").also { motionSrc = it }
-            val dstVideo = File(context.cacheDir, "pc_motion_dst_$ts.mp4").also { motionDst = it }
+            val srcVideo = attempt.temp(".mp4").also { motionSrc = it }
+            val dstVideo = attempt.temp(".mp4").also { motionDst = it }
             srcVideo.writeBytes(videoPart)
             val res = VideoTranscoder.transcode(
                 srcVideo, dstVideo, videoTier, VideoTranscoder.BitrateProfile.AGGRESSIVE,
+                checkCancelled = attempt::checkCancelled,
             )
             if (res.success && dstVideo.exists() && dstVideo.length() < videoPart.size) {
                 // 内嵌视频也要保住原有元数据（相机信息等）
@@ -380,9 +462,10 @@ class CompressionEngine(private val context: Context) {
                 return CompressOutcome.Skipped("压缩后体积未减小（${original.size} → ${assembled.size}）")
             }
 
-            val temp = File(context.cacheDir, "pc_live_${System.currentTimeMillis()}.jpg")
+            attempt.checkCancelled()
+            val temp = attempt.temp(".jpg")
             temp.writeBytes(assembled)
-            return commit(item, temp, tier, codecUsed = "JPEG q=$quality + 增益图原样 + $motionNote")
+            return commit(item, temp, tier, codecUsed = "JPEG q=$quality + 增益图原样 + $motionNote", attempt = attempt)
         } finally {
             motionDst?.delete()
             motionSrc?.delete()
@@ -391,14 +474,15 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 视频
 
-    private suspend fun compressVideo(item: MediaItem, tier: QualityTier): CompressOutcome {
+    private suspend fun compressVideo(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         if (item.format != ContainerFormat.MP4) {
             return CompressOutcome.Skipped("${item.format.label} 容器本版本不处理")
         }
-        val dst = File(context.cacheDir, "pc_video_${System.currentTimeMillis()}.mp4")
-        val res = VideoTranscoder.transcode(file, dst, tier)
+        val dst = attempt.temp(".mp4")
+        val res = VideoTranscoder.transcode(file, dst, tier, checkCancelled = attempt::checkCancelled)
+        attempt.checkCancelled()
         if (!res.success || !dst.exists()) {
             dst.delete()
             // HDR 源在无法保真时由 VideoTranscoder 返回跳过原因（原文件未改动）
@@ -426,7 +510,7 @@ class CompressionEngine(private val context: Context) {
         val codecLabel = MediaClassifierCodec.label(probe.codec)
         // HDR 源的处置结论（保真 / 已转 SDR）随编码信息写入账本，便于识别与追溯
         val codecUsed = res.hdrNote?.let { "$codecLabel · $it" } ?: codecLabel
-        return commit(item, dst, tier, codecUsed = codecUsed)
+        return commit(item, dst, tier, codecUsed = codecUsed, attempt = attempt)
     }
 
     // ---------------------------------------------------------------- 提交（备份 → 原地替换 → 校验 → 回滚）
@@ -436,6 +520,7 @@ class CompressionEngine(private val context: Context) {
         tempContent: File,
         tier: QualityTier,
         codecUsed: String?,
+        attempt: Attempt,
     ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) {
@@ -444,15 +529,22 @@ class CompressionEngine(private val context: Context) {
         }
         val originalSize = file.length()
         val mtimeMs = file.lastModified()
-        val originalSha = FileUtils.sha256(file)
+        val originalMtime = Files.getLastModifiedTime(file.toPath())
+        var originalSha = ""
         val id = UUID.randomUUID().toString()
         var backupRel: String? = null
+        var writeStarted = false
 
         return try {
-            backupRel = recycle.backup(id, file)
-            val backupSize = recycle.fileOf(backupRel).length()
+            val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
+            backupRel = backup.relativePath
+            originalSha = backup.sha256
+            val backupSize = backup.size
 
-            InPlaceRewriter.writeFrom(file, tempContent, mtimeMs)
+            attempt.checkCancelled()
+            writeStarted = true
+            InPlaceRewriter.writeFrom(file, tempContent, mtimeMs, attempt::checkCancelled)
+            restoreMtime(file, originalMtime)
 
             // 写回校验
             if (!file.exists() || file.length() != tempContent.length()) {
@@ -463,6 +555,7 @@ class CompressionEngine(private val context: Context) {
                 context, item.uri, item.dataPath,
                 item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec,
             )
+            attempt.checkCancelled()
 
             val now = System.currentTimeMillis()
             val record = CompressedItemEntity(
@@ -491,28 +584,41 @@ class CompressionEngine(private val context: Context) {
                 backupSize = backupSize,
                 status = CompressedItemEntity.STATUS_DONE,
             )
+            attempt.publish(record)
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
             // 刷新未通过同样不能记为成功。保留备份，并分别报告文件恢复与相册同步结果。
+            attempt.cleanup()
             var bytesRestored = false
-            val rollback = backupRel?.let { backupPath ->
-                runCatching {
+            val rollback = withContext(NonCancellable) {
+                val fileRollback = backupRel?.takeIf { writeStarted }?.let { backupPath -> runCatching {
                     recycle.restore(backupPath, file, mtimeMs)
+                    restoreMtime(file, originalMtime)
                     check(FileUtils.sha256(file) == originalSha) { "回滚内容与原文件不一致" }
                     bytesRestored = true
                     MediaStoreUpdater.refresh(
                         context, item.uri, item.dataPath,
                         item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec,
                     )
-                }
+                } } ?: Result.success(Unit)
+                if (fileRollback.isSuccess) runCatching { attempt.forgetPublished() } else fileRollback
             }
             val state = when {
-                rollback == null -> "写入失败，原文件未改动"
+                !writeStarted -> "原文件未改动"
                 rollback.isSuccess -> "写入失败，原文件及相册记录已恢复"
-                bytesRestored -> "原文件已恢复，但相册同步未通过；原始备份已保留"
+                bytesRestored -> "原文件已恢复，但相册或账本同步未通过；原始备份已保留"
                 else -> "回滚未通过；原始备份已保留，请勿清理备份"
             }
-            CompressOutcome.Failed("$state：${t.javaClass.simpleName}: ${t.message}")
+            if (t is CancellationException && rollback.isSuccess) {
+                backupRel?.let { recycle.delete(it) }
+                if (t !is CompressionCancelledException) throw t
+                CompressOutcome.Cancelled()
+            } else if (t is CompressionCancelledException) {
+                CompressOutcome.Cancelled("$state：${rollback.exceptionOrNull()?.message}")
+            } else {
+                if (t is CancellationException) throw t
+                CompressOutcome.Failed("$state：${t.javaClass.simpleName}: ${t.message}")
+            }
         } finally {
             tempContent.delete()
         }
@@ -580,6 +686,12 @@ class CompressionEngine(private val context: Context) {
     }
 
     fun recycleBinSize(): Long = recycle.totalSize()
+
+    /** 当前事务直接保留系统提供的时间精度，不在取消回退时截断为秒或毫秒。 */
+    private fun restoreMtime(file: File, time: FileTime) {
+        Files.setLastModifiedTime(file.toPath(), time)
+        check(Files.getLastModifiedTime(file.toPath()) == time) { "文件修改时间恢复未通过" }
+    }
 
     private fun mediaUriOf(record: CompressedItemEntity): android.net.Uri {
         val base = if (record.mediaKind == MediaKind.VIDEO.name) {

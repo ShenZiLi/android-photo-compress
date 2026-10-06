@@ -148,20 +148,22 @@ fun AppRoot(vm: AppViewModel) {
         }
     }
 
-    val todoSummary = state.todoSelection()
-    val doneSummary = state.doneSelection()
+    // 进度/当前文件更新不改变媒体选择，避免每次批次反馈重新分组整个图库。
+    val todoSummary = remember(state) { state.todoSelection() }
+    val doneSummary = remember(state) { state.doneSelection() }
 
     Scaffold(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
-                if (state.page == AppPage.TODO || state.page == AppPage.DONE) {
+                if (batch != null || state.page == AppPage.TODO || state.page == AppPage.DONE) {
                     ActionBar(
                         isTodo = state.page == AppPage.TODO,
                         level = if (state.page == AppPage.TODO) state.todo.level else state.done.level,
                         summary = if (state.page == AppPage.TODO) todoSummary else doneSummary,
                         batch = batch,
+                        onCancel = vm::cancelCompression,
                         onAction = {
                             if (state.page == AppPage.TODO) {
                                 dialog = DialogData(
@@ -248,11 +250,13 @@ fun AppRoot(vm: AppViewModel) {
 
                     AppPage.TRASH -> TrashScreen(
                         state = state,
+                        busy = batch != null,
                         onBack = { vm.go(AppPage.SETTINGS) },
                         onPurgeAll = {
+                            val backups = state.ledger.filter { it.backupRelPath != null }
                             dialog = DialogData(
                                 title = "清理回收站",
-                                body = "将永久删除回收站中的原始文件备份。此操作不可撤销；已压缩的照片本身不受影响，但这些照片将无法再还原到压缩前的状态。",
+                                body = "将永久删除 ${formatCount(backups.size)} 份原始备份，释放约 ${formatSize(backups.sumOf { it.backupSize })}。此操作不可撤销；已压缩的照片本身不受影响，但这些照片将无法再还原到压缩前的状态。",
                                 okLabel = "永久删除备份",
                                 danger = true,
                                 onConfirm = { vm.purgeAllBackups() },
@@ -400,6 +404,7 @@ private fun ActionBar(
     summary: SelectionSummary,
     batch: BatchState?,
     onAction: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     val enter = motionTween<Float>()
     val exit = motionTween<Float>(AppMotion.Exit)
@@ -419,6 +424,9 @@ private fun ActionBar(
                     if (shownBatch != null) {
                         val progress = motionFloat(shownBatch.progress.coerceIn(0f, 1f), "batchProgress", AppMotion.Progress)
                         Text(shownBatch.label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        shownBatch.currentName?.let {
+                            Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
                         Spacer(Modifier.height(6.dp))
                         LinearProgressIndicator(
                             progress = { progress },
@@ -461,10 +469,15 @@ private fun ActionBar(
             }
             Spacer(Modifier.width(12.dp))
             GlassButton(
-                onClick = onAction,
-                enabled = !summary.empty && batch == null,
+                onClick = if (batch != null) onCancel else onAction,
+                enabled = if (batch != null) batch.canCancel && !batch.cancelling else !summary.empty,
             ) {
-                Text(if (isTodo) "压缩" else "还原", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (batch != null) {
+                        if (batch.cancelling) "取消中" else if (batch.canCancel) "取消" else "处理中"
+                    } else if (isTodo) "压缩" else "还原",
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

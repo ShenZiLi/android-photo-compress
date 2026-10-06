@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.photocompress.app.core.compress.CompressOutcome
 import com.photocompress.app.core.compress.CompressionEngine
+import com.photocompress.app.core.compress.CompressionControl
 import com.photocompress.app.core.compress.RestoreOutcome
 import com.photocompress.app.data.ledger.AppDatabase
 import com.photocompress.app.data.ledger.CompressedItemEntity
@@ -24,8 +25,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
-data class BatchState(val label: String, val progress: Float, val done: Int, val total: Int)
+data class BatchState(
+    val label: String,
+    val progress: Float,
+    val done: Int,
+    val total: Int,
+    val canCancel: Boolean = false,
+    val cancelling: Boolean = false,
+    val currentName: String? = null,
+)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -46,6 +58,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val messages = _messages.receiveAsFlow()
 
     private var writing = false
+    private var compressionControl: CompressionControl? = null
 
     init {
         viewModelScope.launch {
@@ -59,7 +72,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 扫描
 
     fun refresh() {
-        if (writing) return
+        if (writing || _ui.value.scanning) return
         viewModelScope.launch {
             val settings = settingsDao.get() ?: SettingsEntity()
             // 缓存可用需同时满足两条：扫描水位已推进 + 判类逻辑版本未变。
@@ -188,10 +201,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 批量压缩 / 还原
 
     fun compress(summary: SelectionSummary) {
-        if (summary.empty || _batch.value != null) return
+        if (summary.empty || writing || _batch.value != null || _ui.value.scanning) return
         val targets = summary.todoTargets
+        val control = CompressionControl()
+        compressionControl = control
+        writing = true
+        _batch.value = BatchState("正在压缩", 0f, 0, targets.size, canCancel = true)
         viewModelScope.launch {
-            writing = true
             val touched = LinkedHashSet<String>()
             try {
                 val tiers = _ui.value.settings
@@ -200,8 +216,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 var skipped = 0
                 var failed = 0
                 val failures = mutableListOf<String>()
-                _batch.value = BatchState("正在压缩", 0f, 0, targets.size)
                 for ((index, item) in targets.withIndex()) {
+                    if (control.isCancellationRequested) break
+                    _batch.update { it?.copy(currentName = item.displayName) }
                     val tier = tierFor(item.kind, tiers)
                     // 实况照片内嵌视频取独立的「实况视频段」档位；只有普通视频才用「视频」档位
                     val videoTier = if (item.kind == MediaKind.VIDEO) {
@@ -209,9 +226,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     } else {
                         QualityTier.fromName(tiers.liveVideoTier)
                     }
-                    when (val outcome = engine.compress(item, tier, videoTier)) {
+                    when (val outcome = engine.compress(
+                        item, tier, videoTier, control,
+                        onCommit = ledgerDao::upsert,
+                        onRollback = ledgerDao::deleteById,
+                    )) {
                         is CompressOutcome.Success -> {
-                            ledgerDao.upsert(outcome.record)
                             done++
                             savedBytes += outcome.record.savedBytes
                             touched += outcome.record.dataPath
@@ -224,17 +244,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             android.util.Log.i(TAG, "${item.displayName}: SKIP ${outcome.reason}")
                         }
                         is CompressOutcome.Failed -> {
+                            touched += item.dataPath
                             failed++
                             failures += "${item.displayName}：${outcome.reason}"
                             android.util.Log.w(TAG, "${item.displayName}: FAIL ${outcome.reason}")
                         }
+                        is CompressOutcome.Cancelled -> {
+                            touched += item.dataPath
+                            outcome.reason?.let { failed++; failures += it }
+                            break
+                        }
                     }
-                    _batch.value = BatchState("正在压缩", (index + 1f) / targets.size, index + 1, targets.size)
+                    _batch.update { it?.copy(progress = (index + 1f) / targets.size, done = index + 1, currentName = null) }
                 }
+                // 此时当前项已经完成或安全回退，取消信号不再作用于历史项目。
+                compressionControl = null
+                _batch.update { it?.copy(label = "正在更新", canCancel = false, currentName = null) }
                 clearSelection(AppPage.TODO)
-                reloadLedger()
                 _messages.trySend(
                     buildString {
+                        if (control.isCancellationRequested) append("已取消，")
                         append("压缩${done}项")
                         if (savedBytes > 0) append("，节省${formatSize(savedBytes).replace(" ", "")}")
                         if (skipped > 0) append("，跳过${skipped}项")
@@ -244,20 +273,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (failures.isNotEmpty()) {
                     _messages.trySend(failures.take(3).joinToString("\n"))
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                _messages.trySend("压缩已停止：${failure.message ?: "处理异常"}")
             } finally {
-                writing = false
-                _batch.value = null
-                invalidateCache(touched)
-                refresh()
+                compressionControl = null
+                finishBatch(touched)
             }
         }
     }
 
+    fun cancelCompression() {
+        val control = compressionControl ?: return
+        control.requestCancel()
+        _batch.update { it?.copy(label = "正在取消", cancelling = true) }
+    }
+
     fun restore(summary: SelectionSummary) {
-        if (summary.empty || _batch.value != null) return
+        if (summary.empty || writing || _batch.value != null || _ui.value.scanning) return
         val targets = summary.doneTargets
+        writing = true
+        _batch.value = BatchState("正在还原", 0f, 0, targets.size)
         viewModelScope.launch {
-            writing = true
             val touched = LinkedHashSet<String>()
             try {
                 var done = 0
@@ -285,7 +323,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     _batch.value = BatchState("正在还原", (index + 1f) / targets.size, index + 1, targets.size)
                 }
                 clearSelection(AppPage.DONE)
-                reloadLedger()
                 _messages.trySend(
                     buildString {
                         append("还原${done}项")
@@ -294,10 +331,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 )
             } finally {
-                writing = false
-                _batch.value = null
-                invalidateCache(touched)
-                refresh()
+                finishBatch(touched)
             }
         }
     }
@@ -309,12 +343,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 回收站
 
     fun purgeAllBackups() {
+        if (writing || _batch.value != null) return
         val records = _ui.value.ledger.filter {
             it.status == CompressedItemEntity.STATUS_DONE && it.backupRelPath != null
         }
         if (records.isEmpty()) return
+        writing = true
+        _batch.value = BatchState("正在清理备份", 0f, 0, records.size)
         viewModelScope.launch {
-            writing = true
             try {
                 val freed = engine.purgeBackups(records)
                 ledgerDao.purgeAllBackups()
@@ -322,6 +358,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _messages.trySend("已清理备份，释放 ${formatSize(freed)}")
             } finally {
                 writing = false
+                _batch.value = null
                 refresh()
             }
         }
@@ -329,6 +366,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 到期自动清理（F11）：删除超期备份，已压缩照片不受影响。 */
     fun purgeExpired() {
+        if (writing || _batch.value != null) return
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val expired = ledgerDao.findExpired(now)
@@ -380,6 +418,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------------------------------------------------------- 内部
+
+    /** 回退完成后才开放新批次；缓存异常或生命周期取消也必须释放操作状态。 */
+    private suspend fun finishBatch(touched: Collection<String>) {
+        withContext(NonCancellable) {
+            try {
+                invalidateCache(touched)
+                reloadLedger()
+            } catch (failure: Throwable) {
+                _messages.trySend("媒体状态更新失败：${failure.message}")
+            } finally {
+                writing = false
+                _batch.value = null
+            }
+        }
+        refresh()
+    }
 
     private suspend fun reloadLedger() {
         _ui.update { it.copy(ledger = ledgerDao.observeAll().first()) }
