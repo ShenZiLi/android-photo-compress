@@ -689,3 +689,38 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 用户自行真机验收；本次仅本地APK与Git提交，不推送或发布。
+
+
+## Session 23: HEIC丢图风险修复与全局失败恢复保护
+<!-- trellis-session: v=2 fp=fef8d8963105eba9 -->
+
+**Date**: 2026-10-07
+**Task**: HEIC丢图风险修复与全局失败恢复保护
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.21：停止不安全HEIC转换，原片改写前持久保存恢复记录，保护异常及唯一备份，并提供原片恢复和旧备份找回。
+
+### Main Changes
+
+- 移除删除媒体URI重建索引；还原前校验备份和保存当前版本，完整同步与账本通过后清理；Failed停止后续项。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `baf19a3` | fix(media): protect originals and persist recovery on failed operations |
+
+### Testing
+
+- [OK] 独立Android16虚拟机MediaSafetyTest 9项通过：HEIC完整性、日期及账本失败、取消、坏备份、唯一备份保护、还原重试、写中断模拟及旧HEIC/JPEG双文件保护。
+- [OK] 原生UI恢复中断JPEG及导出用户HEIC副本成功，SHA256一致且原备份保留；Debug、签名Release、专项测试构建及lintVital通过；git diff --check通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户手机已经丢失的照片未直接恢复，旧备份尚在时可通过新版回收站找回；HEIC原格式压缩与MPF扩展仍待后续实现。本次未推送或发布。
