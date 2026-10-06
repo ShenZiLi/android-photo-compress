@@ -758,3 +758,39 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 安装包本地交付；MPF扩展待继续，未推送或发布。
+
+
+## Session 25: 双图MPF照片压缩与HDR保留
+<!-- trellis-session: v=2 fp=0685b51df1621ca2 -->
+
+**Date**: 2026-10-07
+**Task**: 双图MPF照片压缩与HDR保留
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.23支持静态双图MPF主图压缩，保留HDR辅助图、元数据与厂商尾部；两份样本副本通过API36原生压缩和字节级还原验收，生成正式及调试APK。
+
+### Main Changes
+
+- 增加真实JPEG边界扫描、严格MPF索引解析及重组；沿用质量档位、唯一标记、备份和安全原地事务。
+- 补充README、MPF规范、需求决策与匿名验收记录；个人媒体、诊断样本、APK及签名材料保持忽略。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `866c40c` | feat(jpeg): compress dual-image MPF photos while preserving HDR |
+
+### Testing
+
+- [OK] 原生APP压缩两份样本副本，分别减少58.3%和53.0%；HDR/Display P3、增益参数、元数据、尾部、路径、inode、mtime及MediaStore日期身份一致。
+- [OK] 原生APP还原两份备份，与原片逐字节一致；正式及调试构建成功，正式签名检查通过，最终调试APK覆盖安装API36虚拟机成功。未新增或运行单元测试。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 由用户在真机检查HDR观感；文件创建时间须单独验收，虚拟机日期身份核对不替代该要求。
