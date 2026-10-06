@@ -222,7 +222,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 var savedBytes = 0L
                 var skipped = 0
                 var failed = 0
-                val failures = mutableListOf<String>()
+                // 同一批次按首次出现顺序收集不同原因，统计仍按实际项目计数。
+                val failures = linkedSetOf<String>()
                 for ((index, item) in targets.withIndex()) {
                     if (control.isCancellationRequested) break
                     _batch.update { it?.copy(currentName = item.displayName) }

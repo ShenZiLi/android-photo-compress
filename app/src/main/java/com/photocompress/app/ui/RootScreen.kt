@@ -142,7 +142,8 @@ fun AppRoot(vm: AppViewModel) {
 
     LaunchedEffect(Unit) {
         vm.messages.collectLatest { msg ->
-            toast = msg
+            toast = msg.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+                .distinct().joinToString("\n")
             delay(3200)
             toast = null
         }
