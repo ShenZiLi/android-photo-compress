@@ -864,3 +864,39 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机压缩功能与HDR观感由用户自行验证；本次仅部署及启动核对。
+
+
+## Session 28: 多图MPF与已编辑实况主图压缩
+<!-- trellis-session: v=2 fp=6fbdbbf4bdc1bce9 -->
+
+**Date**: 2026-10-07
+**Task**: 多图MPF与已编辑实况主图压缩
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.25按全部MPEntry处理多图，三图及以上实况保留Original和视频；真实三图副本及合成四五图原生压缩、完整还原验收通过。
+
+### Main Changes
+
+- 通用Plan保存所有辅助图索引，校验JPEG/范围/依赖并平移全部offset；三图实况在旧布局解析前分流，外层主图重编码，其余后缀保持。
+- 更新多图MPF规范、README、需求决策和匿名验收记录；原始照片、提取视频、诊断输出及APK在忽略目录。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3bff77b` | feat(jpeg): support multiple MPF images and preserve edited live photos |
+
+### Testing
+
+- [OK] 真实三图20,806,316至17,984,847字节，减少13.6%；合成四五图分别减少66.1%和66.0%。所有索引、辅助图、Original、视频、尾部、元数据及HDR/色彩/身份/日期核对通过。
+- [OK] 三份原生APP还原与原片逐字节一致，内嵌HEVC/AAC完整解码通过；正式/调试构建、发布必需Lint、签名及diff检查通过。全量lintDebug仍为既有视频模块两处WrongConstant，未扩大修复；未新增或运行测试套件。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机厂商相册的多图关联、HDR与实况播放由用户验证；合成四五图不替代所有厂商样本验收。

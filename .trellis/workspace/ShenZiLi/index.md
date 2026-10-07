@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
+- **Total Sessions**: 28
 - **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~866 | Active |
+| `journal-1.md` | ~902 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-10-07 | 多图MPF与已编辑实况主图压缩 | `3bff77b` | `master` |
 | 27 | 2026-10-07 | 轻存0.1.24真机覆盖安装 | `79b1b5f` | `master` |
 | 26 | 2026-10-07 | 无收益图片移入已压缩并标记已跳过 | `7d0078e` | `master` |
 | 25 | 2026-10-07 | 双图MPF照片压缩与HDR保留 | `866c40c` | `master` |
