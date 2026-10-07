@@ -970,3 +970,40 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 需要真机安装时使用 artifacts/qingcun-v0.1.27.apk；本轮未安装真机。
+
+
+## Session 31: 压缩PNG开关与安全JPEG转换
+<!-- trellis-session: v=2 fp=97277cadb202c4eb -->
+
+**Date**: 2026-10-07
+**Task**: 压缩PNG开关与安全JPEG转换
+**Branch**: `master`
+
+### Summary
+
+轻存 0.1.28：默认关闭的压缩PNG开关，开启后按普通照片档位转 JPEG，保留原 PNG 的备份/还原与失败事务回滚。
+
+### Main Changes
+
+- Room v6 非破坏迁移；PNG 候选与引擎双重门控；JPEG/HEIF/PNG 格式说明；扫描水位定向更新避免覆盖新设置。
+- PNG CRC/像素/透明度检查，EXIF/XMP 迁移及其余块 APP15 原样归档；同目录改后缀，保持媒体 ID/inode，持久转换恢复记录与当前版本安全副本。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3f7519a` | feat(media): add opt-in PNG to JPEG compression with safe restore |
+
+### Testing
+
+- [OK] API36 原生三档 PNG→JPEG、无EXIF/null日期、元数据/标记、路径/身份/纳秒mtime/媒体日期、四项完整还原通过；合成样本减少89.2/93.1/95.2%，不推断真实照片收益。
+- [OK] 真实SQLite登记失败回滚、原生取消仅当前项、透明/APNG/同名保护、持久恢复记录及null日期校验通过；原始5020条账本保留，无新增PNG备份或恢复残留。最后版本重复数据库失败通过，临时触发器和过滤均恢复。
+- [OK] 调试/正式构建、正式签名/包名/版本0.1.28-code29、模拟器覆盖安装和冷启动通过，差异检查通过。全量Lint两项既有VideoTranscoder WrongConstant错误，模块未改动；未新增或运行测试套件，仅更新既有PNG判类断言。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机厂商改名兼容性、特殊PNG与文件创建时间待验证；本轮未安装真机、未操作真实个人照片，旧保护备份不因本次功能清理。
