@@ -976,6 +976,7 @@ class CompressionEngine(private val context: Context) {
         records: List<CompressedItemEntity>,
         onPurged: suspend (List<String>) -> Unit,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
+        allowMissingOrChangedMedia: Boolean = false,
     ): RecycleBin.PurgeResult = withMediaLock {
         var freed = 0L
         var failed = 0
@@ -997,17 +998,23 @@ class CompressionEngine(private val context: Context) {
                 if (rel != null) {
                     try {
                         if (rel in protectedPaths) { protected++; report(index); return@forEachIndexed }
-                        val original = record.status == CompressedItemEntity.STATUS_RESTORED || record.status == CompressedItemEntity.STATUS_FAILED
-                        val mediaPath = if (original)
-                            record.originalPath.ifBlank { record.dataPath } else record.dataPath
-                        val media = File(mediaPath)
-                        val expectedSize = if (original)
-                            record.originalSize else record.compressedSize
-                        if (!media.isFile || media.length() <= 0 || media.length() != expectedSize) {
-                            protected++; report(index); return@forEachIndexed
-                        }
-                        if (original && FileUtils.sha256(media) != record.originalSha256) {
-                            protected++; report(index); return@forEachIndexed
+                        // 用户在回收站确认永久删除成功备份时，不再要求相册文件仍在原路径或大小相同。
+                        // 自动清理继续检查当前媒体，未完成恢复引用的备份始终由上面的保护分支处理。
+                        val confirmedSuccessfulBackup = allowMissingOrChangedMedia && record.status in
+                            setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED)
+                        if (!confirmedSuccessfulBackup) {
+                            val original = record.status == CompressedItemEntity.STATUS_RESTORED || record.status == CompressedItemEntity.STATUS_FAILED
+                            val mediaPath = if (original)
+                                record.originalPath.ifBlank { record.dataPath } else record.dataPath
+                            val media = File(mediaPath)
+                            val expectedSize = if (original)
+                                record.originalSize else record.compressedSize
+                            if (!media.isFile || media.length() <= 0 || media.length() != expectedSize) {
+                                protected++; report(index); return@forEachIndexed
+                            }
+                            if (original && FileUtils.sha256(media) != record.originalSha256) {
+                                protected++; report(index); return@forEachIndexed
+                            }
                         }
                         freed += recycle.deleteBackupChecked(rel)
                         pending += record.id

@@ -372,6 +372,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     val result = engine.purgeBackups(
                         records,
+                        allowMissingOrChangedMedia = true,
                         onPurged = { ledgerDao.markBackupsGone(it) },
                         onProgress = { done, total ->
                             _batch.value = BatchState("正在清理备份", done.toFloat() / total.coerceAtLeast(1), done, total)
@@ -379,7 +380,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     _messages.trySend(buildString {
                         append(if (result.freedBytes > 0) "已清理备份，释放 ${formatSize(result.freedBytes)}" else "未释放空间")
-                        if (result.protectedCount > 0) append("，${formatCount(result.protectedCount)} 份备份受保护，未删除")
+                        if (result.protectedCount > 0) append("，${formatCount(result.protectedCount)} 份未完成恢复的备份保留")
                         if (result.failedCount > 0) append("，${formatCount(result.failedCount)} 份备份删除失败，可重试")
                     })
                 }

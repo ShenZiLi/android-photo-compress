@@ -258,7 +258,7 @@ fun AppRoot(vm: AppViewModel) {
                             val backups = state.successfulBackups()
                             dialog = DialogData(
                                 title = "清理回收站",
-                                body = "将清理 ${formatCount(backups.size)} 份已登记备份中可安全删除的内容。异常恢复备份及原片缺失时可能唯一剩下的备份会保留。删除不可撤销；已压缩照片不受影响，已删除的备份将无法再用于还原。",
+                                body = "将永久删除回收站中的 ${formatCount(backups.size)} 份备份，包括对应照片已移动、删除或发生变化的备份。删除后无法再通过这些备份还原照片；相册中的现有照片不受影响。未完成恢复的备份仍会保留。",
                                 okLabel = "永久删除备份",
                                 danger = true,
                                 onConfirm = { vm.purgeAllBackups() },

@@ -228,3 +228,7 @@ MediaMuxer 只写编码必需的结构，源 `moov` 下承载相机信息的框�
 采用 `core.heif.HeicCompressor` + `HeicContainer`，AndroidX HeifWriter 编码临时 HEIC，复用原 HEIF 元数据与引用结构重建主图数据位置。直接主图或 grid 编码布局、色彩及非主图载荷通过后，复用现有 commit/备份/回滚/还原；原路径和后缀不变。写前源 SHA 与备份匹配，写回结果 SHA 与临时文件匹配，自有 UUID 承载 XMP 标记，扫描恢复旧缓存分类。HEVC CQ 独立使用 75/55/35。
 
 实现范围和验收边界见 [HEIC 规范](../../spec/android/heic.md) 与 [原格式验收](research/heic-native.md)。不重新启用历史 HEIC→JPEG 转换。
+
+## 2026-10-07：确认后删除成功备份
+
+`purgeBackups` 增加默认 false 的 `allowMissingOrChangedMedia`。手动清空确认后传 true，且仅 DONE/PURGED 记录豁免当前媒体存在/大小检查；自动清理仍走原检查。恢复引用检查在豁免之前执行，实际删除继续使用 private recycle 路径校验及 checked deletion，删除成功才批量清空备份索引。更新现有确认弹窗与剩余保护项文案，不增加另一轮弹窗或处理个人媒体。
