@@ -222,3 +222,9 @@ MediaMuxer 只写编码必需的结构，源 `moov` 下承载相机信息的框�
 `UiState.todoItems()` 是未压缩页图集、网格、筛选、选择和底部统计的统一入口。PNG 的候选状态每次由当前 `settings.compressPng` 决定，覆盖扫描缓存中的转换预检判定：开启即 Supported，关闭即“PNG 压缩未开启”。待恢复事务分支保持最高优先级，不能用开关解除失败事务保护。
 
 可勾选表示允许发起处理；是否能安全转 JPEG 仍由 `CompressionEngine.compressPng` / `PngCompressor.compress` 在任何原片写入前决定。维持透明、动画、位深、色彩与元数据保护，不修改媒体改名/还原事务，也不因设置切换全量重扫。
+
+## 2026-10-07：HEIC 原格式编码与容器保留
+
+采用 `core.heif.HeicCompressor` + `HeicContainer`，AndroidX HeifWriter 编码临时 HEIC，复用原 HEIF 元数据与引用结构重建主图数据位置。直接主图或 grid 编码布局、色彩及非主图载荷通过后，复用现有 commit/备份/回滚/还原；原路径和后缀不变。写前源 SHA 与备份匹配，写回结果 SHA 与临时文件匹配，自有 UUID 承载 XMP 标记，扫描恢复旧缓存分类。HEVC CQ 独立使用 75/55/35。
+
+实现范围和验收边界见 [HEIC 规范](../../spec/android/heic.md) 与 [原格式验收](research/heic-native.md)。不重新启用历史 HEIC→JPEG 转换。

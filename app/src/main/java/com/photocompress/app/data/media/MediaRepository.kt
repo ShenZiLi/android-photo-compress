@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import com.photocompress.app.core.jpeg.JpegSegments
+import com.photocompress.app.core.heif.HeicCompressor
 import com.photocompress.app.core.png.PngCompressor
 import com.photocompress.app.core.xmp.Mp4XmpMarker
 import com.photocompress.app.core.xmp.PcXmp
@@ -204,6 +205,9 @@ class MediaRepository(
                     JpegSegments.xmpTextOf(header)?.let { PcXmp.read(it)?.id }
                 }.getOrNull()
             }
+        }
+        if (format == ContainerFormat.HEIC) {
+            xmpCompressId = HeicCompressor.markerOf(File(path))?.id
         }
         val png = if (format == ContainerFormat.PNG) PngCompressor.probe(File(path)) else null
         val isLive = liveInfo != null

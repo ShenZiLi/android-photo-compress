@@ -6,6 +6,7 @@ import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
 import com.photocompress.app.core.jpeg.MpfPhotoContainer
 import com.photocompress.app.core.png.PngCompressor
+import com.photocompress.app.core.heif.HeicCompressor
 import com.photocompress.app.core.livephoto.LivePhotoContainer
 import com.photocompress.app.core.mp4.Mp4Metadata
 import com.photocompress.app.core.rewrite.FileUtils
@@ -126,7 +127,7 @@ class CompressionEngine(private val context: Context) {
             val originalModified = source.lastModified()
             val outcome = when (item.kind) {
                 MediaKind.PHOTO -> when (item.format) {
-                    ContainerFormat.HEIC -> CompressOutcome.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
+                    ContainerFormat.HEIC -> compressHeic(item, tier, attempt)
                     ContainerFormat.PNG -> if (pngEnabled) compressPng(item, tier, attempt) else CompressOutcome.Skipped("PNG 压缩未开启")
                     else -> compressPhoto(item, tier, videoTier, attempt)
                 }
@@ -149,6 +150,23 @@ class CompressionEngine(private val context: Context) {
     }
 
     // ---------------------------------------------------------------- 普通照片
+
+    private suspend fun compressHeic(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
+        val source = File(item.dataPath)
+        if (!source.isFile) return CompressOutcome.Failed("文件不存在")
+        if (HeicCompressor.markerOf(source) != null) return CompressOutcome.Skipped("该照片已经压缩")
+        val encoded = attempt.temp(".heic")
+        val result = attempt.temp(".heic")
+        val output = try {
+            HeicCompressor.compress(source, encoded, result, tier, newMarker(), attempt::checkCancelled)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            return CompressOutcome.Skipped("HEIC 未压缩，原片已保留：${failure.message ?: "编码或校验失败"}")
+        }
+        if (result.length() >= source.length()) return CompressOutcome.Skipped.noSizeReduction()
+        return commit(item, result, tier, "HEIC q=${output.quality}", attempt, expectedSourceSha = output.sourceSha)
+    }
 
     private suspend fun compressPng(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
         val file = File(item.dataPath)
@@ -565,6 +583,7 @@ class CompressionEngine(private val context: Context) {
         tier: QualityTier,
         codecUsed: String?,
         attempt: Attempt,
+        expectedSourceSha: String? = null,
     ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) {
@@ -586,6 +605,7 @@ class CompressionEngine(private val context: Context) {
             val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
             backupRel = backup.relativePath
             originalSha = backup.sha256
+            check(expectedSourceSha == null || originalSha == expectedSourceSha) { "编码期间原片发生变化，未写入" }
             val backupSize = backup.size
 
             recovery.begin(RecoveryJournal.Entry(
@@ -603,6 +623,9 @@ class CompressionEngine(private val context: Context) {
             // 写回校验
             if (!file.exists() || file.length() != tempContent.length()) {
                 throw IllegalStateException("写入后长度不一致")
+            }
+            if (expectedSourceSha != null) {
+                check(FileUtils.sha256(file) == FileUtils.sha256(tempContent)) { "HEIC 写回内容校验失败" }
             }
 
             MediaStoreUpdater.refresh(

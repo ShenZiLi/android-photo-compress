@@ -16,8 +16,8 @@ android {
         applicationId = "com.photocompress.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.1.30"
+        versionCode = 32
+        versionName = "0.1.31"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -81,6 +81,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.heifwriter)
     implementation(libs.androidx.work.runtime.ktx)
 
     implementation(platform(libs.compose.bom))

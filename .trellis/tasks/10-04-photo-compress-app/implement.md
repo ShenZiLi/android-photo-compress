@@ -194,3 +194,15 @@ gradle :app:testDebugUnitTest
 - [ ] 真机 PNG 开关页面及实际转换功能验收（本次没有手动处理个人媒体，由用户验证）。
 
 记录见 [research/png-jpeg.md](research/png-jpeg.md) 的 0.1.30 部署段落。
+
+## 2026-10-07：HEIC 原格式压缩（0.1.31）
+
+- [x] 使用 AndroidX HeifWriter 编码 HEIC 主图，原容器重组保留 EXIF、ICC/XMP、非主图载荷、引用、厂商 QTI 与尾部；移除旧 HEIC→JPEG 编码实现。
+- [x] 普通图片档位对应 HEIC CQ 75/55/35；缓存版本 4 更新旧分类，自有 UUID 内 XMP 使压缩标记可再次识别。
+- [x] 写前源/备份 SHA、写回结果 SHA、解码尺寸/色彩/抽样像素及容器信息检查；接入原路径备份、失败回滚、取消与还原。
+- [x] API36 用户样本独占副本三档减少 13.0%/59.5%/81.4%，仍为 HEIC；三档还原 SHA/stat/日期保持，原始 5020 条账本保留；真实登记错误及取消完整回滚，无本次备份/入口遗留。
+- [x] 最终 APK 平衡档重复压缩及原生还原通过；调试/正式构建、正式签名、0.1.31/code32/轻存包信息检查通过。
+- [x] 同步旧 HEIC 探针接口及只读私有样本约束，未新增测试方法或运行测试套件；未重新运行全量 Lint，两项原有 VideoTranscoder WrongConstant 保持记录。
+- [ ] 真机安装与相册验收、特殊 HEIC、HDR 观感和文件创建时间（本轮未执行）。
+
+具体范围与证据见 [research/heic-native.md](research/heic-native.md)；正式产物 `artifacts/qingcun-v0.1.31.apk`，个人媒体与诊断产物均不提交。

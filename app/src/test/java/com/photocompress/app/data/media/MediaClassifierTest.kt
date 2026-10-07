@@ -16,10 +16,10 @@ class MediaClassifierTest {
     }
 
     @Test
-    fun `HEIF 转为 JPEG 压缩（元信息搬运）`() {
+    fun `HEIF 保留原格式压缩（写前完整性检查）`() {
         assertEquals(ContainerFormat.HEIC, MediaClassifier.imageFormat("image/heic", "IMG_0002.heic"))
         assertTrue(
-            "HEIC 通过转 JPEG 的方式支持压缩",
+            "HEIC 可作为原格式压缩候选",
             MediaClassifier.decideImage(ContainerFormat.HEIC, false) is SupportDecision.Supported,
         )
     }

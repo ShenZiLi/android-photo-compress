@@ -80,11 +80,12 @@ class MediaSafetyTest {
         backupRelPath = backup.relativePath, backupSize = backup.size, status = "DONE",
     ).also { records += it }
 
-    @Test fun suppliedHeicIsSkippedWithoutChangingAnyBytes() = runBlocking {
+    @Test fun malformedHeicIsSkippedWithoutChangingAnyBytes() = runBlocking {
         val source = File(context.cacheDir, "heic-safety-source.heic")
         assertTrue("Explicitly supplied HEIC copy required", source.isFile)
         val copy = File(context.cacheDir, "PC-Safety-${UUID.randomUUID()}.heic")
-        source.copyTo(copy)
+        // 从明确提供的私有副本取无效截断数据，验证预检失败不会改写原片。
+        copy.writeBytes(source.readBytes().copyOfRange(0, minOf(32, source.length().toInt())))
         try {
             val sha = FileUtils.sha256(copy)
             val mtime = Files.getLastModifiedTime(copy.toPath())
@@ -95,7 +96,7 @@ class MediaSafetyTest {
             assertTrue(CompressionEngine(context).compress(item, QualityTier.BALANCED) is CompressOutcome.Skipped)
             assertEquals(sha, FileUtils.sha256(copy)); assertEquals(mtime, Files.getLastModifiedTime(copy.toPath()))
             assertEquals(inode, Os.stat(copy.path).st_ino)
-            assertTrue(MediaClassifier.decideImage(ContainerFormat.HEIC, false) is SupportDecision.Skipped)
+            assertTrue(MediaClassifier.decideImage(ContainerFormat.HEIC, false) is SupportDecision.Supported)
         } finally { copy.delete() }
     }
 
