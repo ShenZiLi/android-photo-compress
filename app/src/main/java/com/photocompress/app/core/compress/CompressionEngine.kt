@@ -152,7 +152,7 @@ class CompressionEngine(private val context: Context) {
         val containerItems = LivePhotoDetector.parseContainerItems(xmp ?: "")
         if (mpfPayload != null) {
             val n = MpfRewriter.numberOfImages(mpfPayload)
-            if (n == 2 && containerItems.none { it.semantic == "MotionPhoto" }) {
+            if (n >= 2 && (n > 2 || containerItems.none { it.semantic == "MotionPhoto" })) {
                 return compressMpfPhoto(item, original, xmp, tier, attempt)
             }
             if (n != 1) return CompressOutcome.Skipped("含${n}图 MPF 多图结构，本版本不处理。")
@@ -223,7 +223,10 @@ class CompressionEngine(private val context: Context) {
         attempt.checkCancelled()
         val temp = attempt.temp(".jpg")
         temp.writeBytes(out)
-        return commit(item, temp, tier, codecUsed = "MPF 双图 JPEG q=$quality + 辅助图与尾部原样", attempt = attempt)
+        val retained = if (LivePhotoDetector.parseContainerItems(xmp ?: "").any { it.semantic == "MotionPhoto" }) {
+            "附加图、视频与尾部原样"
+        } else "附加图与尾部原样"
+        return commit(item, temp, tier, codecUsed = "MPF ${plan.imageCount}图 JPEG q=$quality + $retained", attempt = attempt)
     }
 
     // ---------------------------------------------------------------- 实况照片
@@ -241,15 +244,17 @@ class CompressionEngine(private val context: Context) {
         if (!JpegSegments.isJpeg(original)) return CompressOutcome.Skipped("不是有效 JPEG")
 
         val xmp = JpegSegments.xmpTextOf(original) ?: return CompressOutcome.Skipped("缺少 XMP，无法解析实况结构")
-        val items = LivePhotoDetector.parseContainerItems(xmp)
-        val plan = LivePhotoContainer.plan(file, items)
-            ?: return CompressOutcome.Skipped("无法解析实况照片容器")
-
         val mpfPayload = JpegSegments.mpfPayloadOf(original)
         if (mpfPayload != null) {
             val n = MpfRewriter.numberOfImages(mpfPayload)
+            // 已编辑实况的 Original 可嵌套 MPF；保留完整关联后缀，不套用三段实况重组器。
+            if (n > 2) return compressMpfPhoto(item, original, xmp, tier, attempt)
             if (n != 1 && n != 2) return CompressOutcome.Skipped("含${n}图 MPF 多图结构，本版本不处理。")
         }
+
+        val items = LivePhotoDetector.parseContainerItems(xmp)
+        val plan = LivePhotoContainer.plan(file, items)
+            ?: return CompressOutcome.Skipped("无法解析实况照片容器")
 
         val primaryEnd = plan.primaryEnd.toInt()
         val gainStart = primaryEnd

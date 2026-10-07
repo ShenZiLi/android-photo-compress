@@ -128,3 +128,13 @@ gradle :app:testDebugUnitTest
 - [x] 调试/正式构建与虚拟机覆盖安装成功；未新增或运行单元测试。
 
 边界与证据见 [research/no-size-reduction.md](research/no-size-reduction.md)。
+
+## 2026-10-07：多图 MPF（0.1.25）
+
+- [x] 将双图计划改为全部 MPEntry 辅助图列表，检查声明区间、JPEG 和依赖索引，重建每项偏移。
+- [x] 三图及以上实况在旧三段布局解析前进入通用主图压缩，Original/内层 MPF/视频保持原样。
+- [x] 真实三图样本副本和合成四/五图通过 APP 压缩，所有索引、附加图、元数据、HDR、身份/日期与完整还原验收通过。
+- [x] 调试和正式 APK 构建成功，虚拟机覆盖安装成功；未新增或运行测试套件。
+- [ ] 真机厂商相册对多图关联、HDR 与实况播放的验收（用户自行验证）。
+
+详见 [research/mpf-multi-photo.md](research/mpf-multi-photo.md)。
