@@ -27,3 +27,7 @@
 - 静态检查限制：`:app:lintDebug` 报 2 个已有 WrongConstant 错误，位于 `core/video/VideoTranscoder.kt` 358/377 行，`MediaExtractor.sampleFlags` 直接传给 `MediaCodec.BufferInfo.set`。通过 HEAD 原文及该文件零差异确认与本次变更无关。Trellis 检查要求超出变更边界的修复先记录证据，本次不扩大到视频转码修改。正式/调试构建与发布必需 Lint 成功，但不得称全量 Lint 已通过。
 
 未声称已经验证文件同大小同日期被外部替换、登记瞬间取消或数据库故障。过去无收益提示未持久登记的图片，升级后下一次实际尝试才会获得跳过记录。
+
+## 2026-10-07 真机部署
+
+用户授权安装到真机。通过现有 ADB 5037 连接真我 GT7 Pro（RMX5010），读取到旧版 0.1.20/code21 为正式签名；拉取应用安装包核对签名，与 0.1.24 正式 APK 相同。执行覆盖安装返回 Success，安装后读取 versionName=0.1.24/versionCode=25；启动 MainActivity 返回 Status: ok，应用进程存在。采用覆盖升级保留应用数据，未卸载或清除应用数据。本次为部署及启动确认，没有对真机个人媒体执行压缩/还原。
