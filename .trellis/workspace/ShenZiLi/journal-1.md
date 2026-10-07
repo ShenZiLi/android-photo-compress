@@ -1075,3 +1075,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机当前未连接，新正式APK位于artifacts/qingcun-v0.1.29.apk，尚未部署真机。
+
+
+## Session 34: PNG开关即时联动候选状态
+<!-- trellis-session: v=2 fp=c92e7d574e1c3016 -->
+
+**Date**: 2026-10-07
+**Task**: PNG开关即时联动候选状态
+**Branch**: `master`
+
+### Summary
+
+0.1.30 PNG开启可勾选、关闭不支持；修正旧缓存判定干扰，保留写前校验及恢复保护。
+
+### Main Changes
+
+- 统一todoItems按PNG开关派生候选，图集网格筛选全选共用口径；版本code31；更新规范及任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68703e8` | fix(ui): derive PNG selection support from compression setting |
+
+### Testing
+
+- [OK] 调试和正式构建、签名与包信息、差异检查通过；API36原生网格开启单选1项/全选2项，关闭清空并仅全选JPEG1项，PNG不支持恢复。未重扫或改写媒体，未新增或运行测试套件，未重跑全量Lint。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机未连接，正式APK已交付，真机开关联动待用户安装验证。
