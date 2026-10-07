@@ -175,7 +175,7 @@ fun DoneLevel1(
                     name = album.name,
                     line2 = album.sizeLine,
                     line3 = album.statusLine,
-                    line3Warn = album.restorableCount == 0 && album.skippedCount == 0,
+                    line3Warn = album.restorableCount == 0,
                     picked = album.name in state.done.pickedAlbums,
                     onOpen = { onOpenAlbum(album.name) },
                     onTogglePick = { onToggleAlbum(album.name) },

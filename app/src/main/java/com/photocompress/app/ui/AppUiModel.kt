@@ -92,12 +92,12 @@ data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
     val after: Long get() = items.sumOf { it.compressedSize }
     val restorableItems: List<DoneMedia> get() = items.filter { it.restorable }
     val restorableCount: Int get() = restorableItems.size
-    val skippedCount: Int get() = items.count { it.skipped }
     val statusLine: String
-        get() = buildList {
-            if (restorableCount > 0) add("可还原 ${formatCount(restorableCount)} 项")
-            if (skippedCount > 0) add("已跳过 ${formatCount(skippedCount)} 项")
-        }.joinToString(" · ").ifEmpty { "备份已不可还原" }
+        get() = if (restorableCount > 0) {
+            "可还原 ${formatCount(restorableCount)} 项"
+        } else {
+            "备份已不可还原"
+        }
 
     /** 全部条目都只有标记、压缩前大小未知时只显示当前体积，避免「0 B →」的误导性展示。 */
     val sizeLine: String
