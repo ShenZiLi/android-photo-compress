@@ -5,6 +5,10 @@ import com.photocompress.app.data.ledger.SettingsEntity
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.data.media.MediaKind
 import com.photocompress.app.data.media.QualityTier
+import com.photocompress.app.data.media.ContainerFormat
+import com.photocompress.app.data.media.SupportDecision
+import androidx.core.net.toUri
+import java.io.File
 import com.photocompress.app.core.rewrite.RecoveryJournal
 
 enum class AppPage { HOME, TODO, DONE, TRASH, SETTINGS, ALBUM_FILTER, COMPRESS_RATIO }
@@ -31,7 +35,6 @@ data class UiState(
     val items: List<MediaItem> = emptyList(),
     val ledger: List<CompressedItemEntity> = emptyList(),
     val recoveryEntries: List<RecoveryJournal.Entry> = emptyList(),
-    val untrackedBackupCount: Int = 0,
     val settings: SettingsEntity = SettingsEntity(),
     val todo: LevelState = LevelState(),
     val done: LevelState = LevelState(),
@@ -76,7 +79,10 @@ data class AlbumTodoUi(val name: String, val items: List<MediaItem>) {
     val compressibleItems: List<MediaItem> get() = items.filter { it.compressible }
     val compressibleCount: Int get() = compressibleItems.size
     val compressibleBytes: Long get() = compressibleItems.sumOf { it.size }
+    val pendingCount: Int get() = items.count { it.skipReason == RECOVERY_REASON }
 }
+
+private const val RECOVERY_REASON = "处理失败，原片恢复未完成，可在详情中重试恢复"
 
 data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
     val count: Int get() = items.size
@@ -129,7 +135,9 @@ private val ACTIVE_STATUSES = setOf(
 /** 无收益判断只适用于仍然存在且身份/大小/日期一致的原片，不隐藏改过或替换过的图片。 */
 private fun UiState.activeLedger(): List<CompressedItemEntity> {
     val byPath = items.associateBy { it.dataPath }
+    val pending = recoveryEntries.map { it.path }.toSet()
     return ledger.filter { record ->
+        record.dataPath !in pending && record.originalPath !in pending &&
         record.status in ACTIVE_STATUSES && (!record.skipped || byPath[record.dataPath]?.let { item ->
             item.id == record.mediaStoreId && item.volumeName == record.volumeName &&
                 item.size == record.originalSize && item.dateModifiedSec == record.originalDateModifiedSec &&
@@ -211,11 +219,30 @@ fun UiState.doneSelection(): SelectionSummary {
 /** 未压缩：媒体库中有、且账本与文件内标记都没有压缩痕迹；排除用户屏蔽的图集。 */
 fun UiState.todoItems(): List<MediaItem> {
     val excluded = excludedAlbums
+    val pending = recoveryEntries.associateBy { it.path }
     val compressedPaths = HashSet<String>()
     activeLedger().forEach { compressedPaths += it.dataPath }
     // 文件内标记优先：账本丢失（重装 / 清数据）时仍能识别，避免二次压缩（F7 / AC5）
-    items.asSequence().filter { it.xmpCompressId != null }.forEach { compressedPaths += it.dataPath }
-    return items.filter { it.dataPath !in compressedPaths && it.bucketName !in excluded }
+    items.asSequence().filter { it.xmpCompressId != null && it.dataPath !in pending }.forEach { compressedPaths += it.dataPath }
+    val available = items.filter { it.dataPath !in compressedPaths && it.bucketName !in excluded }
+        .map { if (it.dataPath in pending) it.copy(support = SupportDecision.Skipped(RECOVERY_REASON)) else it }
+    val paths = items.map { it.dataPath }.toSet()
+    val missing = recoveryEntries.filter { it.path !in paths }.map { entry ->
+        val uri = entry.mediaUri.toUri()
+        val video = uri.path?.contains("/video/") == true
+        val file = File(entry.path)
+        MediaItem(
+            id = uri.lastPathSegment?.toLongOrNull() ?: (-entry.id.hashCode().toLong()).coerceAtMost(-1L),
+            uri = uri, dataPath = entry.path, volumeName = "external_primary", bucketId = 0L,
+            bucketName = file.parentFile?.name ?: "待恢复", displayName = file.name,
+            mimeType = if (video) "video/mp4" else "image/jpeg", size = file.length(),
+            dateTakenMs = entry.dateTakenMs, dateAddedSec = entry.dateAddedSec, dateModifiedSec = entry.dateModifiedSec,
+            width = 0, height = 0, kind = if (video) MediaKind.VIDEO else MediaKind.PHOTO,
+            format = if (video) ContainerFormat.MP4 else ContainerFormat.UNKNOWN,
+            support = SupportDecision.Skipped(RECOVERY_REASON),
+        )
+    }.filter { it.bucketName !in excluded }
+    return available + missing
 }
 
 fun UiState.doneItems(): List<DoneMedia> {
@@ -226,9 +253,18 @@ fun UiState.doneItems(): List<DoneMedia> {
         .filter { it.bucketName !in excluded }
     val known = fromLedger.map { it.dataPath }.toHashSet()
     val adopted = items
-        .filter { it.xmpCompressId != null && it.dataPath !in known && it.bucketName !in excluded }
+        .filter { it.xmpCompressId != null && it.dataPath !in known && it.bucketName !in excluded &&
+            recoveryEntries.none { entry -> entry.path == it.dataPath } }
         .map { DoneMedia(adoptedRecord(it), it, adopted = true) }
     return fromLedger + adopted
+}
+
+/** 回收站仅承载成功压缩备份；失败事务在未压缩页处理。 */
+fun UiState.successfulBackups(): List<CompressedItemEntity> {
+    val pending = recoveryEntries.map { it.path }.toSet()
+    return ledger.filter { it.backupRelPath != null &&
+        it.status in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED) &&
+        it.dataPath !in pending && it.originalPath !in pending }
 }
 
 /** 媒体库中出现过的全部图集（设置页用于配置过滤，不排除任何项）。 */

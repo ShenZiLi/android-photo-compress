@@ -129,7 +129,7 @@ class RecycleBin(private val context: Context) {
         return size
     }
 
-    data class PurgeResult(val freedBytes: Long, val failedCount: Int)
+    data class PurgeResult(val freedBytes: Long, val failedCount: Int, val protectedCount: Int = 0)
 
     /** 无账本文件可能是旧版失败后唯一剩余原片：只列出，不清理。 */
     fun untracked(knownPaths: Set<String>): List<File> = Files.walk(root.canonicalFile.toPath()).use { paths ->

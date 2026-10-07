@@ -95,6 +95,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val onProgress: (Int, Int) -> Unit = { done, total ->
                     _ui.update { it.copy(scanDone = done, scanTotal = total) }
                 }
+                val affected = withContext(Dispatchers.IO) {
+                    val records = ledgerDao.observeAll().first()
+                    val paths = engine.reconcileRolledBack(records, ledgerDao::markFailed, ledgerDao::deleteById).toMutableSet()
+                    for (entry in engine.pendingRecovery()) {
+                        paths += entry.path
+                        engine.recover(entry, ledgerDao::deleteById)
+                    }
+                    paths
+                }
+                invalidateCache(affected)
                 val items = if (warm) {
                     mediaRepo.incrementalScan(onProgress)
                 } else {
@@ -102,7 +112,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val ledger = ledgerDao.observeAll().first()
                 val recoveryState = withContext(Dispatchers.IO) {
-                    engine.pendingRecovery() to engine.untrackedBackups(ledger).size
+                    engine.pendingRecovery()
                 }
                 // 缓存写入成功后再推进扫描水位；中途退出时水位不变，下次仍会重扫
                 val latest = settingsDao.get() ?: settings
@@ -119,8 +129,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         fullScan = false,
                         items = items,
                         ledger = ledger,
-                        recoveryEntries = recoveryState.first,
-                        untrackedBackupCount = recoveryState.second,
+                        recoveryEntries = recoveryState,
                         lastScanAt = System.currentTimeMillis(),
                         hasAllFilesAccess = StorageAccess.hasAllFilesAccess(getApplication()),
                     )
@@ -350,8 +359,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 回收站
 
     fun purgeAllBackups() {
-        if (writing || _batch.value != null) return
-        val count = _ui.value.ledger.count { it.backupRelPath != null }
+        if (writing || _batch.value != null || _ui.value.scanning) return
+        val count = _ui.value.successfulBackups().size
         if (count == 0) return
         writing = true
         _batch.value = BatchState("正在清理备份", 0f, 0, count)
@@ -359,7 +368,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 // 清理不可撤销；开始后即使退出页面也完成删除及账本登记。
                 withContext(NonCancellable) {
-                    val records = ledgerDao.findWithBackups()
+                    val protected = engine.pendingRecovery().map { it.path }.toSet()
+                    val records = ledgerDao.findWithBackups().filter {
+                        it.status in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED) &&
+                            it.dataPath !in protected && it.originalPath !in protected
+                    }
                     val result = engine.purgeBackups(
                         records,
                         onPurged = { ledgerDao.markBackupsGone(it) },
@@ -367,10 +380,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             _batch.value = BatchState("正在清理备份", done.toFloat() / total.coerceAtLeast(1), done, total)
                         },
                     )
-                    _messages.trySend(
-                        if (result.failedCount == 0) "已清理备份，释放 ${formatSize(result.freedBytes)}"
-                        else "释放 ${formatSize(result.freedBytes)}，${formatCount(result.failedCount)} 项异常备份已保留，请先恢复原片",
-                    )
+                    _messages.trySend(buildString {
+                        append(if (result.freedBytes > 0) "已清理备份，释放 ${formatSize(result.freedBytes)}" else "未释放空间")
+                        if (result.protectedCount > 0) append("，${formatCount(result.protectedCount)} 份备份受保护，未删除")
+                        if (result.failedCount > 0) append("，${formatCount(result.failedCount)} 份备份删除失败，可重试")
+                    })
                 }
             } catch (failure: Exception) {
                 if (failure is CancellationException) throw failure
@@ -383,7 +397,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 到期自动清理（F11）：删除超期备份，已压缩照片不受影响。 */
     fun purgeExpired() {
-        if (writing || _batch.value != null) return
+        if (writing || _batch.value != null || _ui.value.scanning) return
         writing = true
         viewModelScope.launch {
             try {
@@ -401,34 +415,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 设置
 
     fun recoverOriginal(entry: RecoveryJournal.Entry) {
-        if (writing || _batch.value != null) return
+        if (writing || _batch.value != null || _ui.value.scanning) return
         writing = true
         _batch.value = BatchState("正在恢复原片", 0f, 0, 1)
         viewModelScope.launch {
             try {
                 when (val result = engine.recover(entry, ledgerDao::deleteById)) {
-                    is RestoreOutcome.Success -> _messages.trySend("原片已恢复，原始备份继续保留")
+                    is RestoreOutcome.Success -> _messages.trySend("原片已恢复，回滚完成")
                     is RestoreOutcome.Failed -> _messages.trySend(result.reason)
                 }
             } finally {
                 finishBatch(listOf(entry.path))
-            }
-        }
-    }
-
-    fun exportLegacyBackups() {
-        if (writing || _batch.value != null) return
-        writing = true
-        _batch.value = BatchState("正在找回照片", 0f, 0, _ui.value.untrackedBackupCount)
-        viewModelScope.launch {
-            try {
-                val count = engine.exportUntracked(ledgerDao.observeAll().first())
-                _messages.trySend("已找回${count}项，存入“轻存恢复”图集；原始备份继续保留")
-            } catch (failure: Exception) {
-                if (failure is CancellationException) throw failure
-                _messages.trySend("导出未完成，原始备份继续保留：${failure.message}")
-            } finally {
-                finishBatch(emptyList())
             }
         }
     }
@@ -492,10 +489,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun reloadLedger() {
         val ledger = ledgerDao.observeAll().first()
         val recoveryState = withContext(Dispatchers.IO) {
-            engine.pendingRecovery() to engine.untrackedBackups(ledger).size
+            engine.pendingRecovery()
         }
-        _ui.update { it.copy(ledger = ledger, recoveryEntries = recoveryState.first,
-            untrackedBackupCount = recoveryState.second) }
+        _ui.update { it.copy(ledger = ledger, recoveryEntries = recoveryState) }
     }
 
     fun refreshPermission() = _ui.update {

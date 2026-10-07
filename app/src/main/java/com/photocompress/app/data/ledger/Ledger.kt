@@ -57,6 +57,7 @@ data class CompressedItemEntity(
         const val STATUS_RESTORED = "RESTORED"
         const val STATUS_PURGED = "PURGED"
         const val STATUS_SKIPPED = "SKIPPED"
+        const val STATUS_FAILED = "FAILED"
     }
 }
 
@@ -121,6 +122,9 @@ interface LedgerDao {
 
     @Query("DELETE FROM compressed_item WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("UPDATE compressed_item SET status = 'FAILED', failureReason = '原片内容已恢复，处理未完成' WHERE id = :id")
+    suspend fun markFailed(id: String)
 
     @Query("UPDATE compressed_item SET status = :status, backupRelPath = NULL, backupSize = 0 WHERE dataPath = :path")
     suspend fun markBackupGone(path: String, status: String)

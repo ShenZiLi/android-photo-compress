@@ -112,7 +112,7 @@ class MediaSafetyTest {
         val backup = RecycleBin.Backup(entry.backupRelPath, entry.sha256, source.length())
         var registered = false
         val purge = engine.purgeBackups(listOf(record(item, backup)), onPurged = { registered = true })
-        assertEquals(1, purge.failedCount); assertFalse(registered)
+        assertEquals(1, purge.protectedCount); assertEquals(0, purge.failedCount); assertFalse(registered)
         assertTrue(recycle.fileOf(entry.backupRelPath).isFile)
     }
 
@@ -155,7 +155,7 @@ class MediaSafetyTest {
         check(source.delete()) // 仅删除新建测试原片，模拟旧版本已发生的照片丢失。
         var cleared = false
         val result = CompressionEngine(context).purgeBackups(listOf(record), onPurged = { cleared = true })
-        assertEquals(1, result.failedCount); assertFalse(cleared)
+        assertEquals(1, result.protectedCount); assertEquals(0, result.failedCount); assertFalse(cleared)
         assertTrue(recycle.fileOf(backup.relativePath).isFile)
         assertEquals(backup.sha256, FileUtils.sha256(recycle.fileOf(backup.relativePath)))
     }
@@ -174,7 +174,7 @@ class MediaSafetyTest {
         val retried = engine.recover(entry) { recoveredId = it }
         assertTrue(retried.toString(), retried is RestoreOutcome.Success)
         assertEquals(record.id, recoveredId); assertEquals(sha, FileUtils.sha256(source))
-        assertTrue(recycle.fileOf(record.backupRelPath).isFile)
+        assertFalse(recycle.fileOf(record.backupRelPath).exists())
         entry.safetyBackupRelPath?.let(recycle::delete)
     }
 
@@ -192,7 +192,7 @@ class MediaSafetyTest {
         val recovered = engine.recover(RecoveryJournal(context).entries().single { it.id == entry.id }) {}
         assertTrue(recovered.toString(), recovered is RestoreOutcome.Success)
         assertEquals(sha, FileUtils.sha256(source)); assertEquals(time, Files.getLastModifiedTime(source.toPath()))
-        assertTrue(recycle.fileOf(backup.relativePath).isFile)
+        assertFalse(recycle.fileOf(backup.relativePath).exists())
         recycle.delete(backup.relativePath)
     }
 

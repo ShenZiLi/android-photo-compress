@@ -103,6 +103,7 @@ private data class SheetData(
     val title: String,
     val uri: Uri?,
     val rows: List<Pair<String, String>>,
+    val recovery: com.photocompress.app.core.rewrite.RecoveryJournal.Entry? = null,
 )
 
 private data class DialogData(
@@ -226,7 +227,7 @@ fun AppRoot(vm: AppViewModel) {
                             onFilter = { vm.setFilter(AppPage.TODO, it) },
                             onSelectAll = { vm.selectAllItems(AppPage.TODO) },
                             onToggleItem = { vm.toggleItem(AppPage.TODO, it) },
-                            onShowInfo = { sheet = todoSheet(it) },
+                            onShowInfo = { item -> sheet = todoSheet(item, state.recoveryEntries.firstOrNull { it.path == item.dataPath }) },
                         )
                     }
 
@@ -253,16 +254,8 @@ fun AppRoot(vm: AppViewModel) {
                         state = state,
                         busy = batch != null,
                         onBack = { vm.go(AppPage.SETTINGS) },
-                        onRecover = { entry ->
-                            dialog = DialogData("恢复原片", "从受保护备份恢复这张照片并同步相册。原始备份继续保留。",
-                                "恢复", onConfirm = { vm.recoverOriginal(entry) })
-                        },
-                        onExportLegacy = {
-                            dialog = DialogData("找回照片", "将历史异常备份复制到“轻存恢复”图集。旧备份缺少原路径和系统日期记录，导出不会覆盖照片或删除备份。",
-                                "找回", onConfirm = { vm.exportLegacyBackups() })
-                        },
                         onPurgeAll = {
-                            val backups = state.ledger.filter { it.backupRelPath != null }
+                            val backups = state.successfulBackups()
                             dialog = DialogData(
                                 title = "清理回收站",
                                 body = "将清理 ${formatCount(backups.size)} 份已登记备份中可安全删除的内容。异常恢复备份及原片缺失时可能唯一剩下的备份会保留。删除不可撤销；已压缩照片不受影响，已删除的备份将无法再用于还原。",
@@ -312,7 +305,15 @@ fun AppRoot(vm: AppViewModel) {
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         ) {
-            GlassScene(modifier = Modifier.fillMaxWidth()) { InfoSheetContent(data) }
+            GlassScene(modifier = Modifier.fillMaxWidth()) {
+                InfoSheetContent(data) {
+                    data.recovery?.let { entry ->
+                        sheet = null
+                        dialog = DialogData("重试恢复原片", "将原片写回原位置并校验时间和相册记录。完整回滚后清理本次临时备份。",
+                            "恢复", onConfirm = { vm.recoverOriginal(entry) })
+                    }
+                }
+            }
         }
     }
 
@@ -505,7 +506,7 @@ private fun ToastOverlay(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun InfoSheetContent(data: SheetData) {
+private fun InfoSheetContent(data: SheetData, onRecover: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Text(data.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -518,15 +519,20 @@ private fun InfoSheetContent(data: SheetData) {
         )
         Spacer(Modifier.height(12.dp))
         data.rows.forEach { (k, v) -> KeyValueRow(k, v) }
+        if (data.recovery != null) {
+            Spacer(Modifier.height(12.dp))
+            GlassButton(onClick = onRecover) { Text("重试恢复原片") }
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
 
 // ---------------------------------------------------------------- 信息面板数据
 
-private fun todoSheet(item: MediaItem): SheetData = SheetData(
+private fun todoSheet(item: MediaItem, recovery: com.photocompress.app.core.rewrite.RecoveryJournal.Entry? = null): SheetData = SheetData(
     title = item.displayName,
     uri = item.uri,
+    recovery = recovery,
     rows = buildList {
         add("文件名" to item.displayName)
         add("类型" to item.kind.fullLabel)

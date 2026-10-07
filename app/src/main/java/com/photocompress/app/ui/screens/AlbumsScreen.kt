@@ -100,7 +100,7 @@ fun TodoLevel1(
     onToggleAlbum: (String) -> Unit,
     onSelectAll: () -> Unit,
 ) {
-    val albums = state.albumTodoAll().filter { it.compressibleCount > 0 }
+    val albums = state.albumTodoAll().filter { it.compressibleCount > 0 || it.pendingCount > 0 }
     val totalBytes = albums.sumOf { it.bytes }
     val count = albums.sumOf { it.count }
     val allSelected = albums.isNotEmpty() && albums.all { it.name in state.todo.pickedAlbums }
@@ -126,7 +126,7 @@ fun TodoLevel1(
                     coverUris = album.items.take(4).map { it.uri },
                     name = album.name,
                     line2 = "${formatCount(album.count)} 项 · ${formatSize(album.bytes)}",
-                    line3 = if (album.compressibleCount > 0) "可压缩 ${formatCount(album.compressibleCount)} 项" else "无可压缩项",
+                    line3 = if (album.pendingCount > 0) "待恢复 ${formatCount(album.pendingCount)} 项" else if (album.compressibleCount > 0) "可压缩 ${formatCount(album.compressibleCount)} 项" else "无可压缩项",
                     line3Warn = album.compressibleCount == 0,
                     picked = album.name in state.todo.pickedAlbums,
                     onOpen = { onOpenAlbum(album.name) },
@@ -313,12 +313,14 @@ fun TodoLevel2(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(filtered, key = { it.id }) { item ->
+                val pending = state.recoveryEntries.any { it.path == item.dataPath }
                 MediaTile(
                     modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     uri = item.uri,
                     picked = item.id in level.pickedItems,
                     selectable = item.compressible,
                     badge = when {
+                        pending -> "处理失败" to Color(0xB8000000)
                         !item.compressible -> "不支持" to Color(0xB8000000)
                         item.kind == MediaKind.LIVE_PHOTO -> "实况" to Color(0x9E000000)
                         item.kind == MediaKind.VIDEO -> "视频" to Color(0x9E000000)
