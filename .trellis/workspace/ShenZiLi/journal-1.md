@@ -1109,3 +1109,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机未连接，正式APK已交付，真机开关联动待用户安装验证。
+
+
+## Session 35: 轻存0.1.30真机安装
+<!-- trellis-session: v=2 fp=9a32d181cf29f22c -->
+
+**Date**: 2026-10-07
+**Task**: 轻存0.1.30真机安装
+**Branch**: `master`
+
+### Summary
+
+用户连接RMX5010后将正式APK覆盖安装并启动，版本0.1.30/code31。
+
+### Main Changes
+
+- 记录真机从0.1.28升级到0.1.30的部署结果及验收边界。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4d88b9` | docs(deploy): record Qingcun 0.1.30 device installation |
+
+### Testing
+
+- [OK] 正式APK签名/包信息通过，安装Success，真机版本code31，MainActivity冷启动ok，两次进程检查通过，差异检查通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户验证真机PNG开关及照片转换；本次未手动压缩、还原或清理个人媒体。
