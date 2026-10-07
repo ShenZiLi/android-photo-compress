@@ -227,7 +227,7 @@ fun AppRoot(vm: AppViewModel) {
                             onFilter = { vm.setFilter(AppPage.TODO, it) },
                             onSelectAll = { vm.selectAllItems(AppPage.TODO) },
                             onToggleItem = { vm.toggleItem(AppPage.TODO, it) },
-                            onShowInfo = { item -> sheet = todoSheet(item, state.recoveryEntries.firstOrNull { it.path == item.dataPath }) },
+                            onShowInfo = { item -> sheet = todoSheet(item, state.recoveryEntries.firstOrNull { it.matches(item.dataPath, item.uri.toString()) }) },
                         )
                     }
 
@@ -267,10 +267,11 @@ fun AppRoot(vm: AppViewModel) {
                     )
 
                     AppPage.SETTINGS -> SettingsScreen(
-                        state = state,
+                        state = state.copy(busy = batch != null),
                         onOpenTrash = { vm.go(AppPage.TRASH) },
                         onOpenAlbumFilter = { vm.go(AppPage.ALBUM_FILTER) },
                         onOpenCompressRatio = { vm.go(AppPage.COMPRESS_RATIO) },
+                        onSetCompressPng = vm::setCompressPng,
                     )
 
                     AppPage.COMPRESS_RATIO -> CompressRatioScreen(

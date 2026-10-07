@@ -11,6 +11,7 @@
 - [媒体错误恢复](media-recovery.md)：持久恢复记录、异常备份保护、HEIC 安全跳过与恢复故障验收。
 - [多图 MPF 照片](mpf-photo.md)：全部 MPEntry 重建、真实 JPEG 边界、HDR/内嵌 Original/视频与厂商尾部保留。
 - [无收益图片状态](skipped-photos.md)：SKIPPED 持久记录、未压缩/已压缩分页、零收益与不可还原规则。
+- [PNG 转 JPEG](png-jpeg.md)：默认关闭的开关、普通照片档位、元数据迁移与转换/还原事务。
 
 ## 开发前检查
 

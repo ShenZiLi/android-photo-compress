@@ -25,7 +25,7 @@ class MediaClassifierTest {
     }
 
     @Test
-    fun `非相机原生静态图一律跳过且原因明确`() {
+    fun `静态图片按格式判类且跳过原因明确`() {
         val cases = listOf(
             Triple("image/png", "shot.png", ContainerFormat.PNG),
             Triple("image/bmp", "a.bmp", ContainerFormat.BMP),
@@ -37,6 +37,11 @@ class MediaClassifierTest {
         for ((mime, name, expected) in cases) {
             assertEquals(expected, MediaClassifier.imageFormat(mime, name))
             val decision = MediaClassifier.decideImage(expected, false)
+            if (expected == ContainerFormat.PNG) {
+                // PNG 候选在 UI 和引擎中继续受持久设置开关控制。
+                assertTrue("PNG 格式具有原格式压缩路径", decision is SupportDecision.Supported)
+                continue
+            }
             assertTrue("$name 应跳过", decision is SupportDecision.Skipped)
             assertTrue("$name 应有原因", (decision as SupportDecision.Skipped).reason.isNotBlank())
         }

@@ -7,7 +7,7 @@
 ## 2. 接口与字段
 
 - `CompressOutcome.Skipped(reason, noSizeReduction = false)`；`Skipped.noSizeReduction()` 返回固定文案及类型标记，不以字符串匹配推断处理策略。
-- `CompressedItemEntity.STATUS_SKIPPED` / `skipped`：持久状态。Room 仍为 v5，不增列、不清库。
+- `CompressedItemEntity.STATUS_SKIPPED` / `skipped`：持久状态，无收益归类不增列、不清库。Room 当前 v6 仅为 PNG 设置增加开关列。
 - `CompressionEngine.skippedRecord(item, tier, size, modified)`：记录 UUID、媒体 ID/卷/路径、原片大小/摘要/日期和处理时间。
 - `Attempt.publishUnchanged(record)`：登记前检查取消，提交在不可取消上下文完成；不改写原文件，不调用备份或媒体刷新。
 - `UiState.activeLedger()`：两页共用的有效记录范围；`DoneMedia.skipped`、`AlbumDoneUi.statusLine`、`applyDoneFilter("skipped")` 决定展示。

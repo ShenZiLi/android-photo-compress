@@ -23,8 +23,12 @@ class RecoveryJournal(context: Context) {
         val safetyBackupRelPath: String? = null,
         val ledgerId: String = id,
         val dateTakenWasNull: Boolean = false,
+        val convertedPath: String? = null,
+        val sourceInode: Long? = null,
     ) {
         val displayName: String get() = File(path).name
+        val paths: Set<String> get() = listOfNotNull(path, convertedPath).toSet()
+        fun matches(path: String, uri: String): Boolean = path in paths || (convertedPath != null && uri == mediaUri)
     }
 
     fun begin(entry: Entry) = synchronized(lock) {
@@ -36,6 +40,8 @@ class RecoveryJournal(context: Context) {
             put("safety", entry.safetyBackupRelPath ?: JSONObject.NULL)
             put("ledgerId", entry.ledgerId)
             put("takenNull", entry.dateTakenWasNull)
+            put("convertedPath", entry.convertedPath ?: JSONObject.NULL)
+            put("sourceInode", entry.sourceInode ?: JSONObject.NULL)
         }
         val atomic = file(entry.id)
         val stream = atomic.startWrite()
@@ -47,6 +53,8 @@ class RecoveryJournal(context: Context) {
                 saved.getString("sha256") == entry.sha256 && saved.optString("safety") == json.optString("safety")) {
                 "恢复记录保存校验失败，原文件未改动"
             }
+            check(saved.optString("convertedPath") == json.optString("convertedPath") &&
+                saved.optString("sourceInode") == json.optString("sourceInode")) { "转换恢复记录未完整保存，原片未改动" }
         } catch (failure: Throwable) {
             atomic.failWrite(stream)
             throw failure
@@ -67,6 +75,8 @@ class RecoveryJournal(context: Context) {
                     if (json.isNull("safety")) null else json.getString("safety"),
                     json.optString("ledgerId", json.getString("id")),
                     json.optBoolean("takenNull", false),
+                    if (json.isNull("convertedPath")) null else json.getString("convertedPath"),
+                    if (json.isNull("sourceInode")) null else json.getLong("sourceInode"),
                 )
             }
     }

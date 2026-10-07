@@ -2,6 +2,9 @@ package com.photocompress.app.data.ledger
 
 import android.content.Context
 import androidx.room.Dao
+import androidx.room.ColumnInfo
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -20,7 +23,7 @@ import kotlinx.coroutines.flow.Flow
 data class CompressedItemEntity(
     @PrimaryKey val id: String,
     val mediaStoreId: Long,
-    /** 当前媒体文件路径（HEIC→JPEG 转换后为新的 .jpg 路径）。 */
+    /** 当前媒体文件路径（PNG→JPEG 或旧 HEIC 转换后为新的 .jpg 路径）。 */
     val dataPath: String,
     /** 压缩前的原始路径；与 [dataPath] 不同时表示发生了格式转换，还原需写回该路径。 */
     val originalPath: String = "",
@@ -66,6 +69,8 @@ data class CompressedItemEntity(
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val photoTier: String = "BALANCED",
+    /** PNG 原格式压缩开关；关闭时仅识别，不进入压缩候选。 */
+    @ColumnInfo(defaultValue = "0") val compressPng: Boolean = false,
     /** 实况照片「图片段」（主图）质量档位。 */
     val liveTier: String = "BALANCED",
     /** 实况照片「视频段」（内嵌视频）质量档位，与普通视频的 [videoTier] 解耦。 */
@@ -135,6 +140,15 @@ interface LedgerDao {
 
 @Dao
 interface SettingsDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfMissing(settings: SettingsEntity)
+
+    @Query("UPDATE app_settings SET lastScanSec = :scannedAt, cacheLogicVersion = :logicVersion WHERE id = 1")
+    suspend fun markScanCompleted(scannedAt: Long, logicVersion: Int)
+
+    @Query("UPDATE app_settings SET compressPng = :enabled WHERE id = 1")
+    suspend fun setCompressPng(enabled: Boolean)
+
     @Query("SELECT * FROM app_settings WHERE id = 1")
     fun observe(): Flow<SettingsEntity?>
 
@@ -147,7 +161,7 @@ interface SettingsDao {
 
 @Database(
     entities = [CompressedItemEntity::class, SettingsEntity::class, CachedMediaEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -203,12 +217,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN compressPng INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }

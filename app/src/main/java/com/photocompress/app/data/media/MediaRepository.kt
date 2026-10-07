@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import com.photocompress.app.core.jpeg.JpegSegments
+import com.photocompress.app.core.png.PngCompressor
 import com.photocompress.app.core.xmp.Mp4XmpMarker
 import com.photocompress.app.core.xmp.PcXmp
 import kotlinx.coroutines.Dispatchers
@@ -204,9 +205,10 @@ class MediaRepository(
                 }.getOrNull()
             }
         }
+        val png = if (format == ContainerFormat.PNG) PngCompressor.probe(File(path)) else null
         val isLive = liveInfo != null
         val kind = if (isLive) MediaKind.LIVE_PHOTO else MediaKind.PHOTO
-        val support = MediaClassifier.decideImage(format, isLive)
+        val support = png?.skipReason?.let { SupportDecision.Skipped(it) } ?: MediaClassifier.decideImage(format, isLive)
 
         out += MediaItem(
             id = id,

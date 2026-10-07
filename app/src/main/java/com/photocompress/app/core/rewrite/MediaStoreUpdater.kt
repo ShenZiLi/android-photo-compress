@@ -49,10 +49,28 @@ object MediaStoreUpdater {
         val dateModified: Long?,
         val oemVideoSize: Long?,
         val hasOemVideoSize: Boolean,
+        val mimeType: String?,
     )
 
     fun pointsTo(context: Context, uri: Uri, path: String): Boolean =
         runCatching { readRow(context, uri).let { it.path == path && it.pending == 0 } }.getOrDefault(false)
+
+    fun pathOf(context: Context, uri: Uri): String = readRow(context, uri).path
+
+    /** 同目录改名由 MediaProvider 移动同一文件，不删除/新建媒体条目，也不覆盖同名目标。 */
+    fun renameExisting(context: Context, uri: Uri, from: File, target: File, mime: String) {
+        val before = readRow(context, uri)
+        check(before.path == from.path && before.pending == 0 && from.isFile) { "转换媒体身份已变化，未改名" }
+        require(from.parentFile?.canonicalPath == target.parentFile?.canonicalPath && !target.exists()) { "转换目标已存在或目录变化，未覆盖" }
+        val inode = android.system.Os.stat(from.path).st_ino
+        check(context.contentResolver.update(uri, ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, target.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+        }, null, null) == 1) { "系统未接受格式转换改名" }
+        val after = readRow(context, uri)
+        check(after.id == before.id && after.pending == 0 && after.mimeType == mime && after.path == target.path && target.isFile &&
+            !from.exists() && android.system.Os.stat(target.path).st_ino == inode) { "转换改名身份或目标路径未通过" }
+    }
 
     private fun readRow(context: Context, uri: Uri): Row =
         checkNotNull(context.contentResolver.query(uri, null, null, null, null)) {
@@ -73,6 +91,7 @@ object MediaStoreUpdater {
                 dateModified = number(MediaStore.MediaColumns.DATE_MODIFIED),
                 oemVideoSize = number("o_video_size"),
                 hasOemVideoSize = cursor.getColumnIndex("o_video_size") >= 0,
+                mimeType = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE).takeIf { it >= 0 }?.let { cursor.getString(it) },
             )
         }
 

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -71,6 +74,7 @@ fun SettingsScreen(
     onOpenTrash: () -> Unit,
     onOpenAlbumFilter: () -> Unit,
     onOpenCompressRatio: () -> Unit,
+    onSetCompressPng: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(title = "设置")
@@ -82,6 +86,23 @@ fun SettingsScreen(
                     title = "压缩比例",
                     onClick = onOpenCompressRatio,
                 )
+            }
+            Spacer(Modifier.height(12.dp))
+            CardSurface(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .toggleable(
+                            value = state.settings.compressPng,
+                            enabled = !state.busy && !state.scanning,
+                            role = Role.Switch,
+                            onValueChange = onSetCompressPng,
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("压缩PNG", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Switch(checked = state.settings.compressPng, onCheckedChange = null, enabled = !state.busy && !state.scanning)
+                }
             }
 
             SectionTitle("显示", modifier = Modifier.padding(horizontal = 0.dp))
@@ -154,7 +175,7 @@ fun CompressRatioScreen(
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             TierCard(
                 title = "普通照片",
-                hint = "JPEG / HEIF",
+                hint = "JPEG / HEIF / PNG",
                 options = listOf(
                     TierOption(
                         selected = QualityTier.fromName(settings.photoTier),

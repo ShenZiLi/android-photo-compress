@@ -99,7 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val records = ledgerDao.observeAll().first()
                     val paths = engine.reconcileRolledBack(records, ledgerDao::markFailed, ledgerDao::deleteById).toMutableSet()
                     for (entry in engine.pendingRecovery()) {
-                        paths += entry.path
+                        paths += entry.paths
                         engine.recover(entry, ledgerDao::deleteById)
                     }
                     paths
@@ -115,13 +115,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     engine.pendingRecovery()
                 }
                 // 缓存写入成功后再推进扫描水位；中途退出时水位不变，下次仍会重扫
-                val latest = settingsDao.get() ?: settings
-                settingsDao.upsert(
-                    latest.copy(
-                        lastScanSec = System.currentTimeMillis() / 1000,
-                        cacheLogicVersion = CACHE_LOGIC_VERSION,
-                    ),
-                )
+                settingsDao.insertIfMissing(settings)
+                // 只更新扫描水位，不能用旧设置快照覆盖用户刚保存的 PNG 开关或质量档。
+                settingsDao.markScanCompleted(System.currentTimeMillis() / 1000, CACHE_LOGIC_VERSION)
                 android.util.Log.i(TAG, "scan ${if (warm) "incremental" else "full"}: ${items.size} items")
                 _ui.update {
                     it.copy(
@@ -247,6 +243,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         item, tier, videoTier, control,
                         onCommit = ledgerDao::upsert,
                         onRollback = ledgerDao::deleteById,
+                        pngEnabled = tiers.compressPng,
                     )) {
                         is CompressOutcome.Success -> {
                             done++
@@ -368,7 +365,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 // 清理不可撤销；开始后即使退出页面也完成删除及账本登记。
                 withContext(NonCancellable) {
-                    val protected = engine.pendingRecovery().map { it.path }.toSet()
+                    val protected = engine.pendingRecovery().flatMap { it.paths }.toSet()
                     val records = ledgerDao.findWithBackups().filter {
                         it.status in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED) &&
                             it.dataPath !in protected && it.originalPath !in protected
@@ -425,7 +422,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     is RestoreOutcome.Failed -> _messages.trySend(result.reason)
                 }
             } finally {
-                finishBatch(listOf(entry.path))
+                finishBatch(entry.paths)
+            }
+        }
+    }
+
+    fun setCompressPng(enabled: Boolean) {
+        if (writing || _ui.value.scanning) return
+        viewModelScope.launch {
+            try {
+                settingsDao.insertIfMissing(SettingsEntity())
+                settingsDao.setCompressPng(enabled)
+                clearSelection(AppPage.TODO)
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _messages.trySend("PNG 设置保存失败：${failure.message}")
             }
         }
     }

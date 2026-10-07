@@ -135,7 +135,7 @@ private val ACTIVE_STATUSES = setOf(
 /** 无收益判断只适用于仍然存在且身份/大小/日期一致的原片，不隐藏改过或替换过的图片。 */
 private fun UiState.activeLedger(): List<CompressedItemEntity> {
     val byPath = items.associateBy { it.dataPath }
-    val pending = recoveryEntries.map { it.path }.toSet()
+    val pending = recoveryEntries.flatMap { it.paths }.toSet()
     return ledger.filter { record ->
         record.dataPath !in pending && record.originalPath !in pending &&
         record.status in ACTIVE_STATUSES && (!record.skipped || byPath[record.dataPath]?.let { item ->
@@ -219,15 +219,24 @@ fun UiState.doneSelection(): SelectionSummary {
 /** 未压缩：媒体库中有、且账本与文件内标记都没有压缩痕迹；排除用户屏蔽的图集。 */
 fun UiState.todoItems(): List<MediaItem> {
     val excluded = excludedAlbums
-    val pending = recoveryEntries.associateBy { it.path }
+    val pending = buildMap {
+        recoveryEntries.forEach { entry -> entry.paths.forEach { put(it, entry) } }
+        items.forEach { item -> recoveryEntries.firstOrNull { it.matches(item.dataPath, item.uri.toString()) }?.let { put(item.dataPath, it) } }
+    }
     val compressedPaths = HashSet<String>()
     activeLedger().forEach { compressedPaths += it.dataPath }
     // 文件内标记优先：账本丢失（重装 / 清数据）时仍能识别，避免二次压缩（F7 / AC5）
     items.asSequence().filter { it.xmpCompressId != null && it.dataPath !in pending }.forEach { compressedPaths += it.dataPath }
     val available = items.filter { it.dataPath !in compressedPaths && it.bucketName !in excluded }
-        .map { if (it.dataPath in pending) it.copy(support = SupportDecision.Skipped(RECOVERY_REASON)) else it }
+        .map {
+            when {
+                it.dataPath in pending -> it.copy(support = SupportDecision.Skipped(RECOVERY_REASON))
+                it.format == ContainerFormat.PNG && !settings.compressPng -> it.copy(support = SupportDecision.Skipped("PNG 压缩未开启"))
+                else -> it
+            }
+        }
     val paths = items.map { it.dataPath }.toSet()
-    val missing = recoveryEntries.filter { it.path !in paths }.map { entry ->
+    val missing = recoveryEntries.filter { entry -> entry.paths.none { it in paths } && items.none { entry.matches(it.dataPath, it.uri.toString()) } }.map { entry ->
         val uri = entry.mediaUri.toUri()
         val video = uri.path?.contains("/video/") == true
         val file = File(entry.path)
@@ -254,14 +263,14 @@ fun UiState.doneItems(): List<DoneMedia> {
     val known = fromLedger.map { it.dataPath }.toHashSet()
     val adopted = items
         .filter { it.xmpCompressId != null && it.dataPath !in known && it.bucketName !in excluded &&
-            recoveryEntries.none { entry -> entry.path == it.dataPath } }
+            recoveryEntries.none { entry -> entry.matches(it.dataPath, it.uri.toString()) } }
         .map { DoneMedia(adoptedRecord(it), it, adopted = true) }
     return fromLedger + adopted
 }
 
 /** 回收站仅承载成功压缩备份；失败事务在未压缩页处理。 */
 fun UiState.successfulBackups(): List<CompressedItemEntity> {
-    val pending = recoveryEntries.map { it.path }.toSet()
+    val pending = recoveryEntries.flatMap { it.paths }.toSet()
     return ledger.filter { it.backupRelPath != null &&
         it.status in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED) &&
         it.dataPath !in pending && it.originalPath !in pending }

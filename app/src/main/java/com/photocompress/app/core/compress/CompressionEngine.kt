@@ -5,6 +5,7 @@ import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
 import com.photocompress.app.core.jpeg.MpfPhotoContainer
+import com.photocompress.app.core.png.PngCompressor
 import com.photocompress.app.core.livephoto.LivePhotoContainer
 import com.photocompress.app.core.mp4.Mp4Metadata
 import com.photocompress.app.core.rewrite.FileUtils
@@ -12,6 +13,7 @@ import com.photocompress.app.core.rewrite.InPlaceRewriter
 import com.photocompress.app.core.rewrite.MediaStoreUpdater
 import com.photocompress.app.core.rewrite.RecycleBin
 import com.photocompress.app.core.rewrite.RecoveryJournal
+import com.photocompress.app.core.rewrite.PngConversionRewriter
 import com.photocompress.app.core.video.MediaClassifierCodec
 import com.photocompress.app.core.video.VideoTranscoder
 import com.photocompress.app.core.xmp.Mp4XmpMarker
@@ -65,6 +67,7 @@ class CompressionEngine(private val context: Context) {
 
     private val recycle = RecycleBin(context)
     private val recovery = RecoveryJournal(context)
+    private val pngConversion = PngConversionRewriter(context)
 
     /** UI 重试与到期清理共享锁，避免检查保护记录后另一事务开始改写或删除备份。 */
     private suspend fun <T> withMediaLock(
@@ -110,21 +113,22 @@ class CompressionEngine(private val context: Context) {
         control: CompressionControl = CompressionControl(),
         onCommit: suspend (CompressedItemEntity) -> Unit = {},
         onRollback: suspend (String) -> Unit = {},
+        pngEnabled: Boolean = false,
     ): CompressOutcome = withMediaLock {
         val attempt = Attempt(context, control, currentCoroutineContext()[Job], onCommit, onRollback)
         try {
             attempt.checkCancelled()
-            check(recovery.entries().none { it.path == item.dataPath }) {
+            check(recovery.entries().none { it.path == item.dataPath || it.convertedPath == item.dataPath || it.mediaUri == item.uri.toString() }) {
                 "处理未完成，请在未压缩页重试恢复原片"
             }
             val source = File(item.dataPath)
             val originalSize = source.length()
             val originalModified = source.lastModified()
             val outcome = when (item.kind) {
-                MediaKind.PHOTO -> if (item.format == ContainerFormat.HEIC) {
-                    CompressOutcome.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
-                } else {
-                    compressPhoto(item, tier, videoTier, attempt)
+                MediaKind.PHOTO -> when (item.format) {
+                    ContainerFormat.HEIC -> CompressOutcome.Skipped("HEIC 原格式及元数据无法完整保留，已保留原片")
+                    ContainerFormat.PNG -> if (pngEnabled) compressPng(item, tier, attempt) else CompressOutcome.Skipped("PNG 压缩未开启")
+                    else -> compressPhoto(item, tier, videoTier, attempt)
                 }
                 MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier, attempt)
                 MediaKind.VIDEO -> compressVideo(item, videoTier, attempt)
@@ -145,6 +149,74 @@ class CompressionEngine(private val context: Context) {
     }
 
     // ---------------------------------------------------------------- 普通照片
+
+    private suspend fun compressPng(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
+        val file = File(item.dataPath)
+        if (!file.isFile) return CompressOutcome.Failed("文件不存在")
+        if (file.length() > PngCompressor.MAX_FILE_BYTES) return CompressOutcome.Skipped("PNG 文件过大，已保留原片")
+        val original = file.readBytes()
+        attempt.checkCancelled()
+        val marker = newMarker()
+        val encoded = try {
+            PngCompressor.compress(original, tier, marker, attempt::checkCancelled)
+        } catch (invalid: IllegalArgumentException) {
+            return CompressOutcome.Skipped(invalid.message ?: "PNG 无法安全压缩，已保留原片")
+        }
+        if (encoded.bytes.size >= original.size) return CompressOutcome.Skipped.noSizeReduction()
+        val destination = File(file.parentFile, file.nameWithoutExtension + ".jpg")
+        if (destination.exists()) return CompressOutcome.Skipped("同名 JPEG 已存在，已保留 PNG 原片")
+        val temp = attempt.temp(".jpg")
+        temp.writeBytes(encoded.bytes)
+        val sourceSha = java.security.MessageDigest.getInstance("SHA-256").digest(original)
+            .joinToString("") { "%02x".format(it) }
+        return commitPngJpeg(item, temp, tier, encoded.quality, destination, sourceSha, attempt)
+    }
+
+    private suspend fun commitPngJpeg(item: MediaItem, temp: File, tier: QualityTier, quality: Int,
+        destination: File, sourceSha: String, attempt: Attempt): CompressOutcome {
+        var prepared: PngConversionRewriter.Prepared? = null
+        var started = false
+        try {
+            attempt.checkCancelled()
+            prepared = pngConversion.prepare(UUID.randomUUID().toString(), item, destination, sourceSha, attempt::checkCancelled)
+            attempt.checkCancelled()
+            started = true
+            pngConversion.writeJpeg(prepared.entry, temp, attempt::checkCancelled)
+            MediaStoreUpdater.refresh(context, item.uri, destination.path, item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec)
+            attempt.checkCancelled()
+            val now = System.currentTimeMillis()
+            val record = CompressedItemEntity(
+                id = prepared.entry.id, mediaStoreId = item.id, dataPath = destination.path, originalPath = item.dataPath,
+                volumeName = item.volumeName, bucketName = item.bucketName, displayName = destination.name,
+                mediaKind = MediaKind.PHOTO.name, mimeType = "image/jpeg", containerFormat = ContainerFormat.JPEG.name,
+                videoCodec = null, originalSize = prepared.size, compressedSize = temp.length(), originalSha256 = sourceSha,
+                originalDateTakenMs = item.dateTakenMs, originalDateAddedSec = item.dateAddedSec, originalDateModifiedSec = item.dateModifiedSec,
+                qualityTier = tier.name, codecUsed = "PNG → JPEG q=$quality", compressedAtMs = now,
+                restoreDeadlineMs = now + TimeUnit.DAYS.toMillis(RETENTION_DAYS), backupRelPath = prepared.entry.backupRelPath,
+                backupSize = prepared.size, status = CompressedItemEntity.STATUS_DONE,
+            )
+            attempt.publish(record)
+            recovery.finish(prepared.entry.id)
+            return CompressOutcome.Success(record)
+        } catch (failure: Throwable) {
+            val rollback = withContext(NonCancellable) {
+                val unregister = runCatching { attempt.forgetPublished() }
+                val restored = runCatching { prepared?.let { pngConversion.restoreOriginal(it.entry) } }
+                if (unregister.isSuccess && restored.isSuccess) runCatching { prepared?.let { pngConversion.cleanup(it.entry) } }
+                else if (restored.isFailure) restored else unregister
+            }
+            if (failure is CancellationException && rollback.isSuccess) {
+                if (failure !is CompressionCancelledException) throw failure
+                return CompressOutcome.Cancelled()
+            }
+            val state = if (rollback.isSuccess) {
+                if (started) "转换失败，PNG 原片及相册记录已恢复" else "PNG 原片未改动"
+            } else "PNG 转换未完成，原始备份已保护，可在未压缩页重试恢复"
+            if (failure is CancellationException && failure !is CompressionCancelledException) throw failure
+            return if (failure is CompressionCancelledException) CompressOutcome.Cancelled("$state：${rollback.exceptionOrNull()?.message}")
+                else CompressOutcome.Failed("$state：${failure.message}")
+        }
+    }
 
     private suspend fun compressPhoto(item: MediaItem, tier: QualityTier, videoTier: QualityTier, attempt: Attempt): CompressOutcome {
         val file = File(item.dataPath)
@@ -629,6 +701,9 @@ class CompressionEngine(private val context: Context) {
         val originalPath = record.originalPath.ifBlank { record.dataPath }
         val target = File(originalPath)
         val converted = originalPath != record.dataPath
+        if (converted && File(originalPath).extension.equals("png", ignoreCase = true)) {
+            return@withMediaLock restorePngJpeg(record, originalPath, rel, onRestored)
+        }
         var safety: RecycleBin.Backup? = null
         val previousTime = target.takeIf { it.isFile }?.let { Files.getLastModifiedTime(it.toPath()) }
         val restoreTime = previousTime?.takeIf { it.toMillis() / 1000L == record.originalDateModifiedSec }
@@ -708,9 +783,39 @@ class CompressionEngine(private val context: Context) {
 
     fun pendingRecovery(): List<RecoveryJournal.Entry> = recovery.entries()
 
+    private suspend fun restorePngJpeg(record: CompressedItemEntity, originalPath: String, backup: String,
+        onRestored: suspend (String) -> Unit): RestoreOutcome = withContext(NonCancellable) {
+        var entry: RecoveryJournal.Entry? = null
+        try {
+            entry = pngConversion.prepareRestore("RESTORE-${UUID.randomUUID()}", originalPath, record.dataPath,
+                backup, record.originalSha256, record.id, mediaUriOf(record))
+            pngConversion.restoreOriginal(entry)
+            onRestored(record.id)
+            pngConversion.cleanup(entry)
+            RestoreOutcome.Success(record.id)
+        } catch (failure: Exception) {
+            RestoreOutcome.Failed(if (entry == null) "PNG 原片未改动：${failure.message}"
+                else "PNG 还原未完成，原始备份已保护，可在未压缩页重试恢复：${failure.message}")
+        }
+    }
+
+    private suspend fun recoverPngEntry(entry: RecoveryJournal.Entry, onRecovered: suspend (String) -> Unit): RestoreOutcome {
+        return try {
+            val known = recovery.entries().firstOrNull { it.id == entry.id }
+                ?: return RestoreOutcome.Failed("恢复记录已处理，请刷新")
+            pngConversion.restoreOriginal(known)
+            onRecovered(known.ledgerId)
+            pngConversion.cleanup(known)
+            RestoreOutcome.Success(known.id)
+        } catch (failure: Exception) {
+            RestoreOutcome.Failed("PNG 恢复未完成，原始备份继续保护：${failure.message}")
+        }
+    }
+
     /** 自动重试持久事务或从未压缩页重试；源文件、时间及账本完整后才清理本次备份。 */
     suspend fun recover(entry: RecoveryJournal.Entry, onRecovered: suspend (String) -> Unit): RestoreOutcome =
         withMediaLock(Dispatchers.IO + NonCancellable) {
+            if (entry.convertedPath != null) return@withMediaLock recoverPngEntry(entry, onRecovered)
             var bytesRestored = false
             var safety: RecycleBin.Backup? = null
             var previousTime: FileTime? = null
@@ -781,7 +886,7 @@ class CompressionEngine(private val context: Context) {
         onFailed: suspend (String) -> Unit,
         onRemoved: suspend (String) -> Unit,
     ): List<String> = withMediaLock {
-        val pending = recovery.entries().map { it.path }.toSet()
+        val pending = recovery.entries().flatMap { it.paths }.toSet()
         val touched = mutableListOf<String>()
         for (record in records) {
             if (record.status !in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_FAILED) ||
