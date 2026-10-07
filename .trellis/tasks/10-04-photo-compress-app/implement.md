@@ -186,3 +186,11 @@ gradle :app:testDebugUnitTest
 - [x] 未新增或运行测试套件，未重新运行全量 Lint；本轮只验收开关联动，没有重跑 PNG 编码/还原故障矩阵。真机未连接，未安装到真机。
 
 验收截图位于忽略目录 `local-device-reports/png-toggle-v0.1.30-on.png` 与 `png-toggle-v0.1.30-off.png`，正式产物 `artifacts/qingcun-v0.1.30.apk`。
+
+## 2026-10-07：0.1.30 真机部署
+
+- [x] 用户连接 RMX5010 后，正式签名 APK 从 0.1.28/code29 覆盖升级至 0.1.30/code31，安装返回 Success。
+- [x] MainActivity 冷启动 Status: ok，安装版本及启动后两次进程检查通过。
+- [ ] 真机 PNG 开关页面及实际转换功能验收（本次没有手动处理个人媒体，由用户验证）。
+
+记录见 [research/png-jpeg.md](research/png-jpeg.md) 的 0.1.30 部署段落。
