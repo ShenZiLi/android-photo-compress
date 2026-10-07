@@ -28,3 +28,9 @@ API 36 原生 APP 使用新生成的独占合成媒体：开关重启持久、�
 - 本轮未安装真机、未操作真实个人照片；真机厂商改名兼容性、特殊 ICC/HDR、超过当前安全范围的 PNG 与文件创建时间均不以模拟器结果替代。
 
 PNG 结构、过滤和未知块策略参考 [W3C PNG 规范](https://www.w3.org/TR/png-3/)；同一媒体条目改名参考 [Android 共享媒体文档](https://developer.android.com/training/data-storage/shared/media)。
+
+## 真机部署（2026-10-07）
+
+用户明确要求安装到真机。检测到 RMX5010 / Android 16，使用正式签名的 `qingcun-v0.1.28.apk` 覆盖安装：原版本 0.1.24/code25，安装返回 Success，安装后读取为 0.1.28/code29。MainActivity 冷启动 Status: ok，进程存在。
+
+本步骤确认安装与启动，不代替 PNG 改名、压缩、元数据或还原的真机功能验收；未手动触发压缩、还原或清理。启动会执行应用既定的扫描及未完成事务恢复流程。
