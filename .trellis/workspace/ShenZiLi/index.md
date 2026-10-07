@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
+- **Total Sessions**: 32
 - **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1009 | Active |
+| `journal-1.md` | ~1043 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 32 | 2026-10-07 | 轻存0.1.28正式版真机部署 | `1bf20d6` | `master` |
 | 31 | 2026-10-07 | 压缩PNG开关与安全JPEG转换 | `3f7519a` | `master` |
 | 30 | 2026-10-07 | 已压缩图集仅显示还原状态 | `d93a3e4` | `master` |
 | 29 | 2026-10-07 | 失败照片事务回滚与回收站职责调整 | `65cdcb2` | `master` |

@@ -1007,3 +1007,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机厂商改名兼容性、特殊PNG与文件创建时间待验证；本轮未安装真机、未操作真实个人照片，旧保护备份不因本次功能清理。
+
+
+## Session 32: 轻存0.1.28正式版真机部署
+<!-- trellis-session: v=2 fp=ec2f910ef678faf8 -->
+
+**Date**: 2026-10-07
+**Task**: 轻存0.1.28正式版真机部署
+**Branch**: `master`
+
+### Summary
+
+按用户要求，将正式签名轻存0.1.28覆盖安装到已连接的RMX5010/Android16真机。
+
+### Main Changes
+
+- 补充PNG功能真机部署记录；保持当前应用安装数据，不卸载或清空。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1bf20d6` | docs: record Qingcun 0.1.28 device deployment |
+
+### Testing
+
+- [OK] 安装返回Success；系统包信息由0.1.24/code25更新到0.1.28/code29，MainActivity冷启动Status ok，后续读取进程仍存在；差异检查通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户在真机自行验证PNG转换、元数据和还原；本轮仅安装及启动，未手动触发压缩、还原、清理。启动执行既定扫描/恢复流程。
