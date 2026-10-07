@@ -90,6 +90,7 @@ data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
     val knownBeforeCount: Int get() = items.count { !it.adopted && !it.skipped }
     val before: Long get() = items.sumOf { it.originalSize }
     val after: Long get() = items.sumOf { it.compressedSize }
+    val saved: Long get() = items.filter { !it.adopted }.sumOf { it.saved.coerceAtLeast(0L) }
     val restorableItems: List<DoneMedia> get() = items.filter { it.restorable }
     val restorableCount: Int get() = restorableItems.size
     val statusLine: String
@@ -105,6 +106,17 @@ data class AlbumDoneUi(val name: String, val items: List<DoneMedia>) {
             "${formatCount(count)} 项 · ${formatSize(after)}"
         } else {
             "${formatCount(count)} 项 · ${formatSize(before)} → ${formatSize(after)}"
+        }
+
+    /** 图集卡片显示真实节省；只有文件标记而原体积未知时不虚构数字。 */
+    val savingsLine: String
+        get() {
+            val reduction = if (knownBeforeCount > 0 || items.all { it.skipped }) {
+                "-${formatCompactSize(saved)}"
+            } else {
+                "—"
+            }
+            return "${formatCount(count)} 项 · $reduction"
         }
 }
 

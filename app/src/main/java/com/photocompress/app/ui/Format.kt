@@ -17,6 +17,15 @@ fun formatSize(bytes: Long): String {
     }
 }
 
+/** 紧凑体积：无单位间空格，去掉小数末尾的零（4.00 GB → 4GB）。 */
+fun formatCompactSize(bytes: Long): String {
+    val size = formatSize(bytes)
+    val number = size.substringBefore(' ').let {
+        if ('.' in it) it.trimEnd('0').trimEnd('.') else it
+    }
+    return number + size.substringAfter(' ')
+}
+
 /** 千分位数字。 */
 fun formatCount(value: Int): String = String.format(Locale.CHINA, "%,d", value)
 

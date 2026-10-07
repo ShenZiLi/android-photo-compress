@@ -173,7 +173,7 @@ fun DoneLevel1(
                     modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     coverUris = album.items.take(4).mapNotNull { it.item?.uri },
                     name = album.name,
-                    line2 = album.sizeLine,
+                    line2 = album.savingsLine,
                     line3 = album.statusLine,
                     line3Warn = album.restorableCount == 0,
                     picked = album.name in state.done.pickedAlbums,
