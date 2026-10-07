@@ -1177,3 +1177,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 真机相册、特殊HEIC/HDR、文件创建时间待验收，正式APK已生成；整个APP任务仍有待验证条件。
+
+
+## Session 37: 回收站支持确认后删除成功备份
+<!-- trellis-session: v=2 fp=4559378d42c270fb -->
+
+**Date**: 2026-10-07
+**Task**: 回收站支持确认后删除成功备份
+**Branch**: `master`
+
+### Summary
+
+0.1.32手动删除成功备份不再被媒体缺失或大小变化阻挡，保留未完成事务和自动清理保护。用户授权推送GitHub。
+
+### Main Changes
+
+- 新增默认关闭的allowMissingOrChangedMedia，手动确认传true仅豁免DONE/PURGED媒体检查；更新确认及剩余保护文案、规范、README和任务记录。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5a03e89` | fix(recycle): allow confirmed deletion of missing or changed media backups |
+
+### Testing
+
+- [OK] API36合成正常/已修改/已缺失三份成功备份通过右上角永久删除全部清理，账本不可还原且照片SHA/inode/mtime不变，回收站为空；旧账本和保护恢复记录保留。构建、签名、code33及差异检查通过；未新增或运行测试套件，未重跑全量Lint。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 本地完成后将代码与会话记录一并推送origin/master，确认远端提交；真机删除流程待用户安装验收。

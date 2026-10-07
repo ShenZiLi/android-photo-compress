@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 36
+- **Total Sessions**: 37
 - **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1179 | Active |
+| `journal-1.md` | ~1213 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 37 | 2026-10-07 | 回收站支持确认后删除成功备份 | `5a03e89` | `master` |
 | 36 | 2026-10-07 | HEIC原格式压缩与安全回滚 | `890b0fe` | `master` |
 | 35 | 2026-10-07 | 轻存0.1.30真机安装 | `f4d88b9` | `master` |
 | 34 | 2026-10-07 | PNG开关即时联动候选状态 | `68703e8` | `master` |
