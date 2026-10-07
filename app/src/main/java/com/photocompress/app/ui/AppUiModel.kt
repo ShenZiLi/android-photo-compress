@@ -243,7 +243,13 @@ fun UiState.todoItems(): List<MediaItem> {
         .map {
             when {
                 it.dataPath in pending -> it.copy(support = SupportDecision.Skipped(RECOVERY_REASON))
-                it.format == ContainerFormat.PNG && !settings.compressPng -> it.copy(support = SupportDecision.Skipped("PNG 压缩未开启"))
+                // PNG 开关决定列表候选，不能复用扫描缓存的转换预检结果。
+                // 安全转换检查仍由引擎在写入原片前完成；待恢复事务优先禁止重试压缩。
+                it.format == ContainerFormat.PNG -> it.copy(support = if (settings.compressPng) {
+                    SupportDecision.Supported
+                } else {
+                    SupportDecision.Skipped("PNG 压缩未开启")
+                })
                 else -> it
             }
         }

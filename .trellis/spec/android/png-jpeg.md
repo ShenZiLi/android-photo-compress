@@ -3,7 +3,8 @@
 ## 范围与设置
 
 - `SettingsEntity.compressPng: Boolean = false`；Room v5→v6 只新增 `compressPng INTEGER NOT NULL DEFAULT 0`，不清空设置、账本或缓存。
-- 设置页显示“压缩PNG”开关；普通照片档位说明固定“JPEG / HEIF / PNG”。关闭时 PNG 不进入压缩候选；开启后沿用 JPEG 92/85/76，不另设质量档。
+- 设置页显示“压缩PNG”开关；普通照片档位说明固定“JPEG / HEIF / PNG”。关闭时 PNG 显示“不支持”、不可勾选；开启后普通 PNG 与图片一样可勾选，不显示“不支持”，沿用 JPEG 92/85/76，不另设质量档。
+- `UiState.todoItems()` 每次按当前开关重建 PNG 候选状态，不能沿用扫描缓存中的转换预检 `skipReason`；一级图集、二级网格、类型筛选、全选和底部统计共用该状态。切换后立即生效并清空未压缩选择，无须重扫。待恢复事务优先保持禁用；动画、透明度等安全检查继续在引擎写入原片前执行，不能把可勾选解释为一定能转换。
 - 扫描完成仅更新 lastScanSec/cacheLogicVersion，初始化用 INSERT IGNORE；不得拿扫描开始时的旧设置快照覆盖用户刚保存的 PNG 开关和档位。
 - 开关不影响已转换 JPEG 的分类和还原。判类逻辑版本为 3；PNG 设置在 UI 候选和引擎入口分别检查，禁止只让按钮可点。
 
