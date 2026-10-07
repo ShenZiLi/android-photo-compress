@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 35
+- **Total Sessions**: 36
 - **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1145 | Active |
+| `journal-1.md` | ~1179 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 36 | 2026-10-07 | HEIC原格式压缩与安全回滚 | `890b0fe` | `master` |
 | 35 | 2026-10-07 | 轻存0.1.30真机安装 | `f4d88b9` | `master` |
 | 34 | 2026-10-07 | PNG开关即时联动候选状态 | `68703e8` | `master` |
 | 33 | 2026-10-07 | 已压缩图集卡片显示节省空间 | `7341453` | `master` |

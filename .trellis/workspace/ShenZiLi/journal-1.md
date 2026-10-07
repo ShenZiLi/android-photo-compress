@@ -1143,3 +1143,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 用户验证真机PNG开关及照片转换；本次未手动压缩、还原或清理个人媒体。
+
+
+## Session 36: HEIC原格式压缩与安全回滚
+<!-- trellis-session: v=2 fp=bb41ae6645e3ea60 -->
+
+**Date**: 2026-10-07
+**Task**: HEIC原格式压缩与安全回滚
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.31新增HEIC→HEIC主图重编码，保留路径及原始元数据，复用备份回滚还原。
+
+### Main Changes
+
+- 新增HEIF容器重组与AndroidX HeifWriter，独立CQ75/55/35、自有UUID内XMP、缓存逻辑4；写前源SHA与写回结果SHA验证；同步规范、README和旧探针接口。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `890b0fe` | feat(media): compress HEIC in place with metadata preservation and rollback |
+
+### Testing
+
+- [OK] API36真实样本独占副本三档减少13.0/59.5/81.4%，格式/路径/媒体身份/日期/精确mtime保持，三档原生还原SHA一致；登记错误与取消完整回滚；EXIF/ICC/引用/厂商尾部字节比对通过。最终构建签名code32及平衡档复验通过，原5020账本保留，诊断触发器和设置复原。未新增测试方法或运行测试套件，未重跑全量Lint。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机相册、特殊HEIC/HDR、文件创建时间待验收，正式APK已生成；整个APP任务仍有待验证条件。
