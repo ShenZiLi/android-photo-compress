@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 29
+- **Total Sessions**: 30
 - **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~938 | Active |
+| `journal-1.md` | ~972 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 30 | 2026-10-07 | 已压缩图集仅显示还原状态 | `d93a3e4` | `master` |
 | 29 | 2026-10-07 | 失败照片事务回滚与回收站职责调整 | `65cdcb2` | `master` |
 | 28 | 2026-10-07 | 多图MPF与已编辑实况主图压缩 | `3bff77b` | `master` |
 | 27 | 2026-10-07 | 轻存0.1.24真机覆盖安装 | `79b1b5f` | `master` |

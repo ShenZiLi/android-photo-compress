@@ -936,3 +936,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 137 份真实历史备份尚未逐项核验，未知备份继续保护；本轮未安装真机、未操作真实个人媒体。
+
+
+## Session 30: 已压缩图集仅显示还原状态
+<!-- trellis-session: v=2 fp=cdd071528cd4154c -->
+
+**Date**: 2026-10-07
+**Task**: 已压缩图集仅显示还原状态
+**Branch**: `master`
+
+### Summary
+
+轻存 0.1.27：已压缩图集只显示可还原 N 项或备份已不可还原，移除已跳过数量。
+
+### Main Changes
+
+- 修改 AlbumDoneUi.statusLine 与不可还原颜色条件，保留图片跳过标记、筛选及媒体处理规则；同步需求和规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d93a3e4` | fix(ui): show only restore availability in compressed albums |
+
+### Testing
+
+- [OK] Debug/Release 构建成功，正式 APK 签名、包名和版本 0.1.27/code28 检查通过；差异检查通过，未新增或运行测试套件，未进行设备 UI 验收。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 需要真机安装时使用 artifacts/qingcun-v0.1.27.apk；本轮未安装真机。
