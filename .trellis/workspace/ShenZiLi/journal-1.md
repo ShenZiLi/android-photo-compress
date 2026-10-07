@@ -830,3 +830,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 过去未登记的无收益图片需下一次尝试才生成跳过记录；登记取消时序、数据库故障和外部改写等专项边界未宣称已验证。
+
+
+## Session 27: 轻存0.1.24真机覆盖安装
+<!-- trellis-session: v=2 fp=5669b9e94461cd73 -->
+
+**Date**: 2026-10-07
+**Task**: 轻存0.1.24真机覆盖安装
+**Branch**: `master`
+
+### Summary
+
+按用户要求在真我GT7 Pro将正式版0.1.20覆盖升级至0.1.24，签名一致，安装成功并启动。
+
+### Main Changes
+
+- 更新真实部署记录；使用现有5037 ADB连接，应用数据保留，不操作个人照片。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `79b1b5f` | docs: record Qingcun 0.1.24 installation on GT7 Pro |
+
+### Testing
+
+- [OK] 安装返回Success；读取versionName=0.1.24/versionCode=25；MainActivity启动Status: ok，进程存在。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机压缩功能与HDR观感由用户自行验证；本次仅部署及启动核对。
