@@ -1041,3 +1041,37 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 用户在真机自行验证PNG转换、元数据和还原；本轮仅安装及启动，未手动触发压缩、还原、清理。启动执行既定扫描/恢复流程。
+
+
+## Session 33: 已压缩图集卡片显示节省空间
+<!-- trellis-session: v=2 fp=9417a8bbe2432c6a -->
+
+**Date**: 2026-10-07
+**Task**: 已压缩图集卡片显示节省空间
+**Branch**: `master`
+
+### Summary
+
+轻存0.1.29：已压缩图集卡片第二行改为数量和负值节省空间，例如1,137项 · -4GB。
+
+### Main Changes
+
+- 新增紧凑体积格式化，去掉单位空格和多余小数零；汇总非接管记录非负节省，跳过为零，全部原体积未知显示横线；页头和二级占用信息保持。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7341453` | fix(ui): show saved space as negative values in album cards |
+
+### Testing
+
+- [OK] 调试/正式构建、正式签名和包名/版本0.1.29-code30检查通过；API36模拟器覆盖安装/启动及原生卡片单行数值验证通过，差异检查通过。未新增或运行测试套件，本轮未重跑全量Lint。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机当前未连接，新正式APK位于artifacts/qingcun-v0.1.29.apk，尚未部署真机。
