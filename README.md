@@ -1,6 +1,6 @@
 <h1 align="center">轻存 · Roomy</h1>
 
-<p align="center">把手机里占空间的照片、实况和视频，留得更轻一些。</p>
+<p align="center">安卓实况图片压缩 APP，让照片留得更轻。</p>
 
 <p align="center">
   <a href="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml"><img src="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml/badge.svg" alt="Android 发布状态"></a>
@@ -15,7 +15,7 @@
   <a href="#构建与发布">构建与发布</a>
 </p>
 
-轻存是一款在 Android 手机上运行的本地照片与视频压缩应用。它把浏览、筛选、多选、压缩和还原放进一条清晰的操作流程，用液态玻璃界面展示媒体占用与已省空间。
+轻存（Roomy）是一款安卓实况图片压缩 APP，主打实况照片的本地压缩，也支持普通图片与视频。支持图集浏览、筛选、批量压缩与备份还原，用液态玻璃界面展示媒体占用与已省空间。
 
 应用采用**有损压缩**。图片质量、视频码率与最终收益取决于文件内容、原始编码及设备能力，不承诺所有素材都能获得固定压缩率或完全无感的画质变化。
 
