@@ -1613,3 +1613,37 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 使用独占副本验收压缩超过屏幕超时、完成/失败/取消后释放，以及旋转、前后台切换和手动锁屏。
+
+
+## Session 50: 当前视频压缩淡黄色子进度条
+<!-- trellis-session: v=2 fp=98460738802b8d13 -->
+
+**Date**: 2026-10-08
+**Task**: 当前视频压缩淡黄色子进度条
+**Branch**: `dev`
+
+### Summary
+
+在批次主进度条下增加当前独立视频的真实转码子进度，不增加可见文字；版本0.1.36/code37。
+
+### Main Changes
+
+- 按已写出编码帧时间更新，视频切换归零，保留图片并发与取消安全流程；记录UI规范和任务资料。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5b9101d` | feat(ui): show current video compression progress below batch bar |
+
+### Testing
+
+- [OK] assembleDebug和lintDebug通过（43秒），0错误/32警告/1既有提示；APK包名、版本、签名及差异检查通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 未安装到手机或处理个人媒体，设备实际进度与深浅色/横屏/大字体验收待验证。
