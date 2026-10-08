@@ -1577,3 +1577,39 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 取得真实HDR HEIC本机样例后确定增益图或10位输入类型，再实施并核对HDR显示、完整元数据及还原。
+
+
+## Session 49: 压缩期间保持屏幕常亮
+<!-- trellis-session: v=2 fp=5966e6cda706ae28 -->
+
+**Date**: 2026-10-08
+**Task**: 压缩期间保持屏幕常亮
+**Branch**: `dev`
+
+### Summary
+
+小范围修改，未新建任务；压缩批次持有常亮，取消回滚和收尾完成后释放，已提交本地。
+
+### Main Changes
+
+- BatchState仅压缩启用keepScreenOn，进度和取消更新保留，finishBatch清空后恢复。
+- AppEntry通过生命周期状态观察及DisposableEffect管理View常亮，退出效果恢复原值；补充Android规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9a28cd` | feat(compression): keep screen awake during compression batches |
+
+### Testing
+
+- [OK] assembleDebug和lintDebug通过（22秒），Lint为0错误/32条既有警告；diff --check通过。
+- [OK] 未新增或运行测试套件；未安装真机或实测屏幕超时。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 使用独占副本验收压缩超过屏幕超时、完成/失败/取消后释放，以及旋转、前后台切换和手动锁屏。

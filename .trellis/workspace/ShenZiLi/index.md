@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 48
+- **Total Sessions**: 49
 - **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1579 | Active |
+| `journal-1.md` | ~1615 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 49 | 2026-10-08 | 压缩期间保持屏幕常亮 | `b9a28cd` | `dev` |
 | 48 | 2026-10-08 | HDR HEIC压缩可行性与真机能力核对 | `5f181b8` | `dev` |
 | 47 | 2026-10-08 | 压缩耗时优化与直通标记校验 | `db3778c` | `dev` |
 | 46 | 2026-10-08 | 已压缩网格默认全部与进入触摸保护 | `53c901a` | `dev` |
