@@ -1,4 +1,4 @@
-<h1 align="center">轻存 · Qingcun</h1>
+<h1 align="center">轻存 · Roomy</h1>
 
 <p align="center">把手机里占空间的照片、实况和视频，留得更轻一些。</p>
 
