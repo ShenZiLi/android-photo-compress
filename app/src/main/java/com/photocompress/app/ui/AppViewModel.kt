@@ -73,9 +73,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsDao.observe().collect { s ->
                 _ui.update { it.copy(settings = s ?: SettingsEntity()) }
+                rebuildLibrary()
             }
         }
         refresh()
+    }
+
+    /**
+     * 重建全库派生结果。
+     *
+     * 派生结果只随媒体库 / 账本 / 恢复日志 / 设置变化，与页面和选中项无关；
+     * 计算放到默认调度器，页面切换的首帧因此不再承担整库重算（过渡动画掉帧的根因）。
+     * 输入没变时 [LibrarySnapshot.matches] 直接命中，不重复计算。
+     */
+    private suspend fun rebuildLibrary() {
+        val source = _ui.value
+        if (source.library.matches(source)) return
+        val rebuilt = withContext(Dispatchers.Default) {
+            LibrarySnapshot(source.items, source.ledger, source.recoveryEntries, source.settings)
+        }
+        // 期间又发生了新的媒体库/账本变更时丢弃本次结果，由那次变更自己的重建接手。
+        _ui.update { if (it.library.matches(it)) it.copy(library = rebuilt) else it }
     }
 
     // ---------------------------------------------------------------- 扫描
@@ -138,6 +156,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         hasAllFilesAccess = StorageAccess.hasAllFilesAccess(getApplication()),
                     )
                 }
+                rebuildLibrary()
             } catch (t: Throwable) {
                 _ui.update { it.copy(scanning = false, fullScan = false, scanError = t.message ?: "扫描失败") }
             }
@@ -567,6 +586,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             engine.pendingRecovery()
         }
         _ui.update { it.copy(ledger = ledger, recoveryEntries = recoveryState) }
+        rebuildLibrary()
     }
 
     fun refreshPermission() {

@@ -27,7 +27,14 @@ class RecoveryJournal(context: Context) {
         val sourceInode: Long? = null,
     ) {
         val displayName: String get() = File(path).name
-        val paths: Set<String> get() = listOfNotNull(path, convertedPath).toSet()
+        /**
+         * 本条目涉及的原片路径。
+         *
+         * 原先每次访问都重新 `listOfNotNull(...).toSet()`，而派生整库列表时
+         * 会按媒体项逐条调用 [matches]，等于为每个媒体项都分配一次列表与集合。
+         * 路径只由构造参数决定，这里算一次即可。
+         */
+        val paths: Set<String> = listOfNotNull(path, convertedPath).toSet()
         fun matches(path: String, uri: String): Boolean = path in paths || (convertedPath != null && uri == mediaUri)
     }
 
