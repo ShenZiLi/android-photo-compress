@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 50
+- **Total Sessions**: 51
 - **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1649 | Active |
+| `journal-1.md` | ~1684 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 51 | 2026-10-08 | 修复首次扫描结果与图集过滤为空 | `e70083c` | `dev` |
 | 50 | 2026-10-08 | 当前视频压缩淡黄色子进度条 | `5b9101d` | `dev` |
 | 49 | 2026-10-08 | 压缩期间保持屏幕常亮 | `b9a28cd` | `dev` |
 | 48 | 2026-10-08 | HDR HEIC压缩可行性与真机能力核对 | `5f181b8` | `dev` |

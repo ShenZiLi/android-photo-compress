@@ -1647,3 +1647,38 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 未安装到手机或处理个人媒体，设备实际进度与深浅色/横屏/大字体验收待验证。
+
+
+## Session 51: 修复首次扫描结果与图集过滤为空
+<!-- trellis-session: v=2 fp=dd54159b840df374 -->
+
+**Date**: 2026-10-08
+**Task**: 修复首次扫描结果与图集过滤为空
+**Branch**: `dev`
+
+### Summary
+
+改为验证待发布的新媒体库快照，恢复首次扫描与设置更新；0.1.37/code38已覆盖安装，真机首页与图集过滤恢复显示。
+
+### Main Changes
+
+- LibrarySnapshot原子发布检查新快照输入，拒绝过期结果，保留导航/选择/进度；记录快照契约和专项任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e70083c` | fix(ui): publish current library snapshot after scanning |
+
+### Testing
+
+- [OK] 真机专项基线6项全部失败，修复后6项全部通过；72个单元测试、构建、Lint及diff检查通过，Lint 0错误/32警告。
+- [OK] 保留数据覆盖安装Success，冷启动成功；扫描8,828项，图集过滤展示33个图集；没有压缩/还原/清理个人媒体。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 本轮修复已完成，首次全量空库转换以合成回归验证，未清空真机数据。
