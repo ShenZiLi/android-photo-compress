@@ -1716,3 +1716,38 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 若用户后续要求修复，再评估大图内存与编码器/grid能力，保留完整性和原片保护；当前未验证扩大上限后的编码结果。
+
+
+## Session 53: 支持5033万像素HEIC单路压缩
+<!-- trellis-session: v=2 fp=86718e68a18776d4 -->
+
+**Date**: 2026-10-08
+**Task**: 支持5033万像素HEIC单路压缩
+**Branch**: `dev`
+
+### Summary
+
+支持6400万像素以内HEIC，含大图批次强制单路，源bitmap编码后释放；0.1.38已覆盖安装，5033万样例三档真机压缩成功。
+
+### Main Changes
+
+- 保留原尺寸/格式/ICC/EXIF/厂商数据、原采样阈值及媒体安全事务；增加内存预检和准确像素超限提示。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5646bd5` | feat(heic): support large photos with serial batches and bounded memory |
+
+### Testing
+
+- [OK] assembleDebug和lintDebug通过（22秒），0错误/32既有警告；签名/差异检查通过，安装Success，版本0.1.38/code39读回一致，启动Status ok。
+- [OK] 三档输出1044748/890608/835292字节，保持8192×6144和Display P3；独立元数据与192tile核对、源SHA、低内存拒绝、两处取消和超6400万拒绝通过。未新增或运行测试套件，未改用户相册原图或重跑完整事务矩阵。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 原厂相册观感、不同设备及完整事务矩阵未本轮重新验收；样例副本编码结果不能推广到任意HDR或未知容器。
