@@ -1682,3 +1682,37 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 本轮修复已完成，首次全量空库转换以合成回归验证，未清空真机数据。
+
+
+## Session 52: 分析5033万像素HEIC被拒绝的原因
+<!-- trellis-session: v=2 fp=c8092ee1f81c24db -->
+
+**Date**: 2026-10-08
+**Task**: 分析5033万像素HEIC被拒绝的原因
+**Branch**: `dev`
+
+### Summary
+
+样例8192×6144/4.91MiB触发固定2000万像素上限；离线直接调用现有HEIC解析器复现。仅提交分析，没有修改产品代码或压缩原片。
+
+### Main Changes
+
+- 记录样例尺寸、192tile网格、8位HEVC、失败调用路径、两张bitmap约384MiB的内存估算及后续评估方向。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f66b6b4` | docs(heic): explain 50MP sample rejection by pixel limit |
+
+### Testing
+
+- [OK] sips、libheif与ispe/hvcC读回一致；现有编译产物抛出相同像素超限异常；原样例前后SHA256一致，差异检查通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 若用户后续要求修复，再评估大图内存与编码器/grid能力，保留完整性和原片保护；当前未验证扩大上限后的编码结果。
