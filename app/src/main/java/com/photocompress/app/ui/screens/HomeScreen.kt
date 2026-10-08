@@ -151,6 +151,7 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxWidth(),
+                    drawStopIndicator = {},
                 )
             } else {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

@@ -466,6 +466,7 @@ private fun ActionBar(
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth(),
+                            drawStopIndicator = {},
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
