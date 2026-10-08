@@ -259,7 +259,7 @@ class CompressionEngine(private val context: Context) {
 
         if (containerItems.any { it.semantic == "MotionPhoto" } || containerItems.any { it.semantic == "GainMap" }) {
             // 实况照片 / Ultra HDR 被误判为普通照片时，走容器重组路径
-            return compressLivePhoto(item, tier, videoTier, attempt)
+            return compressLivePhoto(item, tier, videoTier, attempt, sourceBytes = original)
         }
 
         val quality = JpegCompressor.qualityFor(tier)
@@ -301,12 +301,11 @@ class CompressionEngine(private val context: Context) {
     ): CompressOutcome {
         val plan = MpfPhotoContainer.plan(original)
             ?: return CompressOutcome.Skipped("MPF 图片边界或偏移无效，已保留原片")
-        val primary = original.copyOfRange(0, plan.primaryEnd)
-        val originalDimensions = JpegCompressor.probeSize(primary)
+        val originalDimensions = JpegCompressor.probeSize(original, byteCount = plan.primaryEnd)
             ?: return CompressOutcome.Skipped("MPF 主图无法解码，已保留原片")
         val quality = JpegCompressor.qualityFor(tier)
         // 只解码主图，避免平台解码整个 HDR 容器后将增益映射结果烘焙进 SDR 基图。
-        val encoded = JpegCompressor.compressJpeg(primary, quality)
+        val encoded = JpegCompressor.compressJpeg(original, quality, byteCount = plan.primaryEnd)
             ?: return CompressOutcome.Skipped("MPF 主图无法重编码，已保留原片")
         attempt.checkCancelled()
         val xmpOut = PcXmp.injectAttributes(xmp, newMarker())
@@ -335,10 +334,11 @@ class CompressionEngine(private val context: Context) {
         tier: QualityTier,
         videoTier: QualityTier,
         attempt: Attempt,
+        sourceBytes: ByteArray? = null,
     ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
-        val original = file.readBytes()
+        val original = sourceBytes ?: file.readBytes()
         attempt.checkCancelled()
         if (!JpegSegments.isJpeg(original)) return CompressOutcome.Skipped("不是有效 JPEG")
 
@@ -355,22 +355,30 @@ class CompressionEngine(private val context: Context) {
         val plan = LivePhotoContainer.plan(file, items)
             ?: return CompressOutcome.Skipped("无法解析实况照片容器")
 
+        val sourceLength = original.size.toLong()
+        if (plan.primaryEnd !in 1..sourceLength) return CompressOutcome.Skipped("主图区段越界")
+        if (plan.gainMapLength !in 0..(sourceLength - plan.primaryEnd)) {
+            return CompressOutcome.Skipped("增益图区段越界")
+        }
+        val gainEndLong = plan.primaryEnd + plan.gainMapLength
+        if (plan.gainMapPadding !in 0..(sourceLength - gainEndLong)) {
+            return CompressOutcome.Skipped("增益图区段越界")
+        }
+        val motionStartLong = gainEndLong + plan.gainMapPadding
+        if (plan.hasMotion && plan.motionLength !in 0..(sourceLength - motionStartLong)) {
+            return CompressOutcome.Skipped("内嵌视频区段越界")
+        }
         val primaryEnd = plan.primaryEnd.toInt()
         val gainStart = primaryEnd
-        val gainEnd = (primaryEnd + plan.gainMapLength).toInt()
-        val motionStart = (primaryEnd + plan.gainMapLength + plan.gainMapPadding).toInt()
-        val motionEnd = (motionStart + plan.motionLength).toInt()
+        val gainEnd = gainEndLong.toInt()
+        val motionStart = motionStartLong.toInt()
+        val motionEnd = if (plan.hasMotion) (motionStartLong + plan.motionLength).toInt() else motionStart
 
-        val primaryBytes = original.copyOfRange(0, primaryEnd)
-        val gainBytes = if (plan.hasGainMap && gainEnd in 1..original.size) original.copyOfRange(gainStart, gainEnd) else null
-        val motionBytes = if (plan.hasMotion && motionEnd <= original.size) original.copyOfRange(motionStart, motionEnd) else null
-
-        if (plan.hasMotion && motionBytes == null) return CompressOutcome.Skipped("内嵌视频区段越界")
-        if (plan.hasGainMap && gainBytes == null) return CompressOutcome.Skipped("增益图区段越界")
+        val motionBytes = if (plan.hasMotion) original.copyOfRange(motionStart, motionEnd) else null
 
         // 1) 主图重编码（画质维持现有档位，本次改造不动）
         val quality = JpegCompressor.qualityFor(tier)
-        val encodedPrimary = JpegCompressor.compressJpeg(primaryBytes, quality)
+        val encodedPrimary = JpegCompressor.compressJpeg(original, quality, byteCount = primaryEnd)
             ?: return CompressOutcome.Failed("主图解码失败")
         attempt.checkCancelled()
 
@@ -388,7 +396,7 @@ class CompressionEngine(private val context: Context) {
         }
         val tailPart: ByteArray = split?.second ?: ByteArray(0)
 
-        var newMotionBytes: ByteArray? = null
+        var newVideoBytes: ByteArray? = null
         var newVideoLength = 0L
         var motionSrc: File? = null
         var motionDst: File? = null
@@ -409,7 +417,7 @@ class CompressionEngine(private val context: Context) {
                     val videoBytes = dstVideo.readBytes()
                     newVideoLength = videoBytes.size.toLong()
                     // 尾块逐字节原样追加：其索引偏移自区段末尾反向计数，搬移后仍然有效
-                    newMotionBytes = videoBytes + tailPart
+                    newVideoBytes = videoBytes
                     val codecName = res.codec ?: MediaClassifierCodec.label(probe.codec)
                     motionNote = res.hdrNote?.let { "内嵌视频重编码（$codecName · $it）" }
                         ?: "内嵌视频重编码（$codecName）"
@@ -424,23 +432,24 @@ class CompressionEngine(private val context: Context) {
 
         try {
             // 增益图**原样保留**：它是 HDR/ProXDR 重建的依据，重编码会引入偏差（C6 / D10）
-            val gainLen = gainBytes?.size?.toLong() ?: 0L
-            val motionLen = newMotionBytes?.size?.toLong() ?: (motionBytes?.size?.toLong() ?: 0L)
+            val gainLen = if (plan.hasGainMap) (gainEnd - gainStart).toLong() else 0L
+            val motionLen = newVideoBytes?.let { it.size.toLong() + tailPart.size }
+                ?: (motionBytes?.size?.toLong() ?: 0L)
 
             // 3) XMP：只在长度真的变化时就地改写数字，并注入自有标记（不改结构）
             val changed = HashMap<String, Long>()
-            if (gainBytes != null && gainLen != plan.gainMapLength) changed["GainMap"] = gainLen
-            if (newMotionBytes != null && motionLen != plan.motionLength) changed["MotionPhoto"] = motionLen
+            if (plan.hasGainMap && gainLen != plan.gainMapLength) changed["GainMap"] = gainLen
+            if (newVideoBytes != null && motionLen != plan.motionLength) changed["MotionPhoto"] = motionLen
             var xmpOut = if (changed.isEmpty()) xmp else LivePhotoContainer.rewriteItemLengths(xmp, changed)
             // OpCamera:VideoLength 必须与新主视频字节数一致，否则相册无法定位内嵌视频
-            if (newMotionBytes != null) xmpOut = LivePhotoContainer.rewriteVideoLength(xmpOut, newVideoLength)
+            if (newVideoBytes != null) xmpOut = LivePhotoContainer.rewriteVideoLength(xmpOut, newVideoLength)
             xmpOut = PcXmp.injectAttributes(xmpOut, newMarker())
 
             fun assemblePrimary(mpf: ByteArray?): ByteArray =
-                JpegSegments.rebuildWithMetadata(encodedPrimary, primaryBytes, xmpOut, mpf)
+                JpegSegments.rebuildWithMetadata(encodedPrimary, original, xmpOut, mpf)
 
             var finalPrimary = assemblePrimary(mpfPayload)
-            if (mpfPayload != null && gainBytes != null) {
+            if (mpfPayload != null && plan.hasGainMap) {
                 // MPEntry 改写为定长，两遍组装后主图长度稳定。
                 // offset 必须以 MPF 段的实际位置为基准（相对 MP Endian），
                 // 否则相册按 MPF 定位内嵌视频时会整体偏移，导致无法播放。
@@ -457,12 +466,17 @@ class CompressionEngine(private val context: Context) {
             }
 
             // 4) 拼接：主图 + 增益图 + 内嵌视频
-            val out = java.io.ByteArrayOutputStream(
-                finalPrimary.size + gainLen.toInt() + motionLen.toInt() + 4096
-            )
+            val assembledLength = finalPrimary.size.toLong() + gainLen + motionLen
+            if (assembledLength > Int.MAX_VALUE) return CompressOutcome.Skipped("重组后文件超出可处理大小")
+            val out = java.io.ByteArrayOutputStream(assembledLength.toInt())
             out.write(finalPrimary)
-            gainBytes?.let { out.write(it) }
-            newMotionBytes?.let { out.write(it) } ?: motionBytes?.let { out.write(it) }
+            if (plan.hasGainMap) out.write(original, gainStart, gainLen.toInt())
+            if (newVideoBytes != null) {
+                out.write(newVideoBytes)
+                out.write(tailPart)
+            } else {
+                motionBytes?.let { out.write(it) }
+            }
             val assembled = out.toByteArray()
 
             LivePhotoContainer.verify(assembled)?.let {
@@ -473,7 +487,7 @@ class CompressionEngine(private val context: Context) {
                 val magic = String(assembled, mp4Start + 4, 4, Charsets.US_ASCII)
                 if (magic != "ftyp") return CompressOutcome.Skipped("内嵌视频定位校验失败")
             }
-            if (newMotionBytes != null) {
+            if (newVideoBytes != null) {
                 // 分段自校验：XMP 声明的数字必须与实际重编码后的字节数一致
                 val head = String(assembled, 0, minOf(256 * 1024, assembled.size), Charsets.ISO_8859_1)
                 if (LivePhotoDetector.extractVideoLength(head) != newVideoLength) {

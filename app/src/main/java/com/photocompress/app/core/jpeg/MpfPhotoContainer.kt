@@ -42,10 +42,9 @@ object MpfPhotoContainer {
     }
 
     fun rebuild(original: ByteArray, plan: Plan, encodedPrimary: ByteArray, xmp: String): ByteArray? {
-        val originalPrimary = original.copyOfRange(0, plan.primaryEnd)
         val hasPrimaryLength = LivePhotoDetector.parseContainerItems(xmp)
             .any { it.semantic == "Primary" && it.length > 0 }
-        var primary = JpegSegments.rebuildWithMetadata(encodedPrimary, originalPrimary, xmp)
+        var primary = JpegSegments.rebuildWithMetadata(encodedPrimary, original, xmp)
         repeat(6) {
             val xmpOut = if (hasPrimaryLength) LivePhotoContainer.rewriteItemLengths(xmp,
                 mapOf("Primary" to primary.size.toLong())) else xmp
@@ -56,7 +55,7 @@ object MpfPhotoContainer {
             val patched = MpfRewriter.updateEntries(plan.payload,
                 sizes, offsets, base.toLong())
                 ?: return null
-            val next = JpegSegments.rebuildWithMetadata(encodedPrimary, originalPrimary, xmpOut, patched)
+            val next = JpegSegments.rebuildWithMetadata(encodedPrimary, original, xmpOut, patched)
             if (next.size == primary.size) {
                 val suffixSize = original.size - plan.primaryEnd
                 val total = next.size.toLong() + suffixSize

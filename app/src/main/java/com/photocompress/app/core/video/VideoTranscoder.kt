@@ -24,7 +24,9 @@ object VideoTranscoder {
 
     private const val TAG = "VideoTranscoder"
     private const val IDLE_TIMEOUT_US = 10_000L
-    private val codecInfos by lazy { MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.toList() }
+    private val codecInfos by lazy {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.sortedByDescending { it.isHardwareAccelerated }
+    }
 
     data class Result(
         val success: Boolean,
@@ -355,7 +357,7 @@ object VideoTranscoder {
             buf.clear()
             val size = extractor.readSampleData(buf, 0)
             if (size < 0) return
-            info.set(0, size, extractor.sampleTime, extractor.sampleFlags)
+            info.set(0, size, extractor.sampleTime, audioBufferFlags(extractor.sampleFlags))
             muxer.writeSampleData(track, buf, info)
             extractor.advance()
         }
@@ -374,10 +376,17 @@ object VideoTranscoder {
             buf.clear()
             val size = extractor.readSampleData(buf, 0)
             if (size < 0) break
-            info.set(0, size, extractor.sampleTime, extractor.sampleFlags)
+            info.set(0, size, extractor.sampleTime, audioBufferFlags(extractor.sampleFlags))
             muxer.writeSampleData(track, buf, info)
             extractor.advance()
         }
+    }
+
+    /** 提取器和编码器的标志位含义不同，直通只映射同步样本；不支持的样本交给现有失败路径。 */
+    private fun audioBufferFlags(sampleFlags: Int): Int {
+        require((sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED) == 0) { "不支持加密音频直通" }
+        require((sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME) == 0) { "不支持分片音频直通" }
+        return if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
     }
 
     private fun findVideoTrack(extractor: MediaExtractor): VideoTrack? {
@@ -458,7 +467,7 @@ object VideoTranscoder {
         requireMain10: Boolean = false,
         hardwareOnly: Boolean = false,
     ): TargetEnc? {
-        for (info in codecInfos.sortedByDescending { it.isHardwareAccelerated }) {
+        for (info in codecInfos) {
             if (!info.isEncoder || !info.supportedTypes.any { it.equals(mime, ignoreCase = true) }) continue
             if (hardwareOnly && !info.isHardwareAccelerated) continue
             val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull() ?: continue
