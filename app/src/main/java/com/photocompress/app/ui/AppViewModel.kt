@@ -47,6 +47,8 @@ data class BatchState(
     val cancelling: Boolean = false,
     val currentName: String? = null,
     val keepScreenOn: Boolean = false,
+    val currentVideoId: Long? = null,
+    val currentVideoProgress: Float? = null,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -278,7 +280,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val runOne: suspend (MediaItem) -> Unit = { item ->
                         if (!control.isCancellationRequested && !resultLock.withLock { stopped }) {
                             // 并发时名字会来回跳，只在串行（含视频）时展示当前项。
-                            if (parallelism <= 1 || item.kind == MediaKind.VIDEO) _batch.update { it?.copy(currentName = item.displayName) }
+                            if (item.kind == MediaKind.VIDEO) {
+                                _batch.update {
+                                    it?.copy(currentName = item.displayName, currentVideoId = item.id, currentVideoProgress = 0f)
+                                }
+                            } else if (parallelism <= 1) {
+                                _batch.update { it?.copy(currentName = item.displayName) }
+                            }
                             val tier = tierFor(item.kind, tiers)
                             // 实况照片内嵌视频取独立的「实况视频段」档位；只有普通视频才用「视频」档位
                             val videoTier = if (item.kind == MediaKind.VIDEO) {
@@ -291,6 +299,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                 onCommit = ledgerDao::upsert,
                                 onRollback = ledgerDao::deleteById,
                                 pngEnabled = tiers.compressPng,
+                                onVideoProgress = { progress ->
+                                    _batch.update { batch ->
+                                        if (batch?.currentVideoId == item.id && !batch.cancelling) {
+                                            batch.copy(currentVideoProgress = maxOf(batch.currentVideoProgress ?: 0f, progress.coerceIn(0f, 1f)))
+                                        } else batch
+                                    }
+                                },
                             )
                             resultLock.withLock {
                                 finished++
@@ -321,8 +336,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                         stopped = true
                                     }
                                 }
-                                _batch.update {
-                                    it?.copy(progress = finished.toFloat() / targets.size, done = finished, currentName = null)
+                                _batch.update { batch ->
+                                    val videoFinished = item.kind == MediaKind.VIDEO && batch?.currentVideoId == item.id
+                                    batch?.copy(
+                                        progress = finished.toFloat() / targets.size,
+                                        done = finished,
+                                        currentName = if (videoFinished || batch.currentVideoId == null) null else batch.currentName,
+                                        currentVideoId = if (videoFinished) null else batch.currentVideoId,
+                                        currentVideoProgress = if (videoFinished) null else batch.currentVideoProgress,
+                                    )
                                 }
                             }
                         }
@@ -338,7 +360,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 // 此时当前项已经完成或安全回退，取消信号不再作用于历史项目。
                 compressionControl = null
-                _batch.update { it?.copy(label = "正在更新", canCancel = false, currentName = null) }
+                _batch.update {
+                    it?.copy(label = "正在更新", canCancel = false, currentName = null, currentVideoId = null, currentVideoProgress = null)
+                }
                 clearSelection(AppPage.TODO)
                 _messages.trySend(
                     buildString {

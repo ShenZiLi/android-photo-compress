@@ -126,6 +126,7 @@ class CompressionEngine(private val context: Context) {
         onCommit: suspend (CompressedItemEntity) -> Unit = {},
         onRollback: suspend (String) -> Unit = {},
         pngEnabled: Boolean = false,
+        onVideoProgress: (Float) -> Unit = {},
     ): CompressOutcome = withContext(Dispatchers.IO) {
         // 解码 / 编码 / 转码都是纯 CPU 工作，刻意留在 mediaLock 之外：
         // 否则「加速压缩」开启后，多路并行仍会被这把锁串行化。只有提交段持锁。
@@ -144,7 +145,7 @@ class CompressionEngine(private val context: Context) {
                     else -> compressPhoto(item, tier, videoTier, attempt)
                 }
                 MediaKind.LIVE_PHOTO -> compressLivePhoto(item, tier, videoTier, attempt)
-                MediaKind.VIDEO -> compressVideo(item, videoTier, attempt)
+                MediaKind.VIDEO -> compressVideo(item, videoTier, attempt, onVideoProgress)
             }
             if (outcome is CompressOutcome.Skipped && outcome.noSizeReduction && item.kind != MediaKind.VIDEO) {
                 attempt.publishUnchanged(skippedRecord(item, tier, originalSize, originalModified))
@@ -530,14 +531,23 @@ class CompressionEngine(private val context: Context) {
 
     // ---------------------------------------------------------------- 视频
 
-    private suspend fun compressVideo(item: MediaItem, tier: QualityTier, attempt: Attempt): CompressOutcome {
+    private suspend fun compressVideo(
+        item: MediaItem,
+        tier: QualityTier,
+        attempt: Attempt,
+        onProgress: (Float) -> Unit,
+    ): CompressOutcome {
         val file = File(item.dataPath)
         if (!file.exists()) return CompressOutcome.Failed("文件不存在")
         if (item.format != ContainerFormat.MP4) {
             return CompressOutcome.Skipped("${item.format.label} 容器本版本不处理")
         }
         val dst = attempt.temp(".mp4")
-        val res = VideoTranscoder.transcode(file, dst, tier, checkCancelled = attempt::checkCancelled)
+        val res = VideoTranscoder.transcode(
+            file, dst, tier,
+            checkCancelled = attempt::checkCancelled,
+            onProgress = onProgress,
+        )
         attempt.checkCancelled()
         if (!res.success || !dst.exists()) {
             dst.delete()

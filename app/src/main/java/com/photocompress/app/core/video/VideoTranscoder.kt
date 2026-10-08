@@ -81,10 +81,16 @@ object VideoTranscoder {
         tier: QualityTier,
         profile: BitrateProfile = BitrateProfile.STANDARD,
         checkCancelled: () -> Unit = {},
+        onProgress: (Float) -> Unit = {},
     ): Result {
         checkCancelled()
+        onProgress(0f)
         val source = VideoProbeRunner.probe(input.absolutePath)
-        if (!source.isHdr) return transcodeOnce(input, output, tier, profile, HdrMode.DEFAULT, checkCancelled)
+        if (!source.isHdr) {
+            val result = transcodeOnce(input, output, tier, profile, HdrMode.DEFAULT, checkCancelled, onProgress)
+            if (result.success) onProgress(1f)
+            return result
+        }
 
         val kind = source.hdrKind.label
         if (!hasMain10Encoder()) {
@@ -92,9 +98,10 @@ object VideoTranscoder {
             return Result(false, reason = "无 HEVC Main10 编码器，无法保真压缩 HDR（$kind），已跳过")
         }
 
-        val preserved = transcodeOnce(input, output, tier, profile, HdrMode.PRESERVE, checkCancelled)
+        val preserved = transcodeOnce(input, output, tier, profile, HdrMode.PRESERVE, checkCancelled, onProgress)
         checkCancelled()
         if (preserved.success && isHdrPreserved(input, output)) {
+            onProgress(1f)
             return preserved.copy(hdrNote = "HDR 保真（$kind）")
         }
         val why = preserved.reason ?: "输出未保留 HDR 信号"
@@ -111,6 +118,7 @@ object VideoTranscoder {
         profile: BitrateProfile,
         hdrMode: HdrMode,
         checkCancelled: () -> Unit,
+        onProgress: (Float) -> Unit,
     ): Result {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
@@ -171,7 +179,7 @@ object VideoTranscoder {
             muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             if (video.rotation != 0) muxer.setOrientationHint(video.rotation)
 
-            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input, colorPatch, checkCancelled)
+            val ok = runPipeline(extractor, video, decoder, encoder, muxer, input, colorPatch, checkCancelled, onProgress)
             checkCancelled()
 
             if (!ok) {
@@ -206,6 +214,7 @@ object VideoTranscoder {
         input: File,
         colorPatch: ColorPatch?,
         checkCancelled: () -> Unit,
+        onProgress: (Float) -> Unit,
     ): Boolean {
         val bufferInfo = MediaCodec.BufferInfo()
         val encInfo = MediaCodec.BufferInfo()
@@ -241,6 +250,7 @@ object VideoTranscoder {
             val audioInfo = MediaCodec.BufferInfo()
 
             var lastProgressNs = System.nanoTime()
+            var reportedPercent = 0
 
             while (!encoderOutputDone) {
                 checkCancelled()
@@ -315,6 +325,16 @@ object VideoTranscoder {
                                 encoded.position(encInfo.offset)
                                 encoded.limit(encInfo.offset + encInfo.size)
                                 muxer.writeSampleData(videoTrack, encoded, encInfo)
+                                // 只按已经写出的编码帧推进；限制为百分比变化，避免逐帧刷新 UI。
+                                // 100% 留给音频、封装收尾和 HDR 校验完成后的入口回调。
+                                if (video.durationUs > 0) {
+                                    val percent = (encInfo.presentationTimeUs.toDouble() / video.durationUs * 100)
+                                        .toInt().coerceIn(0, 99)
+                                    if (percent > reportedPercent) {
+                                        reportedPercent = percent
+                                        onProgress(percent / 100f)
+                                    }
+                                }
                             }
                             encoder.releaseOutputBuffer(encIndex, false)
                             if (encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {

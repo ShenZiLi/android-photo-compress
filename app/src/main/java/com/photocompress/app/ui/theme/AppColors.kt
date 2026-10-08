@@ -28,6 +28,8 @@ data class AppColors(
     val kindPhoto: Color,
     val kindLive: Color,
     val kindVideo: Color,
+    val videoProgress: Color,
+    val videoProgressTrack: Color,
 )
 
 val LightAppColors = AppColors(
@@ -44,6 +46,8 @@ val LightAppColors = AppColors(
     kindPhoto = Color(0xFF2F6BD8),
     kindLive = Color(0xFF8B5CF6),
     kindVideo = Color(0xFFE07B39),
+    videoProgress = Color(0xFFE8C85A),
+    videoProgressTrack = Color(0xFF5D501F),
 )
 
 val DarkAppColors = AppColors(
@@ -60,6 +64,8 @@ val DarkAppColors = AppColors(
     kindPhoto = Color(0xFF7FA8FF),
     kindLive = Color(0xFFBE9CFF),
     kindVideo = Color(0xFFF0A868),
+    videoProgress = Color(0xFFF4D978),
+    videoProgressTrack = Color(0xFF5D501F),
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }

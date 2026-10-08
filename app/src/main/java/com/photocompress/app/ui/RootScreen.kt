@@ -59,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -70,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -469,6 +471,20 @@ private fun ActionBar(
                             modifier = Modifier.fillMaxWidth(),
                             drawStopIndicator = {},
                         )
+                        shownBatch.currentVideoProgress?.let { videoProgress ->
+                            key(shownBatch.currentVideoId) {
+                                val currentProgress = motionFloat(videoProgress.coerceIn(0f, 1f), "videoProgress", AppMotion.Progress)
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = { currentProgress },
+                                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                                        .semantics { contentDescription = "当前视频压缩进度" },
+                                    color = MaterialTheme.appColors.videoProgress,
+                                    trackColor = MaterialTheme.appColors.videoProgressTrack,
+                                    drawStopIndicator = {},
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "${shownBatch.done} / ${shownBatch.total}",
