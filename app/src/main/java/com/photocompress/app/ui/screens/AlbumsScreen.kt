@@ -378,7 +378,7 @@ fun DoneLevel2(
             },
         )
         FilterChips(
-            options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已超期", "skipped" to "已跳过"),
+            options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已清理", "skipped" to "已跳过"),
             selected = level.filter,
             onSelect = onFilter,
             guardEntryTouches = true,
@@ -404,8 +404,7 @@ fun DoneLevel2(
                     badge = when {
                         dm.skipped -> "已跳过" to Color(0x9E000000)
                         dm.adopted -> "已压缩" to Color(0x9E000000)
-                        dm.record.status == CompressedItemEntity.STATUS_PURGED -> "已清理" to Color(0xB8000000)
-                        days < 0 -> "已超期" to Color(0xB8000000)
+                        dm.record.status == CompressedItemEntity.STATUS_PURGED || days < 0 -> "已清理" to Color(0xB8000000)
                         else -> "已压缩" to MaterialTheme.appColors.success
                     },
                     isVideo = dm.kind == MediaKind.VIDEO,
