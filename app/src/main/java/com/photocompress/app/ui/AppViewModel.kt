@@ -246,9 +246,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         compressionControl = control
         writing = true
         // 并发度只取决于「加速压缩」开关与当前可用内存；开关关闭时维持逐项串行。
+        // 视频不走并发池：硬编码器实例有限，多路同时转码会互相抢占，反而更慢甚至失败，
+        // 因此视频始终单线程，与开关无关。
         val parallelism = if (_ui.value.settings.fastCompress) fastCompressParallelism() else 1
+        val concurrent = parallelism > 1 && targets.count { it.kind != MediaKind.VIDEO } > 1
         _batch.value = BatchState(
-            if (parallelism > 1) "正在压缩 · $parallelism 路并发" else "正在压缩",
+            if (concurrent) "正在压缩 · $parallelism 路并发" else "正在压缩",
             0f, 0, targets.size, canCancel = true,
         )
         viewModelScope.launch {
@@ -265,60 +268,70 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val failures = linkedSetOf<String>()
                 // 并发下结果统计与进度更新共用一把锁，保证批次状态单调一致。
                 val resultLock = Mutex()
+                // 图片并发池：路数由开关与可用内存决定。
                 val gate = Semaphore(parallelism)
+                // 视频独占池：任何时刻至多一个视频在转码，与并发开关无关。
+                val videoGate = Semaphore(1)
                 coroutineScope {
-                    targets.map { item ->
-                        async {
-                            gate.withPermit {
-                                if (control.isCancellationRequested || resultLock.withLock { stopped }) return@withPermit
-                                if (parallelism == 1) _batch.update { it?.copy(currentName = item.displayName) }
-                                val tier = tierFor(item.kind, tiers)
-                                // 实况照片内嵌视频取独立的「实况视频段」档位；只有普通视频才用「视频」档位
-                                val videoTier = if (item.kind == MediaKind.VIDEO) {
-                                    QualityTier.fromName(tiers.videoTier)
-                                } else {
-                                    QualityTier.fromName(tiers.liveVideoTier)
+                    // 单任务执行体：图片走并发池、视频走串行池，共用同一套结果统计与进度更新。
+                    val runOne: suspend (MediaItem) -> Unit = { item ->
+                        if (!control.isCancellationRequested && !resultLock.withLock { stopped }) {
+                            // 并发时名字会来回跳，只在串行（含视频）时展示当前项。
+                            if (parallelism <= 1 || item.kind == MediaKind.VIDEO) _batch.update { it?.copy(currentName = item.displayName) }
+                            val tier = tierFor(item.kind, tiers)
+                            // 实况照片内嵌视频取独立的「实况视频段」档位；只有普通视频才用「视频」档位
+                            val videoTier = if (item.kind == MediaKind.VIDEO) {
+                                QualityTier.fromName(tiers.videoTier)
+                            } else {
+                                QualityTier.fromName(tiers.liveVideoTier)
+                            }
+                            val outcome = engine.compress(
+                                item, tier, videoTier, control,
+                                onCommit = ledgerDao::upsert,
+                                onRollback = ledgerDao::deleteById,
+                                pngEnabled = tiers.compressPng,
+                            )
+                            resultLock.withLock {
+                                finished++
+                                when (outcome) {
+                                    is CompressOutcome.Success -> {
+                                        done++
+                                        savedBytes += outcome.record.savedBytes
+                                        touched += outcome.record.dataPath
+                                        if (outcome.record.originalPath.isNotBlank()) touched += outcome.record.originalPath
+                                        android.util.Log.i(TAG, "${item.displayName}: OK ${outcome.record.originalSize} -> ${outcome.record.compressedSize} (${outcome.record.codecUsed})")
+                                    }
+                                    is CompressOutcome.Skipped -> {
+                                        skipped++
+                                        failures += outcome.reason
+                                        android.util.Log.i(TAG, "${item.displayName}: SKIP ${outcome.reason}")
+                                    }
+                                    is CompressOutcome.Failed -> {
+                                        touched += item.dataPath
+                                        failed++
+                                        failures += "${item.displayName}：${outcome.reason}"
+                                        android.util.Log.w(TAG, "${item.displayName}: FAIL ${outcome.reason}")
+                                        // 错误可能来自存储或媒体库：保留已完成项，不再启动新项，已在跑的项目自然收尾。
+                                        stopped = true
+                                    }
+                                    is CompressOutcome.Cancelled -> {
+                                        touched += item.dataPath
+                                        outcome.reason?.let { failed++; failures += it }
+                                        stopped = true
+                                    }
                                 }
-                                val outcome = engine.compress(
-                                    item, tier, videoTier, control,
-                                    onCommit = ledgerDao::upsert,
-                                    onRollback = ledgerDao::deleteById,
-                                    pngEnabled = tiers.compressPng,
-                                )
-                                resultLock.withLock {
-                                    finished++
-                                    when (outcome) {
-                                        is CompressOutcome.Success -> {
-                                            done++
-                                            savedBytes += outcome.record.savedBytes
-                                            touched += outcome.record.dataPath
-                                            if (outcome.record.originalPath.isNotBlank()) touched += outcome.record.originalPath
-                                            android.util.Log.i(TAG, "${item.displayName}: OK ${outcome.record.originalSize} -> ${outcome.record.compressedSize} (${outcome.record.codecUsed})")
-                                        }
-                                        is CompressOutcome.Skipped -> {
-                                            skipped++
-                                            failures += outcome.reason
-                                            android.util.Log.i(TAG, "${item.displayName}: SKIP ${outcome.reason}")
-                                        }
-                                        is CompressOutcome.Failed -> {
-                                            touched += item.dataPath
-                                            failed++
-                                            failures += "${item.displayName}：${outcome.reason}"
-                                            android.util.Log.w(TAG, "${item.displayName}: FAIL ${outcome.reason}")
-                                            // 错误可能来自存储或媒体库：保留已完成项，不再启动新项，已在跑的项目自然收尾。
-                                            stopped = true
-                                        }
-                                        is CompressOutcome.Cancelled -> {
-                                            touched += item.dataPath
-                                            outcome.reason?.let { failed++; failures += it }
-                                            stopped = true
-                                        }
-                                    }
-                                    _batch.update {
-                                        it?.copy(progress = finished.toFloat() / targets.size, done = finished, currentName = null)
-                                    }
+                                _batch.update {
+                                    it?.copy(progress = finished.toFloat() / targets.size, done = finished, currentName = null)
                                 }
                             }
+                        }
+                    }
+                    targets.map { item ->
+                        async {
+                            // 并发关闭（或内存不足退化为 1 路）时全部走同一把锁，保持逐项串行；
+                            // 并发开启时视频才分流到独占池，图片与视频互不阻塞、视频自身仍串行。
+                            if (parallelism > 1 && item.kind == MediaKind.VIDEO) videoGate.withPermit { runOne(item) }
+                            else gate.withPermit { runOne(item) }
                         }
                     }.forEach { it.await() }
                 }
@@ -507,7 +520,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 加速压缩的并发路数。
+     * 图片压缩的并发路数（视频不占用这些路数：视频固定单线程）。
      *
      * 单张全尺寸位图按 ARGB_8888 计约 48 MB（12 MP）到 192 MB（48 MP），
      * 路数必须跟着可用内存走，否则大图批量压缩会把内存打爆。
