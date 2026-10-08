@@ -17,29 +17,50 @@ import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 import kotlin.math.abs
 
-/** PNG → JPEG：普通照片档位；透明、动画、HDR 或无法保留信息时跳过。 */
+/**
+ * PNG → JPEG：普通照片档位；透明、动画、HDR 或无法保留信息时跳过。
+ *
+ * 位深只放行 8 位与 16 位。16 位经平台解码后必然降为 8 位每通道，属不可逆精度损失，
+ * 已在设置页「压缩PNG」说明中披露；1/2/4 位低色深是位打包存储，本版本不处理。
+ */
 object PngCompressor {
     const val MAX_FILE_BYTES = 32L * 1024 * 1024
     private val signature = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
     private val archivePrefix = "QingcunPNG\u0000".toByteArray(Charsets.US_ASCII)
     private val critical = setOf("IHDR", "PLTE", "IDAT", "IEND")
+    /** 放行的位深；16 位只允许无调色板色彩类型。 */
+    private val supportedDepths = setOf(8, 16)
+    private val supportedColors = setOf(0, 2, 3, 4, 6)
     private val known = critical + setOf(
         "eXIf", "iTXt", "tEXt", "zTXt", "iCCP", "sRGB", "gAMA", "cHRM", "pHYs", "tIME",
         "bKGD", "tRNS", "sBIT", "hIST", "sPLT", "cICP", "mDCv", "cLLi",
     )
-    data class Encoded(val bytes: ByteArray, val quality: Int)
+    data class Encoded(val bytes: ByteArray, val quality: Int, val bitDepth: Int)
     data class Probe(val skipReason: String?)
     private data class Chunk(val type: String, val start: Int, val length: Int) {
         val dataStart: Int get() = start + 8
         val end: Int get() = start + length + 12
     }
-    private data class Image(val bytes: ByteArray, val chunks: List<Chunk>, val width: Int, val height: Int, val color: Int) {
+    private data class Image(
+        val bytes: ByteArray, val chunks: List<Chunk>, val width: Int, val height: Int,
+        val color: Int, val bitDepth: Int,
+    ) {
         val channels: Int get() = when (color) { 0, 3 -> 1; 2 -> 3; 4 -> 2; else -> 4 }
-        val stride: Int get() = width * channels
+        /** 每样本字节数；16 位为 2。filter 按字节运算，左邻距离必须用它换算。 */
+        val sampleBytes: Int get() = bitDepth / 8
+        val stride: Int get() = width * channels * sampleBytes
     }
     private fun crcOf(type: String, data: ByteArray): Int = CRC32().apply {
         update(type.toByteArray(Charsets.US_ASCII)); update(data)
     }.value.toInt()
+
+    /** 位深与色彩类型闸门：返回 null 表示放行，否则为跳过原因。 */
+    private fun depthReason(bitDepth: Int, color: Int): String? = when {
+        bitDepth !in supportedDepths -> "PNG 为 1/2/4 位低色深，本版本不转换，已保留原片"
+        color !in supportedColors -> "PNG 色彩类型 $color 未经支持，已保留原片"
+        bitDepth == 16 && color == 3 -> "PNG 位深与色彩类型组合非法，已保留原片"
+        else -> null
+    }
     /** 跳过 IDAT，不把整张 PNG 读入内存。 */
     fun probe(file: File): Probe = runCatching {
         RandomAccessFile(file, "r").use { input ->
@@ -61,7 +82,7 @@ object PngCompressor {
                     val data = ByteArray(13).also(input::readFully)
                     require(crcOf(type, data) == input.readInt()) { "PNG 图像头校验失败" }
                     require(intAt(data, 0) in 1..65536 && intAt(data, 4) > 0 && intAt(data, 0).toLong() * intAt(data, 4) <= 16_000_000) { "PNG 像素过多，已保留原片" }
-                    require(data[8].toInt() == 8 && data[9].toInt() in setOf(0, 2, 3, 4, 6)) { "PNG 当前仅支持 8 位静态图片，已保留原片" }
+                    depthReason(data[8].toInt() and 255, data[9].toInt() and 255)?.let { throw IllegalArgumentException(it) }
                     require(data[10].toInt() == 0 && data[11].toInt() == 0 && data[12].toInt() == 0) { "PNG 交错或未知编码暂不处理" }
                     seenHeader = true
                 } else {
@@ -144,7 +165,7 @@ object PngCompressor {
             }
             require(archived.toByteArray().contentEquals(archive)) { "PNG 元数据未完整保留" }
             checkCancelled()
-            return Encoded(finalBytes, quality)
+            return Encoded(finalBytes, quality, image.bitDepth)
         } finally { bitmap.recycle() }
     }
 
@@ -205,7 +226,7 @@ object PngCompressor {
         val height = intAt(bytes, 20)
         val color = bytes[25].toInt() and 255
         require(width in 1..65536 && height > 0 && width.toLong() * height <= 16_000_000) { "PNG 像素过多，已保留原片" }
-        require(bytes[24].toInt() == 8 && color in setOf(0, 2, 3, 4, 6)) { "PNG 当前仅支持 8 位静态图片，已保留原片" }
+        depthReason(bytes[24].toInt() and 255, color)?.let { throw IllegalArgumentException(it) }
         require(bytes[26].toInt() == 0 && bytes[27].toInt() == 0 && bytes[28].toInt() == 0) { "PNG 交错或未知编码暂不处理" }
         val palette = chunks.filter { it.type == "PLTE" }
         require(palette.size <= 1 && palette.all { it.length in 3..768 && it.length % 3 == 0 && it.start < chunks.first { c -> c.type == "IDAT" }.start }) { "PNG 调色板无效" }
@@ -220,7 +241,7 @@ object PngCompressor {
                 else -> false
             }
         }) { "PNG 透明度结构无效" }
-        return Image(bytes, chunks, width, height, color)
+        return Image(bytes, chunks, width, height, color, bytes[24].toInt() and 255)
     }
 
     private class Pixels(val image: Image, val stream: InflaterInputStream, val inflater: Inflater, val input: SequenceInputStream) {
@@ -236,7 +257,8 @@ object PngCompressor {
                 require(n > 0) { "PNG 像素数据不完整" }
                 read += n
             }
-            for (x in row.indices) row[x] = ((row[x].toInt() and 255) + predictor(row, previous, x, image.channels, filter)).toByte()
+            val bpp = image.channels * image.sampleBytes
+            for (x in row.indices) row[x] = ((row[x].toInt() and 255) + predictor(row, previous, x, bpp, filter)).toByte()
             if (image.color == 3) {
                 val colors = image.chunks.single { it.type == "PLTE" }.length / 3
                 require(row.all { (it.toInt() and 255) < colors }) { "PNG 调色板索引无效" }
@@ -268,10 +290,11 @@ object PngCompressor {
         pixels.finish()
     }
 
-    private fun predictor(row: ByteArray, previous: ByteArray, x: Int, channels: Int, filter: Int): Int {
-        val a = if (x >= channels) row[x - channels].toInt() and 255 else 0
+    /** bpp 为每像素字节数；滤波在字节层运算，16 位只需把左邻距离放大到样本字节数。 */
+    private fun predictor(row: ByteArray, previous: ByteArray, x: Int, bpp: Int, filter: Int): Int {
+        val a = if (x >= bpp) row[x - bpp].toInt() and 255 else 0
         val b = previous[x].toInt() and 255
-        val c = if (x >= channels) previous[x - channels].toInt() and 255 else 0
+        val c = if (x >= bpp) previous[x - bpp].toInt() and 255 else 0
         return when (filter) {
             0 -> 0; 1 -> a; 2 -> b; 3 -> (a + b) / 2
             else -> { val p = a + b - c; val pa = abs(p - a); val pb = abs(p - b); val pc = abs(p - c)

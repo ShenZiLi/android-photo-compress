@@ -101,7 +101,14 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("压缩PNG", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("压缩PNG", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "符合条件的 PNG 转为 JPEG；16 位会降为 8 位",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.appColors.onSurfaceMuted,
+                        )
+                    }
                     Switch(checked = state.settings.compressPng, onCheckedChange = null, enabled = !state.busy && !state.scanning)
                 }
             }

@@ -200,10 +200,10 @@ class CompressionEngine(private val context: Context) {
         temp.writeBytes(encoded.bytes)
         val sourceSha = java.security.MessageDigest.getInstance("SHA-256").digest(original)
             .joinToString("") { "%02x".format(it) }
-        return commitPngJpeg(item, temp, tier, encoded.quality, destination, sourceSha, attempt)
+        return commitPngJpeg(item, temp, tier, encoded.quality, encoded.bitDepth, destination, sourceSha, attempt)
     }
 
-    private suspend fun commitPngJpeg(item: MediaItem, temp: File, tier: QualityTier, quality: Int,
+    private suspend fun commitPngJpeg(item: MediaItem, temp: File, tier: QualityTier, quality: Int, bitDepth: Int,
         destination: File, sourceSha: String, attempt: Attempt): CompressOutcome = withMediaLock {
         // 检查保护记录、写备份、改名、删原片必须整体原子，故整段持锁。
         checkRecoveryClear(item)
@@ -224,7 +224,7 @@ class CompressionEngine(private val context: Context) {
                 mediaKind = MediaKind.PHOTO.name, mimeType = "image/jpeg", containerFormat = ContainerFormat.JPEG.name,
                 videoCodec = null, originalSize = prepared.size, compressedSize = temp.length(), originalSha256 = sourceSha,
                 originalDateTakenMs = item.dateTakenMs, originalDateAddedSec = item.dateAddedSec, originalDateModifiedSec = item.dateModifiedSec,
-                qualityTier = tier.name, codecUsed = "PNG → JPEG q=$quality", compressedAtMs = now,
+                qualityTier = tier.name, codecUsed = if (bitDepth == 16) "PNG16 → JPEG q=$quality" else "PNG → JPEG q=$quality", compressedAtMs = now,
                 restoreDeadlineMs = now + TimeUnit.DAYS.toMillis(RETENTION_DAYS), backupRelPath = prepared.entry.backupRelPath,
                 backupSize = prepared.size, status = CompressedItemEntity.STATUS_DONE,
             )
