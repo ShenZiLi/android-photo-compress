@@ -1751,3 +1751,25 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 原厂相册观感、不同设备及完整事务矩阵未本轮重新验收；样例副本编码结果不能推广到任意HDR或未知容器。
+
+
+## Session 54: PNG大图、重名与透明白底压缩
+<!-- trellis-session: v=2 fp=061ced13e22e1f81 -->
+
+**Date**: 2026-10-08
+**Task**: PNG大图、重名与透明白底压缩
+**Branch**: `dev`
+
+### Summary
+
+解除1600万像素PNG拒绝并使大图批次串行；重名JPEG数字后缀与UTF8长文件名保护；软件Canvas原色彩空间铺白，支持RGBA_F16并降低双位图峰值。Debug构建与Lint通过，API36独占合成样例验证2000万像素、8/16位与调色板透明、普通及长文件名重名、P3、取消及内存保护全部通过。未操作相册原片，未安装APK，未运行测试套件。更新PNG规范/README，独立复核无实质发现。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e02d2a` | fix(png): compress large images with white backgrounds and unique names |
+
+### Status
+
+[OK] **Completed**
