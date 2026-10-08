@@ -74,6 +74,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- 扫描
 
     fun refresh() {
+        if (!StorageAccess.hasAllFilesAccess(getApplication())) return
         if (writing || _ui.value.scanning) return
         viewModelScope.launch {
             val settings = settingsDao.get() ?: SettingsEntity()
@@ -506,8 +507,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(ledger = ledger, recoveryEntries = recoveryState) }
     }
 
-    fun refreshPermission() = _ui.update {
-        it.copy(hasAllFilesAccess = StorageAccess.hasAllFilesAccess(getApplication()))
+    fun refreshPermission() {
+        val granted = StorageAccess.hasAllFilesAccess(getApplication())
+        val newlyGranted = granted && !_ui.value.hasAllFilesAccess
+        // 先解除授权页，再异步扫描；首次全库扫描不能阻挡进入首页。
+        _ui.update {
+            it.copy(
+                hasAllFilesAccess = granted,
+                page = if (newlyGranted) AppPage.HOME else it.page,
+            )
+        }
+        if (newlyGranted) refresh()
     }
 
     val recycleBinSize: Long get() = engine.recycleBinSize()

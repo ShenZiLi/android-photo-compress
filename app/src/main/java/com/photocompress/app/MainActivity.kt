@@ -49,6 +49,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshPermission()
+    }
 }
 
 /** 入口：缺少「所有文件访问」时先引导授权（D9）。 */

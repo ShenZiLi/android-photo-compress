@@ -1,5 +1,6 @@
 package com.photocompress.app.ui
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -71,8 +72,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.ui.components.KeyValueRow
@@ -111,6 +115,7 @@ private data class DialogData(
     val body: String,
     val okLabel: String,
     val danger: Boolean = false,
+    val showCancel: Boolean = true,
     val onConfirm: () -> Unit,
 )
 
@@ -119,10 +124,23 @@ private data class DialogData(
 fun AppRoot(vm: AppViewModel) {
     val state by vm.ui.collectAsStateWithLifecycle()
     val batch by vm.batch.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val onboarding = remember(context) { context.getSharedPreferences("onboarding", Context.MODE_PRIVATE) }
 
     var toast by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<SheetData?>(null) }
     var dialog by remember { mutableStateOf<DialogData?>(null) }
+    LaunchedEffect(onboarding) {
+        if (!onboarding.getBoolean("cloud_warning_acknowledged", false)) {
+            dialog = DialogData(
+                title = "使用提醒",
+                body = "请关闭系统相册云服务，避免压缩后云服务自动下载原图",
+                okLabel = "知道了",
+                showCancel = false,
+                onConfirm = { onboarding.edit { putBoolean("cloud_warning_acknowledged", true) } },
+            )
+        }
+    }
     var lastToast by remember { mutableStateOf("") }
     var lastDialog by remember { mutableStateOf<DialogData?>(null) }
     val dialogVisibility = remember { MutableTransitionState(false) }
@@ -322,7 +340,11 @@ fun AppRoot(vm: AppViewModel) {
     if (displayedDialog != null && (dialogVisibility.currentState || dialogVisibility.targetState || !dialogVisibility.isIdle)) {
         val data = displayedDialog
         BasicAlertDialog(
-            onDismissRequest = { dialog = null },
+            onDismissRequest = { if (data.showCancel) dialog = null },
+            properties = DialogProperties(
+                dismissOnBackPress = data.showCancel,
+                dismissOnClickOutside = data.showCancel,
+            ),
         ) {
             AnimatedVisibility(
                 visibleState = dialogVisibility,
@@ -341,8 +363,10 @@ fun AppRoot(vm: AppViewModel) {
                             Text(data.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.appColors.onSurfaceMuted)
                             Spacer(Modifier.height(24.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { dialog = null }, enabled = dialog != null) { Text("取消") }
-                                Spacer(Modifier.width(8.dp))
+                                if (data.showCancel) {
+                                    TextButton(onClick = { dialog = null }, enabled = dialog != null) { Text("取消") }
+                                    Spacer(Modifier.width(8.dp))
+                                }
                                 GlassButton(
                                     onClick = {
                                         val confirm = dialog?.onConfirm
