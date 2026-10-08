@@ -1241,3 +1241,36 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 39: 轻存0.1.32本地构建，真机升级待签名
+<!-- trellis-session: v=2 fp=4ab677f3a90ff6cc -->
+
+**Date**: 2026-10-08
+**Task**: 轻存0.1.32本地构建，真机升级待签名
+**Branch**: `dev`
+
+### Summary
+
+从当前本地源码成功构建0.1.32/code33调试APK；RMX5010真机仍为正式签名0.1.30/code31，本机未找到原签名资料，覆盖升级尚未执行。
+
+### Main Changes
+
+- 使用独立GRADLE_USER_HOME并复用本机缓存，绕过全局init.gradle向项目添加仓库与FAIL_ON_PROJECT_REPOS的冲突；未修改全局配置或应用代码。
+
+### Git Commits
+
+仅变更本节会话记录和工作区索引，随本次本地文档提交保存。
+
+### Testing
+
+- [OK] assembleDebug成功（4分4秒）；APK签名验证通过，包名com.photocompress.app、versionName0.1.32、versionCode33核验通过。
+- [OK] 真机ADB连接正常；读取旧版包信息并拉取安装包核验，正式证书SHA256为d7bbc9b1a847a07acf479eaeceb63a89e5eeec91fae4ddb7be14c9eae0304b89。调试签名不同，未尝试覆盖、未卸载或清空数据，未启动应用或操作个人媒体。
+
+### Status
+
+**Pending** — 调试APK构建已完成，真机覆盖安装等待原正式签名资料。
+
+### Next Steps
+
+- 等待用户提供原正式签名配置路径，再本地构建正式APK并覆盖安装及核验；当前交付仅为调试构建，安装目标尚未完成。
