@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 46
+- **Total Sessions**: 47
 - **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1511 | Active |
+| `journal-1.md` | ~1548 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 47 | 2026-10-08 | 压缩耗时优化与直通标记校验 | `db3778c` | `dev` |
 | 46 | 2026-10-08 | 已压缩网格默认全部与进入触摸保护 | `53c901a` | `dev` |
 | 45 | 2026-10-08 | HEIC标准数据引用表兼容与真机样例验证 | `efa3609` | `dev` |
 | 44 | 2026-10-08 | 0.1.34统一移除进度条末端圆点 | `8c8671d` | `dev` |

@@ -1509,3 +1509,40 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 真机验证单击进入、快速连点、返回重进及主动筛选；记录未复现的原始触发情况
+
+
+## Session 47: 压缩耗时优化与直通标记校验
+<!-- trellis-session: v=2 fp=5c42ab39fed523c3 -->
+
+**Date**: 2026-10-08
+**Task**: 压缩耗时优化与直通标记校验
+**Branch**: `dev`
+
+### Summary
+
+落实固定档位单次编码、硬件优先与数据直通；减少读取及数组副本，纠正音频标记类型。
+
+### Main Changes
+
+- JPEG 支持 byteCount，MPF/实况主图不另建完整副本，实况分流复用原数组。
+- GainMap 直写原区间，新视频与厂商尾部分别写入，保留全部安全校验及事务。
+- 编码器列表缓存硬件排序，两条音频直通路径统一转换 sync 并拒绝加密/分片样本。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db3778c` | perf(compression): avoid redundant media reads and copies |
+
+### Testing
+
+- [OK] 调试构建通过；Lint 通过，0 错误/32 警告，原两处 WrongConstant 消除；独立复核及 diff --check 通过。
+- [未执行] 未新增或运行测试套件；本轮检查时没有连接设备或 AVD，未验证实际耗时、媒体还原或相册/HDR 观感。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 连接设备后，以独占副本和同批同档位验证耗时、HDR/实况播放与完整还原。
