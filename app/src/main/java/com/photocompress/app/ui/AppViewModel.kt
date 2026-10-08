@@ -584,7 +584,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 invalidateCache(touched)
                 reloadLedger()
             } catch (failure: Throwable) {
-                _messages.trySend("媒体状态更新失败：${failure.message}")
+                _messages.trySend("相册状态更新失败：${failure.message}")
             } finally {
                 writing = false
                 _batch.value = null

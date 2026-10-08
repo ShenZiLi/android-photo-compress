@@ -36,7 +36,7 @@ object MediaStoreUpdater {
         if (matches(readRow(context, uri))) return
         context.contentResolver.update(uri, dates, null, null)
         val row = readRow(context, uri)
-        check(matches(row)) { "无法恢复媒体日期；文件已保留" }
+        check(matches(row)) { "无法恢复相册日期；文件已保留" }
     }
 
     private data class Row(
@@ -60,7 +60,7 @@ object MediaStoreUpdater {
     /** 同目录改名由 MediaProvider 移动同一文件，不删除/新建媒体条目，也不覆盖同名目标。 */
     fun renameExisting(context: Context, uri: Uri, from: File, target: File, mime: String) {
         val before = readRow(context, uri)
-        check(before.path == from.path && before.pending == 0 && from.isFile) { "转换媒体身份已变化，未改名" }
+        check(before.path == from.path && before.pending == 0 && from.isFile) { "转换后相册条目已变化，未改名" }
         require(from.parentFile?.canonicalPath == target.parentFile?.canonicalPath && !target.exists()) { "转换目标已存在或目录变化，未覆盖" }
         val inode = android.system.Os.stat(from.path).st_ino
         check(context.contentResolver.update(uri, ContentValues().apply {
@@ -74,9 +74,9 @@ object MediaStoreUpdater {
 
     private fun readRow(context: Context, uri: Uri): Row =
         checkNotNull(context.contentResolver.query(uri, null, null, null, null)) {
-            "无法读取媒体库条目"
+            "无法读取相册条目"
         }.use { cursor ->
-            check(cursor.moveToFirst()) { "媒体库条目已不存在" }
+            check(cursor.moveToFirst()) { "相册条目已不存在" }
             fun number(column: String): Long? {
                 val index = cursor.getColumnIndex(column)
                 return if (index < 0 || cursor.isNull(index)) null else cursor.getLong(index)
@@ -106,9 +106,9 @@ object MediaStoreUpdater {
         val file = File(path)
         check(file.isFile) { "刷新时原文件不存在" }
         val before = readRow(context, uri)
-        check(before.path == path && before.pending == 0) { "媒体路径改变或条目尚未发布" }
+        check(before.path == path && before.pending == 0) { "相册路径改变或条目尚未发布" }
         check(before.dateAdded == originalDateAddedSec && before.dateModified == originalDateModifiedSec) {
-            "媒体日期已改变，不能覆盖其他操作"
+            "相册日期已改变，不能覆盖其他操作"
         }
         // 仓库可能用 DATE_ADDED 作为无拍摄日期时的 UI 回退值；保留数据库的原始 null/0。
         check(before.dateTaken == null || before.dateTaken <= 0 || before.dateTaken == originalDateTakenMs) {
@@ -123,12 +123,12 @@ object MediaStoreUpdater {
         // 原地保持 pending=0；不设为 1、不改名、不删除或重建媒体条目。
         check(resolver.update(uri, ContentValues().apply {
             put(MediaStore.MediaColumns.IS_PENDING, 0)
-        }, null, null) == 1) { "媒体库未接受刷新" }
+        }, null, null) == 1) { "相册未接受刷新" }
 
         var after = readRow(context, uri)
         fun checkIdentity() {
             check(after.id == before.id && after.path == path && after.pending == 0) {
-                "刷新改变了媒体条目编号、路径或发布状态"
+                "刷新改变了相册条目编号、路径或发布状态"
             }
         }
         checkIdentity()
@@ -147,7 +147,7 @@ object MediaStoreUpdater {
             after = readRow(context, uri)
             checkIdentity()
         }
-        check(after.size == expectedSize) { "媒体库大小仍为旧值" }
+        check(after.size == expectedSize) { "相册条目大小仍为旧值" }
         if (expectedMotionSize != null && before.hasOemVideoSize) {
             check(after.hasOemVideoSize && after.oemVideoSize == expectedMotionSize) {
                 "系统相册实况视频长度未同步"
@@ -155,7 +155,7 @@ object MediaStoreUpdater {
         }
         check(after.dateTaken == before.dateTaken && after.dateAdded == before.dateAdded &&
             after.dateModified == before.dateModified
-        ) { "媒体日期恢复校验失败" }
+        ) { "相册日期恢复校验失败" }
         check(file.length() == expectedSize && Files.getLastModifiedTime(file.toPath()) == mtime) {
             "刷新改变了文件大小或修改时间"
         }

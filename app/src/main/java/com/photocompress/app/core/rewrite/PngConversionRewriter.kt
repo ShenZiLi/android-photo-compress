@@ -21,7 +21,7 @@ class PngConversionRewriter(private val context: Context) {
     fun prepare(id: String, item: MediaItem, destination: File, expectedSha: String, checkCancelled: () -> Unit): Prepared {
         val source = File(item.dataPath)
         check(source.isFile && !destination.exists() && source.parentFile?.canonicalPath == destination.parentFile?.canonicalPath) { "JPEG 目标已存在或原片路径变化，未覆盖" }
-        check(MediaStoreUpdater.pointsTo(context, item.uri, source.path)) { "PNG 媒体身份已变化" }
+        check(MediaStoreUpdater.pointsTo(context, item.uri, source.path)) { "PNG 相册条目已变化" }
         val inode = Os.stat(source.path).st_ino
         val mtime = Files.getLastModifiedTime(source.toPath())
         val dates = MediaStoreUpdater.captureDates(context, item.uri)
@@ -90,7 +90,7 @@ class PngConversionRewriter(private val context: Context) {
     fun prepareRestore(id: String, originalPath: String, currentPath: String, backupPath: String, sha: String, ledgerId: String, uri: Uri): RecoveryJournal.Entry {
         val current = File(currentPath)
         check(current.isFile && File(originalPath).parentFile?.canonicalPath == current.parentFile?.canonicalPath && !File(originalPath).exists()) { "PNG 原路径已存在或 JPEG 不存在，未覆盖" }
-        check(MediaStoreUpdater.pointsTo(context, uri, current.path)) { "JPEG 媒体身份已变化" }
+        check(MediaStoreUpdater.pointsTo(context, uri, current.path)) { "JPEG 相册条目已变化" }
         val backup = recycle.fileOf(backupPath)
         check(backup.isFile && FileUtils.sha256(backup) == sha) { "PNG 原始备份校验失败，未覆盖照片" }
         val dates = MediaStoreUpdater.captureDates(context, uri)

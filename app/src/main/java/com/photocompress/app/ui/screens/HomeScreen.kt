@@ -71,18 +71,18 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
         AppBar(
             title = stringResource(R.string.app_name),
             subtitle = when {
-                state.fullScan -> "正在扫描媒体库…"
-                state.scanning -> "正在同步媒体变更…"
+                state.fullScan -> "正在扫描相册…"
+                state.scanning -> "正在同步相册变更…"
                 else -> {
                     val time = if (state.lastScanAt > 0) {
                         SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(state.lastScanAt))
                     } else "—"
-                    "已扫描本机媒体 · $time"
+                    "已扫描本机相册 · $time"
                 }
             },
             actions = {
                 IconButton(onClick = onRescan) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "重新扫描媒体库")
+                    Icon(Icons.Filled.Refresh, contentDescription = "重新扫描相册")
                 }
             },
         )
@@ -128,7 +128,7 @@ fun HomeScreen(state: UiState, onRescan: () -> Unit) {
     }
 }
 
-/** 首次扫描进度：给出可见进度条与已扫描数量，避免长时间只显示「正在扫描媒体库…」。 */
+/** 首次扫描进度：给出可见进度条与已扫描数量，避免长时间只显示「正在扫描相册…」。 */
 @Composable
 private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
     val progress = motionFloat(state.scanProgress.coerceIn(0f, 1f), "scanProgress", AppMotion.Progress)
@@ -139,7 +139,7 @@ private fun ScanProgressCard(state: UiState, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("正在扫描媒体库", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text("正在扫描相册", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (state.scanTotal > 0) "${state.scanDone} / ${state.scanTotal}" else "统计中…",
                     style = MaterialTheme.typography.labelMedium,

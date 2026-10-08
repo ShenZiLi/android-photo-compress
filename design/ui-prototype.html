@@ -575,9 +575,9 @@
           <div class="appbar">
             <div class="grow">
               <h2 id="h-home">照片压缩</h2>
-              <div class="sub" id="homeSub">已扫描本机媒体</div>
+              <div class="sub" id="homeSub">已扫描本机相册</div>
             </div>
-            <button class="iconbtn" data-rescan aria-label="重新扫描媒体库">
+            <button class="iconbtn" data-rescan aria-label="重新扫描相册">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 6v3l4-4-4-4v3a7 7 0 1 0 7 7h-2a5 5 0 1 1-5-5Z"/></svg>
             </button>
           </div>
@@ -798,7 +798,7 @@
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
         <span class="grab" aria-hidden="true"></span>
         <div class="sheet-head">
-          <b id="sheetTitle">媒体信息</b>
+          <b id="sheetTitle">文件信息</b>
           <button class="iconbtn" id="sheetClose" aria-label="关闭信息面板">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4Z"/></svg>
           </button>
@@ -996,7 +996,7 @@ function renderHome(){
   $('savedTotal').textContent = '已节约 ' + fmtSize(t.saved);
   const ratio = t.before > 0 ? ((t.saved / t.before) * 100).toFixed(0) : '0';
   $('savedNote').textContent =
-    `占全部媒体原始大小（${fmtSize(t.todoMb + t.before)}）的 ${t.pct.toFixed(1)}%，已压缩部分体积减少 ${ratio}%`;
+    `占全部相册原始大小（${fmtSize(t.todoMb + t.before)}）的 ${t.pct.toFixed(1)}%，已压缩部分体积减少 ${ratio}%`;
 
   $('kpiTodoCount').textContent = fmtNum(t.todoN) + ' 项';
   $('kpiTodoSize').textContent  = '共 ' + fmtSize(t.todoMb);
@@ -1011,7 +1011,7 @@ function renderHome(){
   $('doneSub').textContent = `${fmtNum(t.doneN)} 项 · ${fmtSize(t.before)} → ${fmtSize(t.after)}`;
   $('trashSub').textContent = `${fmtNum(t.restorable)} 份备份可还原`;
   $('setTrashNote').textContent = `${fmtNum(t.restorable)} 份备份可还原`;
-  $('homeSub').textContent = '已扫描本机媒体 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  $('homeSub').textContent = '已扫描本机相册 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
 }
 
 /* ============================================================
@@ -1075,8 +1075,8 @@ function renderAlbums(status){
   if (!sorted.length){
     host.innerHTML = isTodo
       ? (rows.length
-          ? emptyState('没有可压缩的图集', '剩余媒体是当前不支持的格式（PNG、WebP、AVIF、RAW 等）')
-          : emptyState('没有未压缩的媒体', '本机媒体都已压缩完成，可在「已压缩」页查看'))
+          ? emptyState('没有可压缩的图集', '剩余内容是当前不支持的格式（PNG、WebP、AVIF、RAW 等）')
+          : emptyState('没有未压缩的内容', '本机相册都已压缩完成，可在「已压缩」页查看'))
       : emptyState('还没有可处理的图集', '压缩完成后会出现在这里');
     return;
   }
@@ -1733,7 +1733,7 @@ function go(page){
 }
 document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => go(b.dataset.page)));
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
-document.querySelector('[data-rescan]').addEventListener('click', () => { renderHome(); toast('已重新扫描媒体库'); });
+document.querySelector('[data-rescan]').addEventListener('click', () => { renderHome(); toast('已重新扫描相册'); });
 
 /* 一级“全选图集” */
 $('todoAllAlbums').addEventListener('click', () => {

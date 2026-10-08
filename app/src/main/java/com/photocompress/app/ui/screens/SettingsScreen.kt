@@ -197,7 +197,7 @@ fun CompressRatioScreen(
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(
             title = "压缩比例",
-            subtitle = "按媒体类型选择压缩档位",
+            subtitle = "按类型选择压缩档位",
             navigation = {
                 com.photocompress.app.ui.components.GlassIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回设置")
