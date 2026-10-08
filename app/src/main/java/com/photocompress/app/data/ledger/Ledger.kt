@@ -71,6 +71,11 @@ data class SettingsEntity(
     val photoTier: String = "BALANCED",
     /** PNG 原格式压缩开关；关闭时仅识别，不进入压缩候选。 */
     @ColumnInfo(defaultValue = "0") val compressPng: Boolean = false,
+    /**
+     * 加速压缩开关。关闭时同一批次逐项串行处理；
+     * 开启后多张并行，质量档位与产物完全不变，代价是发热与内存占用上升。
+     */
+    @ColumnInfo(defaultValue = "0") val fastCompress: Boolean = false,
     /** 实况照片「图片段」（主图）质量档位。 */
     val liveTier: String = "BALANCED",
     /** 实况照片「视频段」（内嵌视频）质量档位，与普通视频的 [videoTier] 解耦。 */
@@ -149,6 +154,9 @@ interface SettingsDao {
     @Query("UPDATE app_settings SET compressPng = :enabled WHERE id = 1")
     suspend fun setCompressPng(enabled: Boolean)
 
+    @Query("UPDATE app_settings SET fastCompress = :enabled WHERE id = 1")
+    suspend fun setFastCompress(enabled: Boolean)
+
     @Query("SELECT * FROM app_settings WHERE id = 1")
     fun observe(): Flow<SettingsEntity?>
 
@@ -161,7 +169,7 @@ interface SettingsDao {
 
 @Database(
     entities = [CompressedItemEntity::class, SettingsEntity::class, CachedMediaEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -223,12 +231,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 → v7：新增加速压缩开关（默认关闭，保持原有逐项串行行为）。 */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN fastCompress INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "photo_compress.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
         }
     }
 }

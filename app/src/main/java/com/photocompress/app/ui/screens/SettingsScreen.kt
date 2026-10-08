@@ -75,6 +75,7 @@ fun SettingsScreen(
     onOpenAlbumFilter: () -> Unit,
     onOpenCompressRatio: () -> Unit,
     onSetCompressPng: (Boolean) -> Unit,
+    onSetFastCompress: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         AppBar(title = "设置")
@@ -102,6 +103,30 @@ fun SettingsScreen(
                 ) {
                     Text("压缩PNG", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Switch(checked = state.settings.compressPng, onCheckedChange = null, enabled = !state.busy && !state.scanning)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            CardSurface(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .toggleable(
+                            value = state.settings.fastCompress,
+                            enabled = !state.busy && !state.scanning,
+                            role = Role.Switch,
+                            onValueChange = onSetFastCompress,
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("加速压缩", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "并发压缩，不影响压缩质量，但会增加发热",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.appColors.onSurfaceMuted,
+                        )
+                    }
+                    Switch(checked = state.settings.fastCompress, onCheckedChange = null, enabled = !state.busy && !state.scanning)
                 }
             }
 

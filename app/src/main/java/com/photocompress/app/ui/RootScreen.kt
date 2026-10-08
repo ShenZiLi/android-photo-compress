@@ -290,6 +290,7 @@ fun AppRoot(vm: AppViewModel) {
                         onOpenAlbumFilter = { vm.go(AppPage.ALBUM_FILTER) },
                         onOpenCompressRatio = { vm.go(AppPage.COMPRESS_RATIO) },
                         onSetCompressPng = vm::setCompressPng,
+                        onSetFastCompress = vm::setFastCompress,
                     )
 
                     AppPage.COMPRESS_RATIO -> CompressRatioScreen(

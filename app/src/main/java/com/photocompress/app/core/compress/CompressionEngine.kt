@@ -1,6 +1,7 @@
 package com.photocompress.app.core.compress
 
 import android.content.Context
+import android.util.Log
 import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.jpeg.MpfRewriter
@@ -76,6 +77,16 @@ class CompressionEngine(private val context: Context) {
         block: suspend () -> T,
     ): T = withContext(dispatcher) { mediaLock.withLock { block() } }
 
+    /**
+     * 恢复日志预检。只读无副作用，因此解码前可在锁外先跑一次（快速失败），
+     * 提交段持锁后会再确认一次，以覆盖 CPU 段执行期间新落盘的保护记录。
+     */
+    private fun checkRecoveryClear(item: MediaItem) {
+        check(recovery.entries().none { it.path == item.dataPath || it.convertedPath == item.dataPath || it.mediaUri == item.uri.toString() }) {
+            "处理未完成，请在未压缩页重试恢复原片"
+        }
+    }
+
     private class Attempt(
         private val context: Context,
         private val control: CompressionControl,
@@ -115,13 +126,14 @@ class CompressionEngine(private val context: Context) {
         onCommit: suspend (CompressedItemEntity) -> Unit = {},
         onRollback: suspend (String) -> Unit = {},
         pngEnabled: Boolean = false,
-    ): CompressOutcome = withMediaLock {
+    ): CompressOutcome = withContext(Dispatchers.IO) {
+        // 解码 / 编码 / 转码都是纯 CPU 工作，刻意留在 mediaLock 之外：
+        // 否则「加速压缩」开启后，多路并行仍会被这把锁串行化。只有提交段持锁。
         val attempt = Attempt(context, control, currentCoroutineContext()[Job], onCommit, onRollback)
+        val startedAtMs = System.currentTimeMillis()
         try {
             attempt.checkCancelled()
-            check(recovery.entries().none { it.path == item.dataPath || it.convertedPath == item.dataPath || it.mediaUri == item.uri.toString() }) {
-                "处理未完成，请在未压缩页重试恢复原片"
-            }
+            checkRecoveryClear(item)
             val source = File(item.dataPath)
             val originalSize = source.length()
             val originalModified = source.lastModified()
@@ -137,6 +149,7 @@ class CompressionEngine(private val context: Context) {
             if (outcome is CompressOutcome.Skipped && outcome.noSizeReduction && item.kind != MediaKind.VIDEO) {
                 attempt.publishUnchanged(skippedRecord(item, tier, originalSize, originalModified))
             }
+            Log.i(TAG, "compress ${item.displayName} ${outcome::class.simpleName} totalMs=${System.currentTimeMillis() - startedAtMs}")
             outcome
         } catch (_: CompressionCancelledException) {
             CompressOutcome.Cancelled()
@@ -191,7 +204,9 @@ class CompressionEngine(private val context: Context) {
     }
 
     private suspend fun commitPngJpeg(item: MediaItem, temp: File, tier: QualityTier, quality: Int,
-        destination: File, sourceSha: String, attempt: Attempt): CompressOutcome {
+        destination: File, sourceSha: String, attempt: Attempt): CompressOutcome = withMediaLock {
+        // 检查保护记录、写备份、改名、删原片必须整体原子，故整段持锁。
+        checkRecoveryClear(item)
         var prepared: PngConversionRewriter.Prepared? = null
         var started = false
         try {
@@ -215,7 +230,7 @@ class CompressionEngine(private val context: Context) {
             )
             attempt.publish(record)
             recovery.finish(prepared.entry.id)
-            return CompressOutcome.Success(record)
+            return@withMediaLock CompressOutcome.Success(record)
         } catch (failure: Throwable) {
             val rollback = withContext(NonCancellable) {
                 val unregister = runCatching { attempt.forgetPublished() }
@@ -225,13 +240,13 @@ class CompressionEngine(private val context: Context) {
             }
             if (failure is CancellationException && rollback.isSuccess) {
                 if (failure !is CompressionCancelledException) throw failure
-                return CompressOutcome.Cancelled()
+                return@withMediaLock CompressOutcome.Cancelled()
             }
             val state = if (rollback.isSuccess) {
                 if (started) "转换失败，PNG 原片及相册记录已恢复" else "PNG 原片未改动"
             } else "PNG 转换未完成，原始备份已保护，可在未压缩页重试恢复"
             if (failure is CancellationException && failure !is CompressionCancelledException) throw failure
-            return if (failure is CompressionCancelledException) CompressOutcome.Cancelled("$state：${rollback.exceptionOrNull()?.message}")
+            return@withMediaLock if (failure is CompressionCancelledException) CompressOutcome.Cancelled("$state：${rollback.exceptionOrNull()?.message}")
                 else CompressOutcome.Failed("$state：${failure.message}")
         }
     }
@@ -598,11 +613,14 @@ class CompressionEngine(private val context: Context) {
         codecUsed: String?,
         attempt: Attempt,
         expectedSourceSha: String? = null,
-    ): CompressOutcome {
+    ): CompressOutcome = withMediaLock {
+        // CPU 段不持锁，此处重新确认恢复日志：期间可能有新的保护记录落盘。
+        checkRecoveryClear(item)
+        val commitStartedAtMs = System.currentTimeMillis()
         val file = File(item.dataPath)
         if (!file.exists()) {
             tempContent.delete()
-            return CompressOutcome.Failed("原文件不存在")
+            return@withMediaLock CompressOutcome.Failed("原文件不存在")
         }
         val originalSize = file.length()
         val mtimeMs = file.lastModified()
@@ -613,7 +631,7 @@ class CompressionEngine(private val context: Context) {
         var writeStarted = false
         var capturedDates: android.content.ContentValues? = null
 
-        return try {
+        try {
             val originalDates = MediaStoreUpdater.captureDates(context, item.uri)
             capturedDates = originalDates
             val backup = recycle.backupWithDigest(id, file, attempt::checkCancelled)
@@ -677,6 +695,7 @@ class CompressionEngine(private val context: Context) {
             )
             attempt.publish(record)
             recovery.finish(id)
+            Log.i(TAG, "commit ${item.displayName} commitMs=${System.currentTimeMillis() - commitStartedAtMs}")
             CompressOutcome.Success(record)
         } catch (t: Throwable) {
             // 刷新未通过同样不能记为成功。保留备份，并分别报告文件恢复与相册同步结果。
@@ -1071,6 +1090,7 @@ class CompressionEngine(private val context: Context) {
 
     companion object {
         private val mediaLock = Mutex()
+        private const val TAG = "CompressionEngine"
         const val APP_VERSION = "0.1.0"
         const val RETENTION_DAYS = 30L
     }
