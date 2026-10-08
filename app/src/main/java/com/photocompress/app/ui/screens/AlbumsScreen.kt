@@ -1,6 +1,7 @@
 package com.photocompress.app.ui.screens
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +14,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,7 +62,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -375,6 +381,7 @@ fun DoneLevel2(
             options = listOf("all" to "全部", "restorable" to "可还原", "expired" to "已超期", "skipped" to "已跳过"),
             selected = level.filter,
             onSelect = onFilter,
+            guardEntryTouches = true,
         )
         if (filtered.isEmpty()) {
             EmptyState("该筛选下没有条目", "换一个筛选条件看看")
@@ -498,9 +505,25 @@ private fun FilterChips(
     options: List<Pair<String, String>>,
     selected: String,
     onSelect: (String) -> Unit,
+    guardEntryTouches: Boolean = false,
 ) {
+    val enteredAt = remember { SystemClock.uptimeMillis() }
+    val doubleTapTimeout = LocalViewConfiguration.current.doubleTapTimeoutMillis
+    val entryGuard = if (guardEntryTouches) Modifier.pointerInput(enteredAt, doubleTapTimeout) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // 图集上的重复点击可能落在刚出现的筛选栏；按手势起点判定，整次触摸都拦截。
+            if (down.uptimeMillis - enteredAt < doubleTapTimeout) {
+                down.consume()
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
+        }
+    } else Modifier
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().then(entryGuard).horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         options.forEach { (value, label) ->
