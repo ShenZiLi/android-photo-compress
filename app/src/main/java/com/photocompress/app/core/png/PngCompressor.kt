@@ -2,6 +2,10 @@ package com.photocompress.app.core.png
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BlendMode
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import com.photocompress.app.core.jpeg.JpegCompressor
 import com.photocompress.app.core.jpeg.JpegSegments
 import com.photocompress.app.core.xmp.PcXmp
@@ -18,13 +22,16 @@ import java.util.zip.InflaterInputStream
 import kotlin.math.abs
 
 /**
- * PNG → JPEG：普通照片档位；透明、动画、HDR 或无法保留信息时跳过。
+ * PNG → JPEG：普通照片档位；透明区域铺白，动画、HDR 或无法保留信息时跳过。
  *
- * 位深只放行 8 位与 16 位。16 位经平台解码后必然降为 8 位每通道，属不可逆精度损失，
+ * 位深只放行 8 位与 16 位。16 位转为 JPEG 后必然降为 8 位每通道，属不可逆精度损失，
  * 已在设置页「压缩PNG」说明中披露；1/2/4 位低色深是位打包存储，本版本不处理。
  */
 object PngCompressor {
     const val MAX_FILE_BYTES = 32L * 1024 * 1024
+    /** 仅供批次调度决定串行处理，不是 PNG 压缩像素上限。 */
+    const val MAX_PARALLEL_PIXELS = 16_000_000L
+    private const val MAX_JPEG_DIMENSION = 65535
     private val signature = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
     private val archivePrefix = "QingcunPNG\u0000".toByteArray(Charsets.US_ASCII)
     private val critical = setOf("IHDR", "PLTE", "IDAT", "IEND")
@@ -61,6 +68,29 @@ object PngCompressor {
         bitDepth == 16 && color == 3 -> "PNG 位深与色彩类型组合非法，已保留原片"
         else -> null
     }
+
+    private fun requireDimensions(width: Int, height: Int) {
+        // JPEG 的 SOF 尺寸字段为 16 位；此边界也保证 PNG/ARGB 行缓冲的乘法不溢出。
+        require(width in 1..MAX_JPEG_DIMENSION && height in 1..MAX_JPEG_DIMENSION) {
+            "PNG 尺寸无效或超出 JPEG 支持范围，已保留原片"
+        }
+    }
+
+    private fun requireMemoryFor(image: Image) {
+        val runtime = Runtime.getRuntime()
+        val available = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory())
+        // 平台可能把 16 位 PNG 解成 RGBA_F16，不能按 ARGB_8888 的每像素 4 字节估算。
+        val bitmapPixelBytes = if (image.bitDepth == 16) 8L else 4L
+        val bitmapBytes = ((image.width * bitmapPixelBytes + 63) / 64 * 64) * image.height
+        val rowBytes = maxOf(image.stride * 2L, image.width * 4L)
+        val metadataBytes = image.chunks.filter { it.type != "IDAT" }.sumOf { it.length.toLong() + 12 }
+        // 源数组已计入占用堆；额外估计一张位图、压缩流/输出副本、归档副本及编码/UI 余量。
+        val estimated = bitmapBytes + image.bytes.size * 2L + rowBytes + metadataBytes * 4 + 32L * 1024 * 1024
+        require(estimated <= available) {
+            "PNG 可用内存不足，已保留原片；请关闭其他任务后重试"
+        }
+    }
+
     /** 跳过 IDAT，不把整张 PNG 读入内存。 */
     fun probe(file: File): Probe = runCatching {
         RandomAccessFile(file, "r").use { input ->
@@ -81,7 +111,7 @@ object PngCompressor {
                     require(type == "IHDR" && length == 13) { "PNG 缺少图像头" }
                     val data = ByteArray(13).also(input::readFully)
                     require(crcOf(type, data) == input.readInt()) { "PNG 图像头校验失败" }
-                    require(intAt(data, 0) in 1..65536 && intAt(data, 4) > 0 && intAt(data, 0).toLong() * intAt(data, 4) <= 16_000_000) { "PNG 像素过多，已保留原片" }
+                    requireDimensions(intAt(data, 0), intAt(data, 4))
                     depthReason(data[8].toInt() and 255, data[9].toInt() and 255)?.let { throw IllegalArgumentException(it) }
                     require(data[10].toInt() == 0 && data[11].toInt() == 0 && data[12].toInt() == 0) { "PNG 交错或未知编码暂不处理" }
                     seenHeader = true
@@ -103,31 +133,34 @@ object PngCompressor {
         val image = parse(bytes)
         require(image.chunks.filter { it.type != "IDAT" }.sumOf { it.length.toLong() + 12 } <= 4L * 1024 * 1024) { "PNG 扩展信息过大，已保留原片" }
         require(image.chunks.none { it.type in setOf("cICP", "mDCv", "cLLi") }) { "PNG HDR 信息无法保真转换，已保留原片" }
+        requireMemoryFor(image)
         validatePixels(image, checkCancelled)
+        checkCancelled()
         val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-            BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 })) { "PNG 解码失败，已保留原片" }
+            BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inMutable = true })) { "PNG 解码失败，已保留原片" }
         try {
             require(bitmap.width == image.width && bitmap.height == image.height) { "PNG 解码尺寸变化" }
-            val pixels = IntArray(bitmap.width)
-            repeat(bitmap.height) { y ->
-                checkCancelled()
-                bitmap.getPixels(pixels, 0, bitmap.width, 0, y, bitmap.width, 1)
-                require(pixels.all { (it ushr 24) == 255 }) { "PNG 含透明区域，无法保留透明度，已保留原片" }
+            require(bitmap.isMutable && (bitmap.config == Bitmap.Config.ARGB_8888 || bitmap.config == Bitmap.Config.RGBA_F16)) {
+                "PNG 解码像素格式无法安全转换，已保留原片"
             }
+            val originalSpace = bitmap.colorSpace
+            compositeWhite(bitmap, checkCancelled)
             val quality = JpegCompressor.qualityFor(tier)
             val stream = ByteArrayOutputStream()
             require(bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)) { "PNG 转 JPEG 编码失败" }
+            // 保存色彩空间后释放源像素，输出校验不会同时持有两张完整位图。
+            bitmap.recycle()
             checkCancelled()
             val raw = stream.toByteArray()
             val decoded = requireNotNull(BitmapFactory.decodeByteArray(raw, 0, raw.size)) { "输出 JPEG 无法解码" }
             try {
-                require(decoded.width == bitmap.width && decoded.height == bitmap.height) {
+                require(decoded.width == image.width && decoded.height == image.height) {
                     "PNG 解码尺寸变化，已保留原片"
                 }
                 // 16 位源经 Skia 解出的是扩展 sRGB（scRGB-nl），转 8 位 JPEG 后必然落在标准 sRGB，
                 // 这属于已声明的降级路径，不算保真失败。
-                require(decoded.colorSpace == bitmap.colorSpace || (image.bitDepth == 16 && decoded.colorSpace?.isSrgb == true)) {
-                    "PNG 色彩空间无法完整保留（源 ${bitmap.colorSpace}，输出 ${decoded.colorSpace}），已保留原片"
+                require(decoded.colorSpace == originalSpace || (image.bitDepth == 16 && decoded.colorSpace?.isSrgb == true)) {
+                    "PNG 色彩空间无法完整保留（源 $originalSpace，输出 ${decoded.colorSpace}），已保留原片"
                 }
             } finally { decoded.recycle() }
             val meta = mutableListOf<JpegSegments.Segment>()
@@ -171,7 +204,29 @@ object PngCompressor {
             require(archived.toByteArray().contentEquals(archive)) { "PNG 元数据未完整保留" }
             checkCancelled()
             return Encoded(finalBytes, quality, image.bitDepth)
-        } finally { bitmap.recycle() }
+        } finally { if (!bitmap.isRecycled) bitmap.recycle() }
+    }
+
+    /** 软件画布在目标色彩空间逐行铺白；DST_OVER 保持不透明像素，不额外分配整图。 */
+    private fun compositeWhite(bitmap: Bitmap, checkCancelled: () -> Unit) {
+        checkCancelled()
+        if (!bitmap.hasAlpha()) return
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            color = Color.WHITE
+            blendMode = BlendMode.DST_OVER
+            isAntiAlias = false
+        }
+        try {
+            repeat(bitmap.height) { y ->
+                checkCancelled()
+                canvas.drawRect(0f, y.toFloat(), bitmap.width.toFloat(), (y + 1).toFloat(), paint)
+            }
+            bitmap.setHasAlpha(false)
+        } finally {
+            // 显式解除画布的原生位图引用，后续 recycle 无须等待 Canvas 被回收。
+            canvas.setBitmap(null)
+        }
     }
 
     private fun metadataArchive(image: Image): ByteArray = ByteArrayOutputStream().apply {
@@ -230,7 +285,7 @@ object PngCompressor {
         val width = intAt(bytes, 16)
         val height = intAt(bytes, 20)
         val color = bytes[25].toInt() and 255
-        require(width in 1..65536 && height > 0 && width.toLong() * height <= 16_000_000) { "PNG 像素过多，已保留原片" }
+        requireDimensions(width, height)
         depthReason(bytes[24].toInt() and 255, color)?.let { throw IllegalArgumentException(it) }
         require(bytes[26].toInt() == 0 && bytes[27].toInt() == 0 && bytes[28].toInt() == 0) { "PNG 交错或未知编码暂不处理" }
         val palette = chunks.filter { it.type == "PLTE" }
@@ -250,12 +305,12 @@ object PngCompressor {
     }
 
     private class Pixels(val image: Image, val stream: InflaterInputStream, val inflater: Inflater, val input: SequenceInputStream) {
-        var previous = ByteArray(image.stride)
+        private var previous = ByteArray(image.stride)
+        private var row = ByteArray(image.stride)
         var filter = 0
-        fun next(): ByteArray {
+        fun next() {
             filter = stream.read()
             require(filter in 0..4) { "PNG 行过滤无效" }
-            val row = ByteArray(image.stride)
             var read = 0
             while (read < row.size) {
                 val n = stream.read(row, read, row.size - read)
@@ -268,7 +323,9 @@ object PngCompressor {
                 val colors = image.chunks.single { it.type == "PLTE" }.length / 3
                 require(row.all { (it.toInt() and 255) < colors }) { "PNG 调色板索引无效" }
             }
-            return row
+            val oldPrevious = previous
+            previous = row
+            row = oldPrevious
         }
         fun finish() {
             require(stream.read() == -1 && inflater.finished() && inflater.remaining == 0 && input.read() == -1) { "PNG 像素数据长度无效" }
@@ -289,8 +346,7 @@ object PngCompressor {
     private fun validatePixels(image: Image, checkCancelled: () -> Unit) = withPixels(image) { pixels ->
         repeat(image.height) {
             checkCancelled()
-            val row = pixels.next()
-            pixels.previous = row
+            pixels.next()
         }
         pixels.finish()
     }

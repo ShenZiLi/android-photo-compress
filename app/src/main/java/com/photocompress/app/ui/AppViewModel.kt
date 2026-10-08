@@ -9,6 +9,7 @@ import com.photocompress.app.core.compress.CompressionEngine
 import com.photocompress.app.core.compress.CompressionControl
 import com.photocompress.app.core.compress.RestoreOutcome
 import com.photocompress.app.core.heif.HeicCompressor
+import com.photocompress.app.core.png.PngCompressor
 import com.photocompress.app.data.ledger.AppDatabase
 import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.data.ledger.SettingsEntity
@@ -250,6 +251,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val control = CompressionControl()
         compressionControl = control
         writing = true
+        // 大 PNG 或尺寸未知的 PNG 所在批次单路处理，避免整图像素缓冲并发叠加。
+        val serialPng = targets.any {
+            it.format == ContainerFormat.PNG && (it.width <= 0 || it.height <= 0 ||
+                it.width.toLong() * it.height > PngCompressor.MAX_PARALLEL_PIXELS)
+        }
         // 大 HEIC 的像素缓冲较大；含大图或尺寸未知 HEIC 的整个批次固定单路，
         // 使其他图片和视频也等待，避免编码/校验时叠加占用。其余批次沿用加速设置。
         val serialHeic = targets.any {
@@ -259,7 +265,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // 开关关闭时维持逐项串行。
         // 视频不走并发池：硬编码器实例有限，多路同时转码会互相抢占，反而更慢甚至失败，
         // 因此视频始终单线程，与开关无关。
-        val parallelism = if (_ui.value.settings.fastCompress && !serialHeic) fastCompressParallelism() else 1
+        val parallelism = if (_ui.value.settings.fastCompress && !serialHeic && !serialPng) fastCompressParallelism() else 1
         val concurrent = parallelism > 1 && targets.count { it.kind != MediaKind.VIDEO } > 1
         _batch.value = BatchState(
             if (concurrent) "正在压缩 · $parallelism 路并发" else "正在压缩",

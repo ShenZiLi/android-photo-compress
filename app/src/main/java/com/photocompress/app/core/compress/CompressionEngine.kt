@@ -186,32 +186,53 @@ class CompressionEngine(private val context: Context) {
         val file = File(item.dataPath)
         if (!file.isFile) return CompressOutcome.Failed("文件不存在")
         if (file.length() > PngCompressor.MAX_FILE_BYTES) return CompressOutcome.Skipped("PNG 文件过大，已保留原片")
-        val original = file.readBytes()
+        val original = try { file.readBytes() } catch (_: OutOfMemoryError) {
+            return CompressOutcome.Skipped("PNG 可用内存不足，已保留原片；请关闭其他任务后重试")
+        }
         attempt.checkCancelled()
         val marker = newMarker()
         val encoded = try {
             PngCompressor.compress(original, tier, marker, attempt::checkCancelled)
         } catch (invalid: IllegalArgumentException) {
             return CompressOutcome.Skipped(invalid.message ?: "PNG 无法安全压缩，已保留原片")
+        } catch (_: OutOfMemoryError) {
+            return CompressOutcome.Skipped("PNG 可用内存不足，已保留原片；请关闭其他任务后重试")
         }
         if (encoded.bytes.size >= original.size) return CompressOutcome.Skipped.noSizeReduction()
-        val destination = File(file.parentFile, file.nameWithoutExtension + ".jpg")
-        if (destination.exists()) return CompressOutcome.Skipped("同名 JPEG 已存在，已保留 PNG 原片")
         val temp = attempt.temp(".jpg")
         temp.writeBytes(encoded.bytes)
         val sourceSha = java.security.MessageDigest.getInstance("SHA-256").digest(original)
             .joinToString("") { "%02x".format(it) }
-        return commitPngJpeg(item, temp, tier, encoded.quality, encoded.bitDepth, destination, sourceSha, attempt)
+        return commitPngJpeg(item, temp, tier, encoded.quality, encoded.bitDepth, sourceSha, attempt)
+    }
+
+    private fun uniquePngJpegDestination(source: File, checkCancelled: () -> Unit): File {
+        val directory = requireNotNull(source.parentFile) { "PNG 原片目录无效" }
+        val baseName = source.nameWithoutExtension
+        var suffix = 0L
+        while (true) {
+            checkCancelled()
+            val ending = if (suffix == 0L) ".jpg" else "_$suffix.jpg"
+            val byteBudget = 255 - ending.length // 后缀均为 ASCII，每个字符占一个 UTF-8 字节。
+            var end = baseName.length
+            while (baseName.substring(0, end).toByteArray(Charsets.UTF_8).size > byteBudget) {
+                end = Character.offsetByCodePoints(baseName, end, -1)
+            }
+            val destination = File(directory, baseName.substring(0, end) + ending)
+            if (!Files.exists(destination.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)) return destination
+            suffix++
+        }
     }
 
     private suspend fun commitPngJpeg(item: MediaItem, temp: File, tier: QualityTier, quality: Int, bitDepth: Int,
-        destination: File, sourceSha: String, attempt: Attempt): CompressOutcome = withMediaLock {
-        // 检查保护记录、写备份、改名、删原片必须整体原子，故整段持锁。
+        sourceSha: String, attempt: Attempt): CompressOutcome = withMediaLock {
+        // 恢复保护、目标选择、备份及改名共用锁，避免批次内同时选中同一目标。
         checkRecoveryClear(item)
         var prepared: PngConversionRewriter.Prepared? = null
         var started = false
         try {
             attempt.checkCancelled()
+            val destination = uniquePngJpegDestination(File(item.dataPath), attempt::checkCancelled)
             prepared = pngConversion.prepare(UUID.randomUUID().toString(), item, destination, sourceSha, attempt::checkCancelled)
             attempt.checkCancelled()
             started = true

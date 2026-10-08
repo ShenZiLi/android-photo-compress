@@ -1,0 +1,4 @@
+{"file":".trellis/spec/android/index.md","reason":"Android quality check"}
+{"file":".trellis/spec/android/png-jpeg.md","reason":"PNG conversion consistency"}
+{"file":".trellis/spec/android/compression-performance.md","reason":"Debug build, lint and exclusive synthetic device fixtures"}
+{"file":".trellis/spec/android/git-workflow.md","reason":"Local commit only our changes"}

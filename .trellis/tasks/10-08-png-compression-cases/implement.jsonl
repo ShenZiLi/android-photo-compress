@@ -1,0 +1,4 @@
+{"file":".trellis/spec/android/index.md","reason":"Android implementation boundaries"}
+{"file":".trellis/spec/android/png-jpeg.md","reason":"PNG metadata and conversion transactions; user request supersedes old skip rules"}
+{"file":".trellis/spec/android/compression-performance.md","reason":"Memory and proof policy; no new or executed test suites"}
+{"file":".trellis/spec/android/media-recovery.md","reason":"Preserve backups and cancellation rollback"}
