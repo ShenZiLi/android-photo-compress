@@ -96,7 +96,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             LibrarySnapshot(source.items, source.ledger, source.recoveryEntries, source.settings)
         }
         // 期间又发生了新的媒体库/账本变更时丢弃本次结果，由那次变更自己的重建接手。
-        _ui.update { if (it.library.matches(it)) it.copy(library = rebuilt) else it }
+        _ui.update { rebuilt.applyTo(it) }
     }
 
     // ---------------------------------------------------------------- 扫描

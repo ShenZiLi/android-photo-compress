@@ -342,6 +342,10 @@ class LibrarySnapshot(
         items === state.items && ledger === state.ledger &&
             recoveryEntries === state.recoveryEntries && settings == state.settings
 
+    /** 在原子更新内发布结果，保留当前导航与选择；计算期间输入变更则丢弃。 */
+    internal fun applyTo(state: UiState): UiState =
+        if (matches(state)) state.copy(library = this) else state
+
     private val excludedAlbums: Set<String> = settings.excludedSet
 
     /** 无收益判断只适用于仍然存在且身份/大小/日期一致的原片，不隐藏改过或替换过的图片。 */
