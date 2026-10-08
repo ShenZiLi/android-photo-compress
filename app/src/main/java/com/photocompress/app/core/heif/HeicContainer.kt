@@ -14,7 +14,7 @@ internal class HeicContainer(private val bytes: ByteArray) {
         val end get() = start + size
     }
     data class Extent(val offset: Int, val length: Int)
-    data class Location(val id: Int, val method: Int, val extents: List<Extent>)
+    data class Location(val id: Int, val method: Int, val dataReferenceIndex: Int, val extents: List<Extent>)
     data class Association(val index: Int, val essential: Boolean)
     private val top = boxes(bytes, 0, bytes.size, allowTail = true)
     private val tail = bytes.copyOfRange(top.last().end, bytes.size)
@@ -28,6 +28,7 @@ internal class HeicContainer(private val bytes: ByteArray) {
     private val ipco = propertyBoxes.single { it.type == "ipco" }
     private val properties = boxes(bytes, ipco.data, ipco.end)
     private val ipma = propertyBoxes.single { it.type == "ipma" }
+    private val dataReferenceCount = readDataReferenceCount()
     private val locations = readLocations()
     private val types = readTypes()
     private val associations = readAssociations()
@@ -55,7 +56,8 @@ internal class HeicContainer(private val bytes: ByteArray) {
         }) { "非静态 HEIC 容器" }
         require(top.none { it.type in setOf("moov", "moof", "sidx") } && bytes[meta.data].toInt() == 0) { "HEIC 序列或未知容器暂不处理" }
         require(top.all { it.type in setOf("ftyp", "meta", "mdat", "free", "skip", "uuid", "QTI ") }) { "HEIC 未知顶层结构，已保留原片" }
-        require(children.all { it.type in setOf("hdlr", "pitm", "iloc", "iinf", "iprp", "iref", "idat") }) { "HEIC 扩展结构暂不处理" }
+        val unknownChildren = children.filter { it.type !in setOf("hdlr", "pitm", "iloc", "iinf", "iprp", "iref", "idat", "dinf", "free", "skip") }
+        require(unknownChildren.isEmpty()) { "HEIC 扩展结构暂不处理：${unknownChildren.map { it.type }.distinct().joinToString(", ")}" }
         require(propertyBoxes.size == 2 && properties.size <= 4096 && locations.keys == types.keys) { "HEIC 项目索引不完整" }
         require(types[primaryId] in setOf("grid", "hvc1") && tiles.size in 1..256 && tiles.distinct().size == tiles.size) { "HEIC 主图结构暂不处理" }
         require(references.none { it.first == "auxl" } && references.all { it.first in setOf("dimg", "thmb", "cdsc") }) { "HEIC 深度、透明或未知辅助图暂不处理" }
@@ -123,6 +125,26 @@ internal class HeicContainer(private val bytes: ByteArray) {
             id to r.text(4)
         }.also { require(it.size == count) }
     }
+    private fun readDataReferenceCount(): Int {
+        val containers = children.filter { it.type == "dinf" }
+        require(containers.size <= 1) { "HEIC 数据引用表重复" }
+        val dinf = containers.singleOrNull() ?: return 0
+        val entries = boxes(bytes, dinf.data, dinf.end)
+        require(entries.size == 1 && entries.single().type == "dref") { "HEIC 数据引用表结构未知" }
+        val dref = entries.single()
+        val c = Cursor(bytes, dref.data, dref.end)
+        require(c.u32() == 0) { "HEIC 数据引用表版本或标志未知" }
+        val count = c.u32(); require(count <= 4096) { "HEIC 数据引用表过大" }
+        val references = boxes(bytes, c.position, dref.end)
+        require(references.size == count) { "HEIC 数据引用表数量不符" }
+        for (entry in references) {
+            require(entry.type == "url ") { "HEIC 数据引用类型暂不处理：${entry.type}" }
+            val r = Cursor(bytes, entry.data, entry.end)
+            require(r.u32() == 1) { "HEIC 外部数据引用或未知引用标志暂不处理" }
+            r.finish()
+        }
+        return count
+    }
     private fun readLocations(): Map<Int, Location> {
         val c = Cursor(bytes, iloc.data, iloc.end); val version = c.u8(); c.skip(3); require(version in 0..2)
         val a = c.u8(); val b = c.u8(); val offsetSize = a ushr 4; val lengthSize = a and 15
@@ -133,14 +155,15 @@ internal class HeicContainer(private val bytes: ByteArray) {
         repeat(count) {
             val id = if (version < 2) c.u16() else c.u32()
             val method = if (version > 0) c.u16() else 0
-            require(method in 0..1 && c.u16() == 0) { "HEIC 外部数据引用暂不处理" }
+            val dataReferenceIndex = c.u16()
+            require(method in 0..1 && (dataReferenceIndex == 0 || method == 0 && dataReferenceIndex in 1..dataReferenceCount)) { "HEIC 外部数据引用或引用索引无效" }
             val base = c.number(baseSize); val n = c.u16(); require(n in 1..4096)
             val extents = List(n) {
                 require(c.number(indexSize) == 0) { "HEIC extent 索引未知" }
                 val offset = base.toLong() + c.number(offsetSize); require(offset <= Int.MAX_VALUE)
                 Extent(offset.toInt(), c.number(lengthSize))
             }
-            require(result.put(id, Location(id, method, extents)) == null)
+            require(result.put(id, Location(id, method, dataReferenceIndex, extents)) == null)
         }
         c.finish(); return result
     }
@@ -211,7 +234,7 @@ internal class HeicContainer(private val bytes: ByteArray) {
             val newIloc = box("iloc", output {
                 writeInt(0x02000000); writeByte(0x44); writeByte(0); writeInt(locations.size)
                 for ((id, l) in locations) {
-                    writeInt(id); writeShort(l.method); writeShort(0); writeShort(l.extents.size)
+                    writeInt(id); writeShort(l.method); writeShort(l.dataReferenceIndex); writeShort(l.extents.size)
                     l.extents.forEachIndexed { index, e ->
                         val new = if (l.method == 0) offsets.getValue(id to index) else e
                         writeInt(new.offset + if (l.method == 0) mdatStart else 0); writeInt(new.length)
@@ -228,6 +251,10 @@ internal class HeicContainer(private val bytes: ByteArray) {
             box("uuid", markerUuid + PcXmp.injectAttributes(null, marker).toByteArray(Charsets.UTF_8)) + tail
         val check = HeicContainer(result)
         require(check.primaryId == primaryId && check.types == types && check.references == references && check.imageSize == imageSize)
+        require(check.locations.mapValues { it.value.dataReferenceIndex } == locations.mapValues { it.value.dataReferenceIndex }) { "HEIC 数据引用索引未完整保留" }
+        val originalChildren = children.filter { it.type !in setOf("iloc", "iprp") }.map(::raw)
+        val retainedChildren = check.children.filter { it.type !in setOf("iloc", "iprp") }.map(check::raw)
+        require(originalChildren.size == retainedChildren.size && originalChildren.zip(retainedChildren).all { (a, b) -> a.contentEquals(b) }) { "HEIC 元数据框未完整保留" }
         require(check.tail.contentEquals(tail) && readMarker(result) == marker) { "HEIC 标记或厂商尾部校验失败" }
         for (id in types.keys - tiles.toSet()) require(check.payload(id).contentEquals(payload(id))) { "HEIC 非主图数据未完整保留" }
         for ((id, list) in associations) {

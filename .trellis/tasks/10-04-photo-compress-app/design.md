@@ -232,3 +232,7 @@ MediaMuxer 只写编码必需的结构，源 `moov` 下承载相机信息的框�
 ## 2026-10-07：确认后删除成功备份
 
 `purgeBackups` 增加默认 false 的 `allowMissingOrChangedMedia`。手动清空确认后传 true，且仅 DONE/PURGED 记录豁免当前媒体存在/大小检查；自动清理仍走原检查。恢复引用检查在豁免之前执行，实际删除继续使用 private recycle 路径校验及 checked deletion，删除成功才批量清空备份索引。更新现有确认弹窗与剩余保护项文案，不增加另一轮弹窗或处理个人媒体。
+
+## 2026-10-08：HEIC dinf 本文件引用
+
+样例 meta 含 `dinf/dref/url `：dref v0 flags0、一个 url v0 flags1，iloc 的 data_reference_index 为 0。扩充 HeicContainer 元结构允许集，只接纳经过边界与数量校验的本文件 URL 引用表；非零 iloc 引用只允许有效本文件条目，Location 保留原引用索引，重组写回同值。原 dinf 字节和其他未改写 meta 子框在输出读回时逐字节核对；未知扩展提示列出实际 fourcc。不放开未知结构或外部引用，不改变 HDR/辅助图/变换/网格限制。无需修改图片分类、UI、账本或媒体事务。

@@ -238,3 +238,10 @@ gradle :app:testDebugUnitTest
 - [x] 保存检查结论、规范及本地提交，不操作个人媒体压缩/还原/清理。
 
 记录见 [research/2026-10-08-progress-stop-indicator.md](research/2026-10-08-progress-stop-indicator.md)。
+
+## 2026-10-08：HEIC 标准数据引用表兼容（0.1.35）
+
+- [x] HeicContainer 解析并校验 dinf/dref/url 本文件引用，保留引用索引与原始框，未知结构提示具体类型。
+- [x] 读回检查全部未改写 meta 子框；版本递增至 0.1.35/code36。
+- [x] 构建并运行样例副本三档压缩，独立检查容器元数据、非主图载荷、色彩/尺寸、标记、源摘要；不新增或运行测试套件。
+- [x] 复核拒绝外部/未知引用，检查差异并本地提交；保存真实设备验证边界及会话记录。

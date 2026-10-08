@@ -9,7 +9,7 @@
 
 ## 容器完整性
 
-`core.heif.HeicContainer` 解析 pitm/iinf/iloc/ipco/ipma/iref/idat。只替换主图编码 extents 及其 hvcC 关联，其他 item ID、引用、网格载荷、EXIF/XMP/辅助项、ICC、厂商 QTI 框和尾部原样保留；重建全部文件偏移和 extent 长度。iloc 方法 0/1 分别对应文件和 idat，不支持外部 item 构造。
+`core.heif.HeicContainer` 解析 pitm/iinf/iloc/ipco/ipma/iref/idat。只替换主图编码 extents 及其 hvcC 关联，其他 item ID、引用、网格载荷、EXIF/XMP/辅助项、ICC、厂商 QTI 框和尾部原样保留；重建全部文件偏移和 extent 长度。iloc 方法 0/1 分别对应文件和 idat，不支持外部 item 构造。可保留经过校验的 `dinf/dref/url ` 本文件引用表，详见下方兼容契约。
 
 保留完整原始元数据数据块，不以逐个复制公开 EXIF 标签替代 MakerNote 或未知字段。重组后重新解析并核对所有非主图载荷、属性、尺寸、引用和尾部。自有 UUID 框 `45609067-7c74-4c16-b9da-99c5dd997ea3` 承载 PcXmp 唯一标记，不替换原 XMP；媒体扫描只读取顶层头部和该标记，账本丢失后仍可识别。UUID 为应用私有容器扩展，不承诺相册读取该自有标记。
 
@@ -24,3 +24,12 @@
 ## 设备验收
 
 以用户提供的 HEIC 创建独占副本，检查格式、体积、EXIF/ICC/厂商尾部字节、标记、媒体身份/日期/mtime、还原 SHA、数据库失败及取消。未实际检查的真机、HDR 观感和文件创建时间不能标为通过。按当前开发者要求不新增或运行测试套件；旧 HEIC→JPEG 断言随接口同步更新。
+
+## 标准数据引用表（0.1.35）
+
+- `meta` 接纳 `dinf` 及 `free/skip` 填充。`dinf` 必须仅含一个 `dref`，版本 0、flags 0、声明数量与子框一致且不超过 4096；每项仅接纳 `url ` v0 flags1、无地址载荷（本文件）。外部 URL、未知条目、数量或边界错误在编码前拒绝。
+- `iloc.data_reference_index == 0` 仍表示本文件；方法 0 的非零索引必须落在已校验引用表内，方法 1 必须为 0。`Location` 保留该索引，重建 `iloc` 原值写回，不默认归零。
+- `dinf` 不因主图重编码改变；输出读回逐字节核对除 `iloc/iprp` 外全部 meta 子框（含原顺序），并核对各 item 的引用索引。编码配置与位置表仍遵循已有替换规则。
+- 未知 meta 扩展仍拒绝，提示含实际框类型，例如“HEIC 扩展结构暂不处理：xxxx”。不能直接删掉允许集检查或保留未知偏移结构后冒充完整兼容。
+
+验收基准：用户提供的 IMG_2253.HEIC（4032×2268 / 40 个 512×512 tile / Display P3）含一个本文件 URL，旧版编码前拒绝。新流程应压缩为 HEIC，dinf、EXIF、ICC、引用及非主图载荷完整保留；只处理私有副本，原样例摘要保持。真实结果及未执行边界见 [兼容验收](../../tasks/10-04-photo-compress-app/research/2026-10-08-heic-dinf.md)。不将一份样例通过推广到 HDR、外部引用或任意 HEIC。
