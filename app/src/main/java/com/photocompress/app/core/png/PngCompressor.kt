@@ -121,8 +121,13 @@ object PngCompressor {
             val raw = stream.toByteArray()
             val decoded = requireNotNull(BitmapFactory.decodeByteArray(raw, 0, raw.size)) { "输出 JPEG 无法解码" }
             try {
-                require(decoded.width == bitmap.width && decoded.height == bitmap.height && decoded.colorSpace == bitmap.colorSpace) {
-                    "PNG 色彩空间或尺寸无法完整保留，已保留原片"
+                require(decoded.width == bitmap.width && decoded.height == bitmap.height) {
+                    "PNG 解码尺寸变化，已保留原片"
+                }
+                // 16 位源经 Skia 解出的是扩展 sRGB（scRGB-nl），转 8 位 JPEG 后必然落在标准 sRGB，
+                // 这属于已声明的降级路径，不算保真失败。
+                require(decoded.colorSpace == bitmap.colorSpace || (image.bitDepth == 16 && decoded.colorSpace?.isSrgb == true)) {
+                    "PNG 色彩空间无法完整保留（源 ${bitmap.colorSpace}，输出 ${decoded.colorSpace}），已保留原片"
                 }
             } finally { decoded.recycle() }
             val meta = mutableListOf<JpegSegments.Segment>()

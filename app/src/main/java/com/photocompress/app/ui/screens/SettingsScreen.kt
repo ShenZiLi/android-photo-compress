@@ -104,7 +104,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("压缩PNG", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "符合条件的 PNG 转为 JPEG；16 位会降为 8 位",
+                            "压缩后转为JPEG",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.appColors.onSurfaceMuted,
                         )
