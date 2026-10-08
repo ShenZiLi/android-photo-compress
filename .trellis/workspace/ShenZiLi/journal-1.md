@@ -1367,3 +1367,39 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 用户自行验证功能；本次仅安装与启动核验，未操作个人照片的压缩、还原或清理。
+
+
+## Session 43: 0.1.33授权返回修复与首次云服务提醒
+<!-- trellis-session: v=2 fp=e672ad7165768b5d -->
+
+**Date**: 2026-10-08
+**Task**: 0.1.33授权返回修复与首次云服务提醒
+**Branch**: `dev`
+
+### Summary
+
+返回前台立即更新所有文件访问权限，首次授权后先进入首页再异步扫描；首次首页显示系统相册云服务提醒，知道了后持久记住。调试APK安装到RMX5010返回Success，交互复验因USB连接不稳定待完成。
+
+### Main Changes
+
+- MainActivity.onResume接入权限刷新，缺少权限不扫描，新授权切到首页，普通返回不改变页面；增加单按钮玻璃提醒及本机确认标记，版本0.1.33/code34。
+- 同步需求、实施计划、UI规范与匿名验证记录，未卸载/清空应用数据，未操作个人媒体压缩、还原或清理。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a836e5f` | fix(onboarding): refresh access on resume and show cloud reminder |
+
+### Testing
+
+- [OK] 最终调试构建、签名和包名版本检查通过；安装页显示0.1.33，点击继续安装后ADB返回Success；git diff --check通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机授权返回时延、首次提醒确认后的重启及普通前后台切换尚未复验，安装后USB连接再次断开。
+- 全量lintDebug未通过：未修改的VideoTranscoder第358/377行两项既有WrongConstant错误；32条警告及1条提示，未新增或运行测试套件。
