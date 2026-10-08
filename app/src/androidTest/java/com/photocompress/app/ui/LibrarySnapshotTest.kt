@@ -2,9 +2,12 @@ package com.photocompress.app.ui
 
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.photocompress.app.core.rewrite.RecoveryJournal
+import com.photocompress.app.data.ledger.CompressedItemEntity
 import com.photocompress.app.data.media.ContainerFormat
 import com.photocompress.app.data.media.MediaItem
 import com.photocompress.app.data.media.MediaKind
+import com.photocompress.app.data.media.QualityTier
 import com.photocompress.app.data.media.SupportDecision
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -111,6 +114,52 @@ class LibrarySnapshotTest {
         assertTrue(empty.albumTodoAll().isEmpty())
         assertTrue(empty.allAlbumNames().isEmpty())
     }
+
+    /**
+     * 回收站备份列表由账本直接派生：清理写入账本后立即可见，不等待整库快照重建。
+     * 这是「清理完成瞬间列表仍显示旧条目」的回归断言。
+     */
+    @Test fun recycleBackupsFollowLedgerInsteadOfDerivedSnapshot() {
+        val backup = ledgerRecord()
+        // 快照尚未重建（仍是空库快照）时，备份列表也必须立即由账本给出。
+        val withBackup = UiState(ledger = listOf(backup))
+        assertFalse(withBackup.library.matches(withBackup))
+        assertEquals(listOf(backup.id), withBackup.successfulBackups().map { it.id })
+
+        // 清理：账本清空备份路径后，列表立即为空，无需任何快照重建或重扫。
+        val purged = withBackup.copy(
+            ledger = listOf(backup.copy(backupRelPath = null, backupSize = 0, status = CompressedItemEntity.STATUS_PURGED)),
+        )
+        assertTrue(purged.successfulBackups().isEmpty())
+    }
+
+    /** 恢复日志涉及的路径不进入回收站：未完成恢复的备份必须保留。 */
+    @Test fun recycleBackupsSkipPathsHeldByRecoveryJournal() {
+        val backup = ledgerRecord()
+        val guarded = UiState(
+            ledger = listOf(backup),
+            recoveryEntries = listOf(recoveryEntry(path = backup.dataPath)),
+        )
+
+        assertTrue(guarded.successfulBackups().isEmpty())
+    }
+
+    private fun ledgerRecord() = CompressedItemEntity(
+        id = "record-1", mediaStoreId = 1, dataPath = "/synthetic/Camera/1.jpg", originalPath = "",
+        volumeName = "external_primary", bucketName = "Camera", displayName = "1.jpg",
+        mediaKind = MediaKind.PHOTO.name, mimeType = "image/jpeg", containerFormat = ContainerFormat.JPEG.name,
+        videoCodec = null, originalSize = 2048, compressedSize = 1024, originalSha256 = "synthetic-sha",
+        originalDateTakenMs = 1000, originalDateAddedSec = 1, originalDateModifiedSec = 1,
+        qualityTier = QualityTier.BALANCED.name, codecUsed = null, compressedAtMs = 2000,
+        restoreDeadlineMs = Long.MAX_VALUE, backupRelPath = "record-1/1.jpg", backupSize = 1024,
+        status = CompressedItemEntity.STATUS_DONE,
+    )
+
+    private fun recoveryEntry(path: String) = RecoveryJournal.Entry(
+        id = "recovery-1", path = path, backupRelPath = "recovery-1/1.jpg", sha256 = "synthetic-sha",
+        modifiedTime = "1", mediaUri = "content://media/external/images/media/1",
+        dateTakenMs = 1000, dateAddedSec = 1, dateModifiedSec = 1,
+    )
 
     private fun snapshot(state: UiState) =
         LibrarySnapshot(state.items, state.ledger, state.recoveryEntries, state.settings)

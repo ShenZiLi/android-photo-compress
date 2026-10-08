@@ -240,8 +240,26 @@ fun UiState.todoItems(): List<MediaItem> = library.todoItems
 
 fun UiState.doneItems(): List<DoneMedia> = library.doneItems
 
-/** 回收站仅承载成功压缩备份；失败事务在未压缩页处理。 */
-fun UiState.successfulBackups(): List<CompressedItemEntity> = library.backups
+/**
+ * 回收站备份：只依赖账本与恢复日志。
+ *
+ * 刻意不走 [UiState.library]：整库快照重建要遍历全部媒体项，排在清理收尾会拖慢列表刷新；
+ * 备份列表本身与媒体项无关，直接过滤账本才能在账本写入后立即反映。
+ */
+fun UiState.successfulBackups(): List<CompressedItemEntity> = run {
+    val pending = recoveryEntries.flatMap { it.paths }.toSet()
+    ledger.filter {
+        it.backupRelPath != null &&
+            it.status in RECYCLE_BACKUP_STATUSES &&
+            it.dataPath !in pending && it.originalPath !in pending
+    }
+}
+
+/** 回收站承载的状态：DONE（可还原）与 PURGED（备份已清理）。失败事务在未压缩页处理。 */
+private val RECYCLE_BACKUP_STATUSES = setOf(
+    CompressedItemEntity.STATUS_DONE,
+    CompressedItemEntity.STATUS_PURGED,
+)
 
 /** 媒体库中出现过的全部图集（设置页用于配置过滤，不排除任何项）。 */
 fun UiState.allAlbumNames(): List<Pair<String, Int>> = library.albumNames
@@ -428,14 +446,6 @@ class LibrarySnapshot(
     val albumDoneAll: List<AlbumDoneUi> = doneItems.groupBy { it.bucketName }
         .map { (name, list) -> AlbumDoneUi(name, list) }
         .sortedByDescending { it.count }
-
-    /** 回收站仅承载成功压缩备份；失败事务在未压缩页处理。 */
-    val backups: List<CompressedItemEntity> = run {
-        val pending = recoveryEntries.flatMap { it.paths }.toSet()
-        ledger.filter { it.backupRelPath != null &&
-            it.status in setOf(CompressedItemEntity.STATUS_DONE, CompressedItemEntity.STATUS_PURGED) &&
-            it.dataPath !in pending && it.originalPath !in pending }
-    }
 
     /** 媒体库中出现过的全部图集（设置页用于配置过滤，不排除任何项）。 */
     val albumNames: List<Pair<String, Int>> = items.groupBy { it.bucketName }

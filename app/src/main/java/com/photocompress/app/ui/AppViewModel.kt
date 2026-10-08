@@ -28,9 +28,11 @@ import com.photocompress.app.data.media.needsFullScan
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -100,7 +102,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 rebuildLibrary()
             }
         }
+        viewModelScope.launch { observeLedger() }
         refresh()
+    }
+
+    /**
+     * 账本变更立即进入界面，整库快照重建按批合并。
+     *
+     * 清理备份按每 64 项写一次账本，回收站列表与数量只依赖账本：
+     * 逐批刷新让列表随清理推进递减，完成瞬间不再出现整体滞后。
+     * 而 [rebuildLibrary] 要遍历整库（真机近万项媒体），必须合并，
+     * 否则一批清理会触发数十次整库重算。
+     */
+    private suspend fun observeLedger() {
+        ledgerDao.observeAll().collectLatest { records ->
+            _ui.update { it.copy(ledger = records) }
+            delay(LIBRARY_REBUILD_DEBOUNCE_MS)
+            rebuildLibrary()
+        }
     }
 
     /**
@@ -508,7 +527,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (failure is CancellationException) throw failure
                 _messages.trySend("备份清理未完成，请重试")
             } finally {
-                finishBatch(emptyList())
+                finishBatch(emptyList(), rescan = false)
             }
         }
     }
@@ -525,7 +544,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (failure is CancellationException) throw failure
                 _messages.trySend("到期备份清理未完成，请重试")
             } finally {
-                finishBatch(emptyList())
+                finishBatch(emptyList(), rescan = false)
             }
         }
     }
@@ -726,8 +745,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- 内部
 
-    /** 回退完成后才开放新批次；缓存异常或生命周期取消也必须释放操作状态。 */
-    private suspend fun finishBatch(touched: Collection<String>) {
+    /**
+     * 回退完成后才开放新批次；缓存异常或生命周期取消也必须释放操作状态。
+     *
+     * [rescan] 为 false 时跳过全库重扫：清理回收站只删除应用私有目录中的备份，
+     * 不改变相册内容，重扫既无收益又会占用 CPU 与 IO、拖慢紧随其后的界面刷新。
+     */
+    private suspend fun finishBatch(touched: Collection<String>, rescan: Boolean = true) {
         withContext(NonCancellable) {
             try {
                 invalidateCache(touched)
@@ -739,7 +763,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _batch.value = null
             }
         }
-        refresh()
+        if (rescan) refresh()
     }
 
     private suspend fun reloadLedger() {
