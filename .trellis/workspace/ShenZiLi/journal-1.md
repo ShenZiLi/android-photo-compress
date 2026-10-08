@@ -1438,3 +1438,40 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 真机截图复核尚未完成：锁屏后用户已解锁，但USB再次断开。未操作个人媒体压缩、还原或清理。
+
+
+## Session 45: HEIC标准数据引用表兼容与真机样例验证
+<!-- trellis-session: v=2 fp=d40d39583c584857 -->
+
+**Date**: 2026-10-08
+**Task**: HEIC标准数据引用表兼容与真机样例验证
+**Branch**: `dev`
+
+### Summary
+
+修复用户IMG_2253.HEIC被dinf允许集拒绝；保留本文件引用与完整元数据，三档真机私有副本验收通过；独立0.1.35覆盖安装成功。
+
+### Main Changes
+
+- 解析并完整保留本文件dinf/dref/url及iloc引用索引；未知或外部引用写前拒绝，更新HEIC契约与任务记录。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `efa3609` | fix(heic): preserve standard self-contained data references |
+
+### Testing
+
+- [OK] 独立HEAD+HEIC修复快照assembleDebug通过，签名验证通过；全工作区lintDebug通过（包含并行性能任务修复，不归因于HEIC）。
+- [OK] RMX5010 Android16私有副本三档输出717827/616476/575185B，减少42.49%/50.61%/53.92%；4032x2268 DisplayP3，元数据及非主图载荷完整，桌面源SHA不变。
+- [OK] 本文件非零引用成功且原索引保持；外部URL/错计数/未知meta/idat非零引用/缺dinf引用均被拒绝。未新增或运行测试套件，未操作个人相册或账本。
+- [OK] 最终独立APK重复平衡输出616476B；覆盖安装Success，0.1.35/code36读回，MainActivity冷启动Status ok、1107ms，进程存在。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户核对原生APP内该样例完整压缩/还原及相册画质；本轮未重跑既有事务故障矩阵。主App任务仍在进行，未归档其他任务。

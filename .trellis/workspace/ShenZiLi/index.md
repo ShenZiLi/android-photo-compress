@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 44
+- **Total Sessions**: 45
 - **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1440 | Active |
+| `journal-1.md` | ~1477 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 45 | 2026-10-08 | HEIC标准数据引用表兼容与真机样例验证 | `efa3609` | `dev` |
 | 44 | 2026-10-08 | 0.1.34统一移除进度条末端圆点 | `8c8671d` | `dev` |
 | 43 | 2026-10-08 | 0.1.33授权返回修复与首次云服务提醒 | `a836e5f` | `dev` |
 | 42 | 2026-10-08 | 轻存0.1.32调试APK真机安装完成 | - | `dev` |
