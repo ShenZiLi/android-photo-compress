@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,8 +62,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppEntry(vm: AppViewModel) {
     val context = LocalContext.current
+    val view = LocalView.current
     val state by vm.ui.collectAsStateWithLifecycle()
+    val batch by vm.batch.collectAsStateWithLifecycle()
+    val keepScreenOn = batch?.keepScreenOn == true
     var requested by remember { mutableStateOf(false) }
+
+    DisposableEffect(view, keepScreenOn) {
+        val previousKeepScreenOn = view.keepScreenOn
+        if (keepScreenOn) view.keepScreenOn = true
+        onDispose {
+            if (keepScreenOn) view.keepScreenOn = previousKeepScreenOn
+        }
+    }
 
     if (!state.hasAllFilesAccess) {
         Column(

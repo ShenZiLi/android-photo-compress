@@ -46,6 +46,7 @@ data class BatchState(
     val canCancel: Boolean = false,
     val cancelling: Boolean = false,
     val currentName: String? = null,
+    val keepScreenOn: Boolean = false,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -252,7 +253,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val concurrent = parallelism > 1 && targets.count { it.kind != MediaKind.VIDEO } > 1
         _batch.value = BatchState(
             if (concurrent) "正在压缩 · $parallelism 路并发" else "正在压缩",
-            0f, 0, targets.size, canCancel = true,
+            0f, 0, targets.size, canCancel = true, keepScreenOn = true,
         )
         viewModelScope.launch {
             val touched = LinkedHashSet<String>()
