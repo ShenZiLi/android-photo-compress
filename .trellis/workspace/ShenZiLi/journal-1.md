@@ -1546,3 +1546,34 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 连接设备后，以独占副本和同批同档位验证耗时、HDR/实况播放与完整还原。
+
+
+## Session 48: HDR HEIC压缩可行性与真机能力核对
+<!-- trellis-session: v=2 fp=eb50fea80158538d -->
+
+**Date**: 2026-10-08
+**Task**: HDR HEIC压缩可行性与真机能力核对
+**Branch**: `dev`
+
+### Summary
+
+核对8位增益图与10位PQ/HLG两条HEIC路径，当前HeifWriter固定8位；RMX5010只读实测Main10硬件声明可用，尚缺真实HDR HEIC样例，未修改产品代码。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f181b8` | docs(heic): record HDR compression feasibility and device capabilities |
+
+### Testing
+
+- [OK] 已安装HeifWriter1.1.0 Builder API及官方最新HeifEncoder源码核对；手机MediaCodec列表包含硬件Main10/CQ/HDR编码器，未进行HDR图像端到端编码。
+- [OK] IMG2253无HDR增益图；读取80份手机HEIC头部未找到auxC/auxl/tmap，仅为有限检查。没有修改媒体或应用数据，没有新增或运行测试套件。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 取得真实HDR HEIC本机样例后确定增益图或10位输入类型，再实施并核对HDR显示、完整元数据及还原。
