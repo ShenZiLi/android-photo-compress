@@ -1,3 +1,5 @@
+<p align="center"><b>简体中文</b> · <a href="README.en.md">English</a></p>
+
 <h1 align="center">轻存 · Roomy</h1>
 
 <p align="center">安卓实况图片压缩 APP，让照片留得更轻。</p>
