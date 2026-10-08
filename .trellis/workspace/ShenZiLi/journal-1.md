@@ -1304,3 +1304,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 41: 介绍突出安卓实况图片压缩定位
+<!-- trellis-session: v=2 fp=19684546a4fb7ab4 -->
+
+**Date**: 2026-10-08
+**Task**: 介绍突出安卓实况图片压缩定位
+**Branch**: `dev`
+
+### Summary
+
+按用户要求，在README顶部标语与应用介绍中明确轻存（Roomy）是一款安卓实况图片压缩APP。
+
+### Main Changes
+
+- 介绍突出实况照片的本地压缩，同时保留普通图片与视频、图集浏览、筛选、批量压缩与备份还原能力；纯文案修改，无新技术规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dd3b358` | docs: highlight Android motion photo compression in introduction |
+
+### Testing
+
+- [OK] 审阅差异仅修改README顶部标语和介绍；git diff --check通过，无需应用构建。
+
+### Status
+
+[OK] **Completed**
