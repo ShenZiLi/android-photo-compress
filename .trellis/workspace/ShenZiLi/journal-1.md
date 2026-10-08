@@ -1274,3 +1274,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 等待用户提供原正式签名配置路径，再本地构建正式APK并覆盖安装及核验；当前交付仅为调试构建，安装目标尚未完成。
+
+
+## Session 40: 确定轻存英文名Roomy
+<!-- trellis-session: v=2 fp=b9462d3a658c734d -->
+
+**Date**: 2026-10-08
+**Task**: 确定轻存英文名Roomy
+**Branch**: `dev`
+
+### Summary
+
+用户选择Roomy作为轻存英文名，README标题更新为轻存 · Roomy。
+
+### Main Changes
+
+- 将README标题中的Qingcun改为Roomy；本次未涉及应用代码或发布配置，无新技术规范需补充。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c0483d2` | docs: adopt Roomy as English app name |
+
+### Testing
+
+- [OK] 检查差异仅涉及README标题一行；git diff --check通过。
+
+### Status
+
+[OK] **Completed**
