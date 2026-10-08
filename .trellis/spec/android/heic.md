@@ -4,7 +4,7 @@
 
 - HEIC/HEIF 静态照片进入普通图片候选，共用普通照片的三个档位；HEVC CQ 数值独立标定为 75/55/35，不照搬 JPEG quality。缓存逻辑版本 4 使旧版 HEIC 不支持缓存重新判类。
 - 使用 AndroidX HeifWriter 1.1.0 编码独占临时 HEIC，不改后缀、不改目录、不删除或重建原媒体 URI。
-- 当前处理 64 MiB / 2000 万像素以内的 8 位主图，支持直接 hvc1 与相同布局的 grid 主图。转换器拒绝 HDR、高位深、auxl 深度/透明图、旋转裁切属性、共享 tile、序列、外部数据引用或未知结构；拒绝发生在原片写入前。
+- 当前处理 64 MiB / 6400 万像素以内的 8 位主图，支持直接 hvc1 与相同布局的 grid 主图，并要求通过解码前内存预检。转换器拒绝 HDR、高位深、auxl 深度/透明图、旋转裁切属性、共享 tile、序列、外部数据引用或未知结构；拒绝发生在原片写入前。
 - 支持 sRGB 与 Display P3 解码空间。编码临时 bitmap 的 RGB 数值不作色域转换，重组保留原 ICC/nclx；恢复 bitmap 的原色域后与输出解码尺寸/色彩及抽样像素比较。抽样误差仅为粗大失真保护，不能冒充肉眼无损验收。
 
 ## 容器完整性
@@ -33,3 +33,12 @@
 - 未知 meta 扩展仍拒绝，提示含实际框类型，例如“HEIC 扩展结构暂不处理：xxxx”。不能直接删掉允许集检查或保留未知偏移结构后冒充完整兼容。
 
 验收基准：用户提供的 IMG_2253.HEIC（4032×2268 / 40 个 512×512 tile / Display P3）含一个本文件 URL，旧版编码前拒绝。新流程应压缩为 HEIC，dinf、EXIF、ICC、引用及非主图载荷完整保留；只处理私有副本，原样例摘要保持。真实结果及未执行边界见 [兼容验收](../../tasks/10-04-photo-compress-app/research/2026-10-08-heic-dinf.md)。不将一份样例通过推广到 HDR、外部引用或任意 HEIC。
+
+## 大尺寸 HEIC 单路与内存（0.1.38）
+
+- `HeicContainer.MAX_PIXELS=64_000_000L` 是有界结构范围，文件仍为 64 MiB，tile 仍为 1–256。文件、尺寸、像素超限分开报错，不放开 HDR/未知属性或任意网格重组。
+- `HeicCompressor.MAX_PARALLEL_PIXELS=20_000_000L` 为批次调度阈值。AppViewModel 选择中存在超过阈值或 width/height≤0 的 HEIC 时，批次并发度固定为 1，图片与视频全部走同一 Semaphore；即使加速开关开启也逐项等待。其他批次保持原策略。这里的单路是应用任务串行，Android 编码器内部线程不由本应用限制。
+- 解码前要求 `width*height*4 + sourceBytes*6 + 64MiB` 不超过 `Runtime.maxMemory - (totalMemory-freeMemory)`，否则提示可用内存不足并保留原片。估算不能保证原生编码器资源充足，设备异常仍沿用写前拒绝和失败保护。
+- 在修改源 bitmap 色域标签前保存原采样坐标的 RGB 与原色域。编码 stop/use 收尾后立即 recycle 源 bitmap，再重组/解码输出；只保留少量样本比较。尺寸、色域、采样坐标与均方误差≤1024 阈值保持，不能用缩小输出代替内存优化。
+- 采样阶段取消释放源 bitmap；编码后和输出校验阶段取消也释放当前 bitmap，不进入原片提交。内存不足、超像素范围、编码/重组/校验失败都不绕过源摘要或原地事务。
+- RMX5010 上 8192×6144/192tile/Display P3 样例三档真实编码通过，原元数据/ICC/QTI 与 190 字节尾部保持，源摘要不变。具体数据及仅编码副本的验收边界见 [大 HEIC 验收](../../tasks/archive/2026-10/10-08-large-heic-serial/research/verification.md)。

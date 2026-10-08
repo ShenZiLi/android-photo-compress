@@ -50,7 +50,9 @@ internal class HeicContainer(private val bytes: ByteArray) {
         .single().third else listOf(primaryId)
 
     init {
-        require(bytes.size <= MAX_FILE_BYTES && width > 0 && height > 0 && width.toLong() * height <= 20_000_000) { "HEIC 文件或像素过大，已保留原片" }
+        require(bytes.size <= MAX_FILE_BYTES) { "HEIC 文件超过 64 MiB，已保留原片" }
+        require(width > 0 && height > 0) { "HEIC 图像尺寸无效，已保留原片" }
+        require(width.toLong() * height <= MAX_PIXELS) { "HEIC 像素超过 6400 万，已保留原片" }
         require(top.first().type == "ftyp" && top.first().header == 8 && raw(top.first()).let {
             it.size >= 20 && String(it, 8, 4, Charsets.US_ASCII) in setOf("heic", "heix", "mif1")
         }) { "非静态 HEIC 容器" }
@@ -267,6 +269,7 @@ internal class HeicContainer(private val bytes: ByteArray) {
 
     companion object {
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
+        const val MAX_PIXELS = 64_000_000L
         private val markerUuid = UUID.fromString("45609067-7c74-4c16-b9da-99c5dd997ea3").let {
             java.nio.ByteBuffer.allocate(16).putLong(it.mostSignificantBits).putLong(it.leastSignificantBits).array()
         }
