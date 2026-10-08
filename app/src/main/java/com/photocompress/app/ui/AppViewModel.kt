@@ -1,7 +1,11 @@
 package com.photocompress.app.ui
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.app.Application
+import android.app.PendingIntent
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.photocompress.app.core.compress.CompressOutcome
@@ -54,6 +58,13 @@ data class BatchState(
     val currentVideoProgress: Float? = null,
 )
 
+/**
+ * 交给界面启动的系统回收站授权窗口。
+ *
+ * [seq] 每批自增：连续批次必须能被界面识别为新的请求，否则第二次不会再拉起窗口。
+ */
+data class TrashRequest(val seq: Long, val intent: PendingIntent)
+
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db = AppDatabase.get(app)
@@ -69,11 +80,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _batch = MutableStateFlow<BatchState?>(null)
     val batch: StateFlow<BatchState?> = _batch.asStateFlow()
 
+    private val _trashRequest = MutableStateFlow<TrashRequest?>(null)
+    val trashRequest: StateFlow<TrashRequest?> = _trashRequest.asStateFlow()
+
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
     private var writing = false
     private var compressionControl: CompressionControl? = null
+
+    /** 一次删除请求的分批状态；系统确认期间保持，直到全部批次结束。 */
+    private var trashSession: TrashSession? = null
+    private var trashSeq = 0L
 
     init {
         viewModelScope.launch {
@@ -512,6 +530,98 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------------------------------------------------------- 删除（移入系统回收站）
+
+    /**
+     * 未压缩网格：把勾选项移入**系统相册回收站**。
+     *
+     * 应用内先确认，这里只负责发起系统授权：非系统默认图库应用把媒体移入回收站，
+     * 每次都需要用户在这张系统弹窗上同意（平台规定，无法由应用跳过）。
+     * 单次请求最多携带 [TRASH_REQUEST_LIMIT] 个条目，超出按批依次请求；
+     * 取消当批即停止后续批次，已批准的批次不回退。
+     */
+    fun deleteSelected() {
+        if (writing || _batch.value != null || _ui.value.scanning) return
+        val state = _ui.value
+        // 只支持未压缩页的图片网格：目标口径与压缩完全一致（当前筛选下的勾选项）。
+        if (state.todo.level != 2) return
+        val targets = state.todoSelection().todoTargets
+        if (targets.isEmpty()) return
+        val session = TrashSession(
+            chunks = targets.map { it.uri }.chunked(TRASH_REQUEST_LIMIT),
+            paths = targets.map { it.dataPath },
+            total = targets.size,
+        )
+        trashSession = session
+        writing = true
+        _batch.value = BatchState("正在移入回收站", 0f, 0, session.total)
+        launchTrashRequest()
+    }
+
+    /** 系统授权窗口返回：`RESULT_OK` 表示本批已进入回收站，否则用户拒绝或直接返回。 */
+    fun onTrashResult(resultCode: Int) {
+        val session = trashSession
+        if (session == null) {
+            // 系统确认期间进程被回收：结果拿不到批次信息，仍然重扫一次同步相册状态。
+            if (resultCode == Activity.RESULT_OK) viewModelScope.launch { finishBatch(emptyList()) }
+            return
+        }
+        if (resultCode != Activity.RESULT_OK) {
+            finishTrash(cancelled = true)
+            return
+        }
+        session.approved += session.chunks.getOrNull(session.index)?.size ?: 0
+        session.index++
+        _batch.update {
+            it?.copy(progress = session.approved.toFloat() / session.total, done = session.approved)
+        }
+        launchTrashRequest()
+    }
+
+    /** 系统无法启动回收站确认窗口（缺少对应界面）：保留原文件，说明原因。 */
+    fun onTrashLaunchFailed(reason: String?) {
+        finishTrash(failure = "无法移入系统回收站：${reason ?: "系统不支持该请求"}")
+    }
+
+    private fun launchTrashRequest() {
+        val session = trashSession ?: return
+        val uris = session.chunks.getOrNull(session.index)
+        if (uris == null) {
+            finishTrash()
+            return
+        }
+        // 请求构造失败（条目已消失、URI 非媒体库条目等）时不再继续后续批次。
+        val request = runCatching {
+            MediaStore.createTrashRequest(getApplication<Application>().contentResolver, uris, true)
+        }.getOrElse { failure ->
+            finishTrash(failure = "无法移入系统回收站：${failure.message ?: "系统拒绝了该请求"}")
+            return
+        }
+        _trashRequest.value = TrashRequest(seq = ++trashSeq, intent = request)
+    }
+
+    /** 收尾：登记已批准数量、清空选择，并重扫让条目从网格消失。 */
+    private fun finishTrash(cancelled: Boolean = false, failure: String? = null) {
+        val session = trashSession
+        trashSession = null
+        _trashRequest.value = null
+        val count = session?.approved ?: 0
+        if (count > 0) clearSelection(AppPage.TODO)
+        val line = buildString {
+            if (count > 0) append("已将 ${formatCount(count)} 项移入系统相册回收站")
+            failure?.let { if (isNotEmpty()) append("\n"); append(it) }
+            if (isEmpty() && cancelled) append("已取消删除")
+        }
+        if (line.isNotEmpty()) _messages.trySend(line)
+        viewModelScope.launch { finishBatch(session?.paths ?: emptyList()) }
+    }
+
+    /** 一次删除请求的分批状态：每批一个系统授权窗口，逐批推进。 */
+    private class TrashSession(val chunks: List<List<Uri>>, val paths: List<String>, val total: Int) {
+        var index = 0
+        var approved = 0
+    }
+
     // ---------------------------------------------------------------- 设置
 
     fun recoverOriginal(entry: RecoveryJournal.Entry) {
@@ -658,5 +768,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         private const val TAG = "PCCompress"
+
+        /** 账本变更后，合并整库快照重建的等待窗口。 */
+        private const val LIBRARY_REBUILD_DEBOUNCE_MS = 250L
+
+        /** 单次回收站请求的条目上限：targetSdk 36（Baklava）起平台强制 2000 条。 */
+        private const val TRASH_REQUEST_LIMIT = 2000
     }
 }

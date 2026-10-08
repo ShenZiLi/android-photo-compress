@@ -3,6 +3,9 @@ package com.photocompress.app.ui
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
@@ -62,6 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -170,6 +174,24 @@ fun AppRoot(vm: AppViewModel) {
         }
     }
 
+    // 未压缩网格的删除：应用内确认后交给系统回收站授权窗口，返回结果由 ViewModel 收尾。
+    val trashRequest by vm.trashRequest.collectAsStateWithLifecycle()
+    val trashLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        vm.onTrashResult(result.resultCode)
+    }
+    // 每批只拉起一次：系统窗口是一次性 PendingIntent，重建（如旋转）后不能重复发送。
+    var launchedTrashSeq by rememberSaveable { mutableStateOf(0L) }
+    LaunchedEffect(trashRequest) {
+        val request = trashRequest ?: return@LaunchedEffect
+        if (request.seq == launchedTrashSeq) return@LaunchedEffect
+        launchedTrashSeq = request.seq
+        // 等应用内确认弹窗退场后再拉起系统窗口，避免两个弹窗叠在一起。
+        if (motionEnabled) delay(AppMotion.Exit.toLong())
+        runCatching {
+            trashLauncher.launch(IntentSenderRequest.Builder(request.intent.intentSender).build())
+        }.onFailure { vm.onTrashLaunchFailed(it.message) }
+    }
+
     // 进度/当前文件更新不改变媒体选择，避免每次批次反馈重新分组整个图库。
     val todoSummary = remember(state) { state.todoSelection() }
     val doneSummary = remember(state) { state.doneSelection() }
@@ -248,6 +270,16 @@ fun AppRoot(vm: AppViewModel) {
                             onSelectAll = { vm.selectAllItems(AppPage.TODO) },
                             onToggleItem = { vm.toggleItem(AppPage.TODO, it) },
                             onShowInfo = { item -> sheet = todoSheet(item, state.recoveryEntries.firstOrNull { it.matches(item.dataPath, item.uri.toString()) }) },
+                            onDeleteSelected = {
+                                dialog = DialogData(
+                                    title = "删除所选",
+                                    body = "将把所选${enumerateCounts(todoSummary.kindCounts)}移入系统相册回收站，可在系统相册的「最近删除」中恢复，系统保留期结束后自动永久删除。",
+                                    okLabel = "删除",
+                                    danger = true,
+                                    onConfirm = { vm.deleteSelected() },
+                                )
+                            },
+                            busy = batch != null,
                         )
                     }
 

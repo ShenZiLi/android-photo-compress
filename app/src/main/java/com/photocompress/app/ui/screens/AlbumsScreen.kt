@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import com.photocompress.app.ui.components.GlassIconButton as IconButton
@@ -281,6 +282,8 @@ fun TodoLevel2(
     onSelectAll: () -> Unit,
     onToggleItem: (Long) -> Unit,
     onShowInfo: (MediaItem) -> Unit,
+    onDeleteSelected: () -> Unit,
+    busy: Boolean,
 ) {
     val album: AlbumTodoUi? = state.albumTodoAll().firstOrNull { it.name == level.album }
     if (album == null) {
@@ -291,6 +294,7 @@ fun TodoLevel2(
     val filtered = album.items.applyTodoFilter(level.filter)
     val actionable = filtered.filter { it.compressible }
     val allSelected = actionable.isNotEmpty() && actionable.all { it.id in level.pickedItems }
+    val pickedCount = actionable.count { it.id in level.pickedItems }
 
     Column(modifier = Modifier.fillMaxSize()) {
         AppBar(
@@ -300,6 +304,12 @@ fun TodoLevel2(
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回图集列表") } },
             navigationSpacing = 12.dp,
             actions = {
+                // 删除只在勾选后可用：目标与压缩共用同一勾选口径，不支持 / 待恢复项不参与。
+                DeleteSelectedAction(
+                    enabled = pickedCount > 0 && !busy,
+                    onClick = onDeleteSelected,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
                 SelectAllAction(allSelected = allSelected, enabled = actionable.isNotEmpty(), onClick = onSelectAll, modifier = Modifier.padding(end = 12.dp))
             },
         )
@@ -581,5 +591,21 @@ private fun SelectAllAction(
 ) {
     IconButton(onClick = onClick, enabled = enabled, modifier = modifier.semantics { selected = allSelected }) {
         Icon(Icons.Filled.CheckCircle, contentDescription = if (allSelected) "取消全选" else "全选")
+    }
+}
+
+/** 未压缩网格：删除所选（移入系统相册回收站），与回收站清空共用同一删除语义与危险色。 */
+@Composable
+private fun DeleteSelectedAction(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        Icon(
+            Icons.Filled.Delete,
+            contentDescription = "删除所选",
+            tint = if (enabled) MaterialTheme.appColors.danger else MaterialTheme.appColors.onSurfaceMuted,
+        )
     }
 }

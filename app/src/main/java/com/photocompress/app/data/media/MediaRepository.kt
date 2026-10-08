@@ -44,6 +44,7 @@ class MediaRepository(
         MediaStore.MediaColumns.DATE_MODIFIED,
         MediaStore.MediaColumns.WIDTH,
         MediaStore.MediaColumns.HEIGHT,
+        MediaStore.MediaColumns.IS_TRASHED,
     )
 
     private val videoProjection = arrayOf(
@@ -60,6 +61,7 @@ class MediaRepository(
         MediaStore.MediaColumns.DATE_MODIFIED,
         MediaStore.MediaColumns.WIDTH,
         MediaStore.MediaColumns.HEIGHT,
+        MediaStore.MediaColumns.IS_TRASHED,
     )
 
     /** 增量对比只读轻量列，不做文件 IO。 */
@@ -68,6 +70,7 @@ class MediaRepository(
         MediaStore.MediaColumns.DATA,
         MediaStore.MediaColumns.DATE_ADDED,
         MediaStore.MediaColumns.DATE_MODIFIED,
+        MediaStore.MediaColumns.IS_TRASHED,
     )
 
     // ------------------------------------------------------------ 全量扫描
@@ -131,6 +134,9 @@ class MediaRepository(
         val out = HashMap<String, CacheSnapshot>()
         context.contentResolver.query(uri, fingerprintProjection, null, null, null)?.use { c ->
             while (c.moveToNext()) {
+                // 已进系统回收站的条目按「已移除」处理：缓存随之删除，列表不再显示。
+                // 部分 ROM 的默认查询仍会返回回收站条目，这里不依赖平台行为。
+                if (c.getInt(COL_FINGERPRINT_TRASHED) == 1) continue
                 val id = c.getLong(0)
                 val path = c.getString(1) ?: continue
                 if (path.isBlank()) continue
@@ -183,6 +189,8 @@ class MediaRepository(
     }
 
     private fun parseImageRow(c: Cursor, out: MutableList<MediaItem>) {
+        // 已进系统回收站的条目不再进入媒体库（不显示在未压缩 / 已压缩页）
+        if (c.getInt(COL_TRASHED) == 1) return
         val id = c.getLong(0)
         val path = c.getString(1) ?: return
         if (path.isBlank()) return
@@ -239,6 +247,8 @@ class MediaRepository(
     }
 
     private fun parseVideoRow(c: Cursor, out: MutableList<MediaItem>) {
+        // 已进系统回收站的条目不再进入媒体库（不显示在未压缩 / 已压缩页）
+        if (c.getInt(COL_TRASHED) == 1) return
         val id = c.getLong(0)
         val path = c.getString(1) ?: return
         if (path.isBlank()) return
@@ -315,6 +325,12 @@ class MediaRepository(
     private companion object {
         const val ID_CHUNK = 800
         const val DB_CHUNK = 500
+
+        /** 图片 / 视频投影末列：[MediaStore.MediaColumns.IS_TRASHED]。 */
+        const val COL_TRASHED = 13
+
+        /** 指纹投影末列：[MediaStore.MediaColumns.IS_TRASHED]。 */
+        const val COL_FINGERPRINT_TRASHED = 4
     }
 }
 
