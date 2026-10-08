@@ -13,6 +13,6 @@
 - assembleDebug 成功（5 秒），确认当前依赖支持该绘制参数。
 - 最终 APK 包名 com.photocompress.app，versionName 0.1.34，versionCode 35；apksigner 验证通过，沿用当前真机调试签名。
 - RMX5010 从 0.1.33/code34 覆盖安装返回 Success；读回 0.1.34/code35，MainActivity 冷启动 Status: ok，TotalTime 1005 ms。
-- 手机随后处于密码锁屏，尚未完成修复后进度条的真机视觉核对；未把源码与构建检查当作截图验收。
+- 启动后手机处于密码锁屏；用户确认已解锁后，ADB 已查不到设备，USB 再次断开。尚未完成修复后进度条的真机视觉核对，未把源码与构建检查当作截图验收。
 - 差异检查通过。本次仅改两个绘制参数及版本、规范、任务记录，未新增或运行测试套件，未重跑全量 Lint。上一轮全量 Lint 的两项 VideoTranscoder WrongConstant 既有错误不在本次范围。
 - 未卸载/清空应用数据，未执行个人媒体压缩、还原或回收站清理；原始诊断 XML 仅保存在忽略目录 .tmp-device/。

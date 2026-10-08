@@ -1403,3 +1403,38 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 
 - 真机授权返回时延、首次提醒确认后的重启及普通前后台切换尚未复验，安装后USB连接再次断开。
 - 全量lintDebug未通过：未修改的VideoTranscoder第358/377行两项既有WrongConstant错误；32条警告及1条提示，未新增或运行测试套件。
+
+
+## Session 44: 0.1.34统一移除进度条末端圆点
+<!-- trellis-session: v=2 fp=f89459a54b79cf1a -->
+
+**Date**: 2026-10-08
+**Task**: 0.1.34统一移除进度条末端圆点
+**Branch**: `dev`
+
+### Summary
+
+首页扫描和压缩/还原共用批次进度条关闭Material3默认终点圆点，保留真实进度和原样式；0.1.34/code35覆盖安装到RMX5010，版本读回及启动通过，截图复核因解锁后USB再次断开待完成。
+
+### Main Changes
+
+- 仅在两个确定进度条调用传入drawStopIndicator={}，未知总数等待条和统计对比图保留原行为；更新版本、任务和UI规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8c8671d` | fix(ui): remove terminal dots from all determinate progress bars |
+
+### Testing
+
+- [OK] assembleDebug成功（5秒），签名/包名/0.1.34-code35核对通过；覆盖安装Success，真机读回版本并冷启动Status ok（1005ms）。
+- [OK] 图谱和源调用检查覆盖应用的三处进度控件调用，确定进度条均关闭终点标记；git diff --check通过。未新增或运行测试套件，未重跑全量Lint。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机截图复核尚未完成：锁屏后用户已解锁，但USB再次断开。未操作个人媒体压缩、还原或清理。
