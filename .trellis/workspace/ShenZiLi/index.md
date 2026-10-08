@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 37
-- **Last Active**: 2026-10-07
+- **Total Sessions**: 38
+- **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1213 | Active |
+| `journal-1.md` | ~1243 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 38 | 2026-10-08 | 精简README功能概览与英文名建议 | `9214d3e` | `dev` |
 | 37 | 2026-10-07 | 回收站支持确认后删除成功备份 | `5a03e89` | `master` |
 | 36 | 2026-10-07 | HEIC原格式压缩与安全回滚 | `890b0fe` | `master` |
 | 35 | 2026-10-07 | 轻存0.1.30真机安装 | `f4d88b9` | `master` |

@@ -1211,3 +1211,33 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Next Steps
 
 - 本地完成后将代码与会话记录一并推送origin/master，确认远端提交；真机删除流程待用户安装验收。
+
+
+## Session 38: 精简README功能概览与英文名建议
+<!-- trellis-session: v=2 fp=00feccb1ac020fd4 -->
+
+**Date**: 2026-10-08
+**Task**: 精简README功能概览与英文名建议
+**Branch**: `dev`
+
+### Summary
+
+将可以做什么版块从9条精简为6条；建议英文名LiteKeep（Lite呼应轻、Keep呼应存），作为建议保留，尚未改动现有名称。
+
+### Main Changes
+
+- 仅修改README功能概览，保留压缩类型、质量档位、批量筛选、跳过无收益、备份期限与取消行为。纯文档修改，无新技术规范需补充。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9214d3e` | docs: simplify README feature overview |
+
+### Testing
+
+- [OK] git diff --check通过；内容对比确认只修改目标版块，其他README内容一致；无需应用构建。
+
+### Status
+
+[OK] **Completed**
