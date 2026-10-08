@@ -1334,3 +1334,36 @@ MPF 提示调整为含2图 MPF 多图结构，本版本不处理。跳过原因�
 ### Status
 
 [OK] **Completed**
+
+
+## Session 42: 轻存0.1.32调试APK真机安装完成
+<!-- trellis-session: v=2 fp=a146e3da9e51f4dc -->
+
+**Date**: 2026-10-08
+**Task**: 轻存0.1.32调试APK真机安装完成
+**Branch**: `dev`
+
+### Summary
+
+RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户完成手机端安装确认后，重新连接核对版本及启动正常。
+
+### Main Changes
+
+- 安装前系统已查不到com.photocompress.app安装记录，因此使用上轮本地构建的调试APK安装；没有执行卸载或清空数据操作。
+
+### Git Commits
+
+本节部署记录和工作区索引随本次本地文档提交保存。
+
+### Testing
+
+- [OK] 手机安装引导期间连接曾断开，ADB安装未返回Success；用户确认已安装后重新连接读取versionName=0.1.32/versionCode=33及DEBUGGABLE，确认实际安装成功。
+- [OK] MainActivity启动Status: ok，耗时269ms，应用进程存在（PID15725）；git diff --check通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户自行验证功能；本次仅安装与启动核验，未操作个人照片的压缩、还原或清理。
