@@ -1,192 +1,200 @@
-<p align="center"><b>简体中文</b> · <a href="README.en.md">English</a></p>
-
-<h1 align="center">轻存 · Roomy</h1>
-
-<p align="center">安卓实况图片压缩 APP，让照片留得更轻。</p>
+<p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 <p align="center">
-  <a href="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml"><img src="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml/badge.svg" alt="Android 发布状态"></a>
-  <img src="https://img.shields.io/badge/Android-11%2B-3DDC84?logo=android&logoColor=white" alt="Android 11 及以上">
+  <img src="docs/assets/logo.svg" width="112" height="112" alt="Roomy 轻存">
+</p>
+
+<h1 align="center">Roomy · 轻存</h1>
+
+<p align="center">Local motion photo compression for Android. Keep your memories, use less space.</p>
+
+<p align="center">
+  <a href="https://github.com/ShenZiLi/android-photo-compress/releases/latest"><img src="https://img.shields.io/github/v/release/ShenZiLi/android-photo-compress?label=release&amp;color=cc785c" alt="Latest release"></a>
+  <img src="https://img.shields.io/github/downloads/ShenZiLi/android-photo-compress/total?label=downloads&amp;color=cc785c" alt="Total downloads">
+  <a href="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml"><img src="https://github.com/ShenZiLi/android-photo-compress/actions/workflows/release.yml/badge.svg" alt="Android release status"></a>
+  <img src="https://img.shields.io/badge/Android-11%2B-3DDC84?logo=android&amp;logoColor=white" alt="Android 11 and above">
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4" alt="Jetpack Compose">
 </p>
 
 <p align="center">
-  <a href="https://github.com/ShenZiLi/android-photo-compress/releases/latest"><b>下载安卓 APK</b></a> ·
-  <a href="#核心页面">核心页面</a> ·
-  <a href="#格式与兼容性">格式与兼容性</a> ·
-  <a href="#构建与发布">构建与发布</a>
+  <a href="https://github.com/ShenZiLi/android-photo-compress/releases/latest"><b>Download APK</b></a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#formats-and-compatibility">Compatibility</a> ·
+  <a href="#build-and-release">Build &amp; release</a>
 </p>
 
-轻存（Roomy）是一款安卓实况图片压缩 APP，主打实况照片的本地压缩，也支持普通图片与视频。支持图集浏览、筛选、批量压缩与备份还原，用液态玻璃界面展示媒体占用与已省空间。
+Roomy (轻存) is an Android app focused on compressing motion photos locally, with support for regular photos and videos. Browse albums, filter media, compress in batches, and restore originals from backups. Its liquid glass interface shows media storage usage and space saved.
 
-应用采用**有损压缩**。图片质量、视频码率与最终收益取决于文件内容、原始编码及设备能力，不承诺所有素材都能获得固定压缩率或完全无感的画质变化。
+The app uses **lossy compression**. Image quality, video bitrate, and storage savings depend on the content, original encoding, and device capabilities. A fixed compression ratio or an imperceptible change in quality is not guaranteed for every file.
 
-## 可以做什么
+## Features
 
-- **压缩图片、实况和视频**，可选将符合条件的 PNG 转为 JPEG。
-- **按类型设置质量**，提供高质量、平衡、更省空间三档，实况的图片与视频段可分别调整。
-- **按图集或单项批量处理**，支持类型筛选、全选与取消全选。
-- **避免重复压缩**，无体积收益的图片保留原片，归入“已压缩”并标记“已跳过”。
-- **删除所选**，未压缩页勾选后可从网格批量移入系统相册回收站，原片仍可在系统相册的“最近删除”中找回。
-- **备份与还原**，原片默认保留 30 天，支持按图片或图集还原；备份到期或清理后无法再还原。
-- **全程本地处理**，无需联网；可随时取消队列，仅回退当前项，保留已完成的结果与备份。
+- **Compress photos, motion photos, and videos**, with optional conversion of eligible PNG files to JPEG.
+- **Set quality by media type** using High Quality, Balanced, or Save More Space presets. Adjust the image and video portions of motion photos independently.
+- **Process albums or individual items in batches**, with type filters, Select All, and Deselect All.
+- **Avoid repeated compression.** Photos with no size reduction keep their originals and appear under “Compressed” with a “Skipped” label.
+- **Delete selected items.** Select media in the “Uncompressed” grid and move it to the system gallery's trash in batches. Originals remain recoverable from the system gallery's “Recently Deleted” section.
+- **Back up and restore originals.** Backups are kept for 30 days by default, with restoration by photo or album. Restoration is unavailable once the backup expires or is cleared.
+- **Process everything locally**, without an internet connection. Cancel a queue at any time: only the current item is rolled back, while completed results and their backups are kept.
 
-## 核心页面
+## Screenshots
 
-> 以下均为 **Android 16 / API 36 本地安卓虚拟机的真实截图**，分辨率 720 × 1600，来自 0.1.18 同源构建。图中的 Forest、Urban、Studio 为演示图集，媒体由本地程序合成，没有真实人物、地点或个人照片。图中数字来自应用实际扫描与压缩结果；不同截图展示流程中的不同阶段。
+> These are **actual screenshots from a local Android 16 / API 36 emulator**, at 720 × 1600 resolution, captured from a build using the same source as version 0.1.18. Forest, Urban, and Studio are demo albums with locally generated media; they contain no real people, places, or personal photos. The numbers come from actual scans and compression results. Different screenshots show different stages of the workflow.
 
-### 1. 总览 → 图集 → 图片网格
-
-<table>
-  <tr>
-    <th>首页总览</th>
-    <th>未压缩图集</th>
-    <th>图片网格与多选</th>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/01-home.png" width="240" alt="轻存首页：图片、实况、视频占用比例，已省空间与数量占用对比"></td>
-    <td><img src="docs/screenshots/02-albums.png" width="240" alt="未压缩一级页面：图集封面、项数、体积与可压缩数量"></td>
-    <td><img src="docs/screenshots/03-photo-grid.png" width="240" alt="图片网格二级页面：类型筛选、全选按钮、选中状态与底部压缩操作"></td>
-  </tr>
-</table>
-
-- **首页**：查看图片、实况、视频各自占用，已省空间，以及未压缩与已压缩的数量、占用对比。右上角可重新扫描。
-- **图集列表**：用四张缩略图预览图集，显示总项数、体积和可处理数量。点封面进入网格，点圆形选择控件选择图集。
-- **图片网格**：支持图片、实况、视频及不支持项筛选。点图片勾选，长按查看详情；底部始终显示当前选择与操作按钮。顶栏在“全选”左侧提供删除入口，勾选后确认即可移入系统相册回收站。
-
-### 2. 确认压缩 → 查看结果 → 按需还原
+### 1. Overview → Albums → Media grid
 
 <table>
   <tr>
-    <th>压缩前确认</th>
-    <th>已压缩与还原</th>
-    <th>媒体信息</th>
+    <th>Home overview</th>
+    <th>Uncompressed albums</th>
+    <th>Media grid and selection</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/09-compress-confirm.png" width="240" alt="压缩确认弹窗，按媒体类型汇总待处理数量"></td>
-    <td><img src="docs/screenshots/04-compressed.png" width="240" alt="已压缩图片网格，展示压缩前后体积与批量还原入口"></td>
-    <td><img src="docs/screenshots/08-media-info.png" width="240" alt="长按媒体的信息面板：文件名、类型、图集、大小、拍摄时间与尺寸"></td>
+    <td><img src="docs/screenshots/01-home.png" width="240" alt="Home: storage usage by photos, motion photos, and videos, space saved, and item count and size comparisons"></td>
+    <td><img src="docs/screenshots/02-albums.png" width="240" alt="Uncompressed albums: covers, item counts, total size, and compressible item counts"></td>
+    <td><img src="docs/screenshots/03-photo-grid.png" width="240" alt="Media grid: type filters, Select All, selected items, and the bottom compression action"></td>
   </tr>
 </table>
 
-压缩前按类型核对选择，确认后显示真实处理进度与结果。无法安全处理、没有体积收益或不满足完整性条件的项目会跳过，并保留原文件。
+- **Home:** View storage usage for photos, motion photos, and videos, space saved, and counts and sizes for uncompressed and compressed media. Rescan using the top-right button.
+- **Albums:** Preview each album with four thumbnails and see its total item count, size, and eligible item count. Tap the cover to open the grid or the circular selection control to select the album.
+- **Media grid:** Filter photos, motion photos, videos, and unsupported items. Tap an item to select it or long-press for details. The bottom bar shows the current selection and available actions. The delete control sits to the left of “Select All” in the top bar; confirm deletion to move selected items to the system gallery's trash.
 
-“已压缩”页同样采用图集 → 图片网格结构。网格展示已知的压缩前、压缩后体积；有可用备份的项目才能勾选还原。仅通过文件标记识别出的媒体可显示为已压缩，但没有账本和备份时无法恢复原始版本。
-
-媒体信息面板展示文件名、类型、图集、体积、拍摄时间、尺寸及可处理状态；不支持项还会显示跳过原因。
-
-### 3. 设置 → 压缩比例 → 回收站
+### 2. Confirm compression → Review results → Restore as needed
 
 <table>
   <tr>
-    <th>设置</th>
-    <th>独立质量档位</th>
-    <th>回收站</th>
+    <th>Compression confirmation</th>
+    <th>Compressed media and restoration</th>
+    <th>Media details</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/05-settings.png" width="240" alt="设置页：压缩比例、图集过滤、回收站与文件访问权限"></td>
-    <td><img src="docs/screenshots/06-quality.png" width="240" alt="压缩比例页：图片、实况图片段、实况视频段与视频分别设置档位"></td>
-    <td><img src="docs/screenshots/07-recycle-bin.png" width="240" alt="回收站：原始备份、剩余保留时间及清理入口"></td>
+    <td><img src="docs/screenshots/09-compress-confirm.png" width="240" alt="Compression confirmation dialog summarizing selected items by media type"></td>
+    <td><img src="docs/screenshots/04-compressed.png" width="240" alt="Compressed media grid showing original and compressed sizes and batch restoration"></td>
+    <td><img src="docs/screenshots/08-media-info.png" width="240" alt="Media details: filename, type, album, size, capture time, and dimensions"></td>
   </tr>
 </table>
 
-先用平衡档观察效果，再按需求调整。实况照片可以保留较高的主图质量，同时提高视频段的压缩程度。
+Review the selection by media type before starting. After confirmation, the app shows actual processing progress and results. Items that cannot be processed safely, offer no size reduction, or fail integrity requirements are skipped, and the original files are kept.
 
-回收站保存压缩前的原始文件，默认保留 30 天。右上角删除按钮可清理全部备份，操作前有永久删除确认；清理后已压缩文件仍然保留。回收站、压缩比例和图集过滤均属于设置的二级页面，返回时回到设置。上述截图记录 0.1.18 的页面，右上角删除入口自 0.1.19 起提供。
+The “Compressed” page also follows an albums → media grid structure. The grid shows known original and compressed sizes; only items with available backups can be selected for restoration. Media detected solely through an embedded file marker may appear as compressed, but cannot be restored to its original version without a ledger record and backup.
 
-**0.1.32 手动清理：** 确认永久删除后，回收站中的成功备份即使对应照片已移动、删除或大小变化，也允许清理。删除后不能再通过这些备份还原，现有照片不改写。自动到期清理仍执行安全检查，未完成恢复任务引用的备份继续保留。
+The media details panel shows the filename, type, album, size, capture time, dimensions, and processing eligibility. Unsupported items also show the reason they are skipped.
 
-**0.1.26 失败回滚：** 改写前持久记录原片备份，失败时撤销本次压缩登记、回滚原片和相册记录，失败照片留在未压缩页。完整回滚后清理本次临时备份；仍未恢复完整的项目显示“处理失败”，可从照片详情重试恢复，并继续保护原片备份。回收站只展示成功压缩的备份，已移除“找回照片”及失败恢复板块。来源不明的旧备份仍保留在应用私有目录，不会因移除板块而删除。
+### 3. Settings → Quality presets → Recycle bin
 
-首页“已省”统计媒体文件的体积缩减，**不包含原始备份占用**。备份保留期间，手机上同时存在压缩文件与原始备份，实际可用空间可能暂时减少；备份清理后才能释放相应空间。
+<table>
+  <tr>
+    <th>Settings</th>
+    <th>Independent quality presets</th>
+    <th>Recycle bin</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-settings.png" width="240" alt="Settings: compression quality, album filtering, recycle bin, and file access permission"></td>
+    <td><img src="docs/screenshots/06-quality.png" width="240" alt="Quality presets for photos, motion photo images, motion photo videos, and regular videos"></td>
+    <td><img src="docs/screenshots/07-recycle-bin.png" width="240" alt="Recycle bin: original backups, remaining retention time, and cleanup controls"></td>
+  </tr>
+</table>
+
+Start with Balanced and adjust after reviewing the results. For motion photos, you can retain higher image quality while compressing the video portion more aggressively.
+
+The app's recycle bin stores originals from before compression for 30 days by default. The top-right delete button clears all backups after a permanent-deletion confirmation; compressed files remain. The recycle bin, quality presets, and album filters are subpages of Settings, and navigating back returns to Settings. These screenshots show version 0.1.18; the top-right delete control was added in 0.1.19.
+
+**Manual cleanup in 0.1.32:** After permanent-deletion confirmation, backups from successful compression can be cleared even if the associated photo has moved, been deleted, or changed size. Those backups can no longer be used for restoration, and existing photos are not rewritten. Automatic expiry cleanup still performs safety checks, and backups referenced by unfinished recovery tasks remain protected.
+
+**Failure rollback in 0.1.26:** The original backup is durably recorded before a file is rewritten. On failure, the app removes the current compression record and rolls back the original file and gallery record. Failed photos stay under “Uncompressed.” Temporary backups for the attempt are cleared after a complete rollback. Items that have not been fully recovered show “Processing failed”; recovery can be retried from photo details, and their original backups remain protected. The recycle bin shows only backups from successful compression. The “Find Photos” and failed-recovery sections have been removed; legacy backups of unknown origin remain in the app's private directory and are not deleted by that removal.
+
+The home page's “Saved” figure measures the reduction in media file size and **does not include original backup storage**. While backups are retained, the phone holds both the compressed files and their originals, so available storage may temporarily decrease. Clearing backups releases the corresponding space.
 
 <details>
-  <summary><b>展开查看：图集过滤与实况筛选</b></summary>
+  <summary><b>More screenshots: album filtering and motion photo filtering</b></summary>
   <br>
   <table>
-    <tr><th>图集过滤</th><th>实况筛选</th></tr>
+    <tr><th>Album filtering</th><th>Motion photo filtering</th></tr>
     <tr>
-      <td><img src="docs/screenshots/10-album-filter.png" width="260" alt="图集过滤页，用开关控制图集是否出现在未压缩与已压缩页面"></td>
-      <td><img src="docs/screenshots/11-live-photo.png" width="260" alt="实况筛选后的网格，保留实况标识与当前选择范围"></td>
+      <td><img src="docs/screenshots/10-album-filter.png" width="260" alt="Album filters controlling visibility on the Uncompressed and Compressed pages"></td>
+      <td><img src="docs/screenshots/11-live-photo.png" width="260" alt="Filtered motion photo grid with motion indicators and the current selection"></td>
     </tr>
   </table>
 </details>
 
-### 动效与操作反馈
+### Motion and interaction feedback
 
-页面进入和返回使用短方向过渡；导航、按钮、多选、筛选和质量档位使用轻量反馈；提示与确认弹窗自然进入、退出。常用反馈为 120–150ms，页面过渡为 220ms，业务操作即时执行。
+Pages use short directional transitions when opening or returning. Navigation, buttons, selection, filters, and quality presets provide subtle feedback, while notices and confirmation dialogs animate in and out. Common feedback lasts 120–150 ms, and page transitions last 220 ms. Business operations start immediately.
 
-类型菜单的动效贴合紧凑胶囊，列表只对位置变化做短过渡；数字即时更新，进度平滑展示真实任务值。新增动效支持系统关闭动画、节电及原生键盘输入模式下的即时回退。
+The type menu's animation follows its compact capsule shape, and lists use short transitions only for position changes. Numbers update immediately, while progress smoothly reflects actual task values. New animations fall back to immediate updates when system animations are disabled, in power-saving mode, or in native keyboard input mode.
 
-## 怎么使用
+## Getting started
 
-1. 从 [Releases](https://github.com/ShenZiLi/android-photo-compress/releases/latest) 下载 `qingcun-v*.apk` 并安装。
-2. 根据应用引导授予“所有文件访问”权限，用于读取媒体、原地改写和还原。
-3. 在“设置 → 压缩比例”选择各类型档位；需要隐藏某些图集时，在“图集过滤”中关闭它们。
-4. 在“未压缩”页选择图集或图片，核对确认弹窗，开始压缩。
-5. 在“已压缩”页查看体积变化；在备份有效期内选择项目并还原。
+1. Download `qingcun-v*.apk` from [Releases](https://github.com/ShenZiLi/android-photo-compress/releases/latest) and install it.
+2. Follow the app's instructions to grant “All files access,” which is used to read media, rewrite files in place, and restore originals.
+3. Choose quality presets for each media type under Settings → Compression Quality. To hide albums, disable them under Album Filters.
+4. Select albums or individual items on the “Uncompressed” page, review the confirmation dialog, and start compression.
+5. Review size changes on the “Compressed” page. Restore selected items while their backups are still available.
 
-**先用备份副本确认设备兼容性。** Releases 提供固定正式签名 APK、下载文件 SHA-256 和公开签名证书指纹。同一签名的后续版本可覆盖升级；正式签名 APK 不能直接覆盖其他签名的调试版。旧版还持有恢复备份时，不要为了切换签名直接卸载它：应用没有启用系统应用数据备份。
+**Check device compatibility using backup copies first.** Releases include an APK signed with a consistent release key, a SHA-256 checksum for the download, and the public signing certificate fingerprint. Later versions with the same signature can be installed as updates. A release APK cannot directly update a debug build signed with a different key. If an older installation still holds recovery backups, do not uninstall it merely to change signatures: system app data backup is disabled.
 
-## 格式与兼容性
+## Formats and compatibility
 
-最低 Android 11 / API 30，当前编译与目标 SDK 为 36。首批参考设备为 **真我 GT7 Pro / Android 16**；用户将系统称为 ColorOS 16，具体行为以设备固件、编码器及原厂相册为准。
+Requires Android 11 / API 30 or later. The current compile and target SDK is 36. The initial reference device is the **realme GT7 Pro running Android 16**. The user refers to its system as ColorOS 16; actual behavior depends on the device firmware, codecs, and stock gallery.
 
-| 类型 | 当前处理方式与边界 |
+| Format or media type | Current behavior and limits |
 | --- | --- |
-| JPEG 图片 | 按档位重编码，搬运 EXIF / XMP 等已支持元信息；不满足完整性或收益条件时跳过 |
-| 实况照片 | 识别 Google Motion Photo 与已适配的 oplus / realme 布局，重建相关长度、偏移与标记；已识别的增益图与厂商私有段按策略保留 |
-| HEIC / HEIF | 0.1.31 起支持可安全解析的 8 位静态主图原格式压缩，保留 `.heic` 路径及原始元数据；HDR、深度/透明、序列及未知结构保留原片并说明原因 |
-| PNG | 可选转 JPEG，默认关闭。支持 8 位与 16 位静态 PNG，16 位转 JPEG 会降为 8 位且不可逆；大图保持原尺寸并串行处理，透明区域铺白，JPEG 重名自动追加数字。APNG、1/2/4 位低色深或不满足完整性条件时保留原片，原 PNG 备份可还原 |
-| MP4 视频 | 通过设备编解码器转码；输出编码依设备能力选用，保留已支持的音频、容器与相机元信息 |
-| 10bit / HDR 视频 | “保真或跳过”：需具备相应编码能力并通过输出校验，不静默降级为 SDR |
-| 多图 MPF JPEG | 0.1.25 起按全部索引处理两图、三图、四图、五图及更多图：压缩外层主图，所有附加图（含 HDR 增益图、内嵌 Original）、填充和厂商尾部原样保留，重建各 MPF 偏移；索引或图像边界无法安全解析时保留原片 |
-| 多图实况 | MPF 三图及以上实况使用主图压缩路径，内嵌原始照片、视频和尾部原样保留，避免破坏关联结构；这一类只应用实况图片段档位，视频段档位不改变原样保留的视频 |
-| 其他图片与视频容器 | GIF、WebP、BMP、AVIF、RAW/DNG、MOV 等当前按不支持处理 |
+| JPEG photos | Re-encoded using the chosen preset, with supported EXIF, XMP, and other metadata carried over. Skipped if integrity or size-reduction requirements are not met. |
+| Motion photos | Recognizes Google Motion Photo and adapted oplus / realme layouts, rebuilding the relevant lengths, offsets, and markers. Recognized gain maps and vendor-private segments are preserved according to the applicable policy. |
+| HEIC / HEIF | Since 0.1.31, safely parseable 8-bit static primary images can be compressed in their original format, preserving the `.heic` path and original metadata. HDR, depth/transparency, sequences, and unknown structures retain their originals with a skip reason. |
+| PNG | Optional conversion to JPEG, disabled by default. Supports 8-bit and 16-bit static PNG; converting 16-bit PNG to JPEG irreversibly reduces it to 8-bit. Large images retain their dimensions and are processed serially. Transparent areas are filled with white, and filename collisions receive a numeric suffix. APNG, 1/2/4-bit images, and files that fail integrity requirements keep their originals. Original PNG backups can be restored. |
+| MP4 videos | Transcoded using device codecs. The output codec depends on device capabilities; supported audio, container information, and camera metadata are retained. |
+| 10-bit / HDR videos | Preserve fidelity or skip: the device must have suitable encoding capabilities, and the output must pass validation. No silent downgrade to SDR. |
+| Multi-image MPF JPEG | Since 0.1.25, handles all indexed images in files containing two, three, four, five, or more images. Compresses the outer primary image, preserves all additional images (including HDR gain maps and embedded originals), padding, and vendor trailers unchanged, and rebuilds MPF offsets. If indexes or image boundaries cannot be parsed safely, the original is kept. |
+| Multi-image motion photos | MPF motion photos with three or more images use primary-image compression. Embedded original photos, video, and trailers remain unchanged to protect their relationships. Only the motion photo image preset applies; the video preset does not alter the preserved video. |
+| Other image and video containers | GIF, WebP, BMP, AVIF, RAW/DNG, MOV, and other formats are currently treated as unsupported. |
 
-**实况兼容性是设备和样本级结论。** GT7 Pro 上的原厂相册动态及声音播放已由使用者确认修复成功；模拟器截图只展示应用页面，不能证明其他厂商相册、所有实况变体或 HDR 观感均兼容。
+**Motion photo compatibility is specific to the device and samples tested.** The user has confirmed that animation and audio playback in the GT7 Pro's stock gallery were successfully fixed. Emulator screenshots demonstrate the app's pages; they do not establish compatibility with other vendors' galleries, every motion photo variant, or HDR appearance.
 
-### 路径、元数据和时间
+### Paths, metadata, and timestamps
 
-路径不变、拍摄时间、MediaStore 日期、文件系统创建与修改时间、元数据完整性及防重复处理，都是项目的完整性目标。它们并不是“相册排序没有变化”的同义词。
+Preserving paths, capture times, MediaStore dates, filesystem creation and modification times, metadata integrity, and protection against repeated processing are all integrity goals. Unchanged gallery ordering alone does not establish that these goals are met.
 
-- JPEG、已适配实况、可处理 HEIC 和 MP4 使用备份 → 临时结果 → 校验 → 原地写入 → 时间及媒体库恢复的处理流程，失败时尝试回滚。
-- 当前已有文件修改时间及部分 MediaStore 日期恢复能力；**尚未对所有 Android 文件系统保证创建时间完整保留**，早期模拟器 FUSE 场景已发现限制。
-- 0.1.21 已停止 HEIC → JPEG 转换，避免格式/日期恢复失败造成原片消失。旧版转换产物还原时保留 JPEG 副本，直到用户自行核对。
-- 不把结构自校验、编码器支持或模拟器运行成功当作所有设备完整性验收通过。
+- JPEG, adapted motion photos, eligible HEIC, and MP4 follow a backup → temporary output → validation → in-place write → timestamp and media-library restoration workflow, with rollback attempted on failure.
+- File modification times and some MediaStore dates can currently be restored. **Complete preservation of creation times is not guaranteed across all Android filesystems**; limitations were found in an early emulator FUSE environment.
+- HEIC → JPEG conversion was discontinued in 0.1.21 to avoid original files disappearing after format or date restoration failures. When restoring older conversion results, the JPEG copy is kept until the user checks it.
+- Structural self-checks, codec support, and successful emulator runs do not establish full integrity validation on every device.
 
-### 压缩速度与取消
+### Compression performance and cancellation
 
-0.1.19 将备份复制和 SHA-256 计算合并为一次顺序读取，JPEG 元数据查询只扫描段头，重组直接复制所需数据范围，减少整文件拷贝及输出扩容。视频优先使用满足尺寸和 HDR 要求的硬件编码器，直接创建选中的编码器，并在管线空闲时等待就绪缓冲区。质量档位没有降低，HDR 保真校验、媒体同步和原始备份仍然执行，具体提速幅度需在目标设备与相同素材上测量。
+Version 0.1.19 combines backup copying and SHA-256 calculation into one sequential read. JPEG metadata queries scan segment headers only, and reconstruction copies the required byte ranges directly to reduce whole-file copies and output-buffer growth. Video processing prioritizes hardware encoders that meet dimension and HDR requirements, creates the selected encoder directly, and waits for ready buffers when the pipeline is idle. Quality presets were not reduced; HDR fidelity checks, media synchronization, and original backups still run. Performance gains must be measured on the target device using the same media.
 
-点击“取消”后不再开始下一项。当前项尚未改写原文件时会丢弃临时结果；已开始写入时恢复该项备份、修改时间和媒体库记录，清理该项未完成账本与临时文件。完成边界是文件、相册同步和账本保存均已结束，之前完成的项目不还原。JPEG 原生解码或编码等不可中断的单次平台调用结束后才检查取消，界面会持续显示取消状态。
+After “Cancel” is tapped, no further item starts. If the current item's original has not yet been rewritten, its temporary output is discarded. If writing has begun, the app restores that item's backup, modification time, and media-library record, then clears its unfinished ledger entry and temporary files. An item is complete only after the file operation, gallery synchronization, and ledger save have all finished. Previously completed items are not restored. Cancellation is checked after an individual non-interruptible platform call, such as native JPEG decoding or encoding, returns; the interface continues to show the cancelling state while it waits.
 
-历史实测及限制见 [验收报告](.trellis/tasks/10-04-photo-compress-app/research/acceptance-report.md)、[设备能力记录](.trellis/tasks/10-04-photo-compress-app/research/device-capability-report.md) 与 [UI 动效说明](.trellis/tasks/10-04-photo-compress-app/research/2026-10-06-motion-design.md)。历史报告包含早期版本结论，不能替代新设备的复验。
+See the [acceptance report](.trellis/tasks/10-04-photo-compress-app/research/acceptance-report.md), [device capability report](.trellis/tasks/10-04-photo-compress-app/research/device-capability-report.md), and [UI motion notes](.trellis/tasks/10-04-photo-compress-app/research/2026-10-06-motion-design.md) for historical measurements and limitations. These reports include findings from earlier versions and do not replace validation on a new device. The linked reports are in Chinese.
 
-## 技术结构
+## Architecture
 
-| 模块 | 用途 |
+| Component | Purpose |
 | --- | --- |
-| Kotlin + Jetpack Compose + Material 3 | 原生界面、导航、选择和交互状态 |
-| Haze + 统一玻璃组件 | 背景采样与液态玻璃材质，照片和文字保持独立清晰 |
-| MediaStore / ExifInterface | 媒体发现、元信息读取与媒体库同步 |
-| MediaCodec / MediaMuxer | 视频及实况视频段的平台编码、封装能力 |
-| JPEG / MPF / XMP / MP4 处理模块 | 容器解析、元数据搬运、实况重组及文件内标记 |
-| Room | 压缩账本、档位设置、扫描缓存 |
-| WorkManager | 备份到期清理 |
+| Kotlin + Jetpack Compose + Material 3 | Native interface, navigation, selection, and interaction state |
+| Haze + shared glass components | Background sampling and liquid glass surfaces, with photos and text kept independently clear |
+| MediaStore / ExifInterface | Media discovery, metadata reading, and media-library synchronization |
+| MediaCodec / MediaMuxer | Platform video and motion photo video encoding and muxing |
+| JPEG / MPF / XMP / MP4 modules | Container parsing, metadata transfer, motion photo reconstruction, and embedded file markers |
+| Room | Compression ledger, quality settings, and scan cache |
+| WorkManager | Expired backup cleanup |
 
 ```text
 app/src/main/java/com/photocompress/app/
-├── ui/                 页面、组件、主题、动效与界面状态
-├── data/               媒体读取、分类、设置与账本
-└── core/               图片/视频/实况处理、容器与备份还原
+├── ui/                 Screens, components, themes, motion, and UI state
+├── data/               Media access, classification, settings, and ledger
+└── core/               Photo/video/motion photo processing, containers, backup and restore
 ```
 
-## 构建与发布
+## Build and release
 
-### 本地调试
+### Local debug build
 
-准备 JDK 17、Android SDK Platform 36 和 SDK Build Tools。在 `local.properties` 中配置本机 `sdk.dir`，或设置 `ANDROID_HOME`。
+Install JDK 17, Android SDK Platform 36, and Android SDK Build Tools. Set your local `sdk.dir` in `local.properties`, or set `ANDROID_HOME`.
 
 ```powershell
 # Windows
@@ -199,36 +207,43 @@ chmod +x gradlew
 ./gradlew :app:assembleDebug
 ```
 
-调试 APK 输出到 `app/build/outputs/apk/debug/app-debug.apk`，使用调试签名。仓库不包含个人媒体、恢复备份、APK、签名私钥或签名密码。
+The debug-signed APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Personal media, recovery backups, APKs, signing private keys, and signing passwords are not included in the repository.
 
-### GitHub Actions 发布
+### GitHub Actions releases
 
-[Release Android APP](.github/workflows/release.yml) 在推送 `v*` 标签时执行，也支持手动选择已有版本标签。标签必须与 `app/build.gradle.kts` 的 `versionName` 一致。
+The [Release Android APP](.github/workflows/release.yml) workflow runs when a `v*` tag is pushed. It also supports manually selecting an existing version tag. The tag must match `versionName` in `app/build.gradle.kts`.
 
-发布前在仓库 **Settings → Secrets and variables → Actions** 配置固定签名资料：
+Before releasing, configure the persistent signing credentials under the repository's **Settings → Secrets and variables → Actions**:
 
-| Secret | 内容 |
+| Secret | Value |
 | --- | --- |
-| `ANDROID_SIGNING_KEYSTORE` | 签名密钥库的 Base64 内容 |
-| `ANDROID_SIGNING_STORE_PASSWORD` | 密钥库密码 |
-| `ANDROID_SIGNING_KEY_ALIAS` | 签名别名 |
-| `ANDROID_SIGNING_KEY_PASSWORD` | 签名私钥密码 |
+| `ANDROID_SIGNING_KEYSTORE` | Base64-encoded signing keystore |
+| `ANDROID_SIGNING_STORE_PASSWORD` | Keystore password |
+| `ANDROID_SIGNING_KEY_ALIAS` | Signing key alias |
+| `ANDROID_SIGNING_KEY_PASSWORD` | Private key password |
 
-流程会安装 Android SDK、校验版本与签名配置、构建 release APK、验证 APK 签名、生成 SHA-256，并创建 GitHub Release。第三方 Actions 固定到提交编号；没有完整签名配置时拒绝构建正式包，已有 Release 不会被同一次重跑覆盖。
+The workflow installs the Android SDK, validates the version and signing configuration, builds the release APK, verifies its signature, generates a SHA-256 checksum, and creates a GitHub Release. Third-party actions are pinned to commit hashes. Release builds are rejected without complete signing configuration, and rerunning the workflow does not overwrite an existing release.
 
 ```bash
-# versionName 例如为 0.1.18 时
+# Example when versionName is 0.1.18
 git tag v0.1.18
 git push origin master
 git push origin v0.1.18
 ```
 
-本地正式构建同样需要 `SIGNING_STORE_FILE`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD` 四个环境变量，再执行 `:app:assembleRelease`。密钥需要在 Git 仓库之外单独保管，后续发布继续使用同一份签名资料。
+Local release builds also require all four environment variables: `SIGNING_STORE_FILE`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`. Then run `:app:assembleRelease`. Store signing keys separately, outside the Git repository, and reuse the same signing credentials for later releases.
 
-## 项目约定
+## Project conventions
 
-- 每个完成的变更单元提交本地 Git，Trellis 保存需求、规范与会话记录。
-- 不提交真实个人照片、视频、元数据、恢复备份或签名资料。
-- 区分已实现、已验证与待验证能力；遇到不满足条件的媒体给出跳过原因。
+- Commit each completed change locally. Trellis stores requirements, guidelines, and session records.
+- Do not commit real personal photos, videos, metadata, recovery backups, or signing credentials.
+- Distinguish implemented, verified, and unverified capabilities. Explain why media is skipped when requirements are not met.
 
-界面截图说明见 [docs/screenshots/README.md](docs/screenshots/README.md)。
+For screenshot provenance, see [docs/screenshots/README.md](docs/screenshots/README.md) (in Chinese).
+
+---
+
+<p align="center">
+  <a href="#top">Back to top</a> ·
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
