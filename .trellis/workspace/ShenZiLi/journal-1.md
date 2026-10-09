@@ -1870,3 +1870,32 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Status
 
 [OK] **Completed**
+
+
+## Session 58: 轻存B站4比3视频封面
+<!-- trellis-session: v=2 fp=ae1a1f1823f47294 -->
+
+**Date**: 2026-10-09
+**Task**: 轻存B站4比3视频封面
+**Branch**: `dev`
+
+### Summary
+
+按用户要求用内置imagegen制作抓眼的4:3 B站封面，突出实况照片空间占用与本地批量压缩。采用正式品牌图标与公开演示首页作参考，输出PNG及完整提示词，保存在Git忽略的brag-output。
+
+### Main Changes
+
+- 主标题实况照片/太占空间，亮黄色重点与墨绿品牌背景，配真实产品界面及演示数据标注
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] ffprobe确认1448x1086准确4:3；目视检查标题、图标、界面和标注
+- [OK] 封面与提示词的Git忽略规则有效；未修改业务源码
+
+### Status
+
+[OK] **Completed**
