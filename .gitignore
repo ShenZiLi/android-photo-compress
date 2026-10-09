@@ -25,6 +25,7 @@ local-recovery/
 .tmp-device/
 
 # Temporary output
+/brag-output/
 *.log
 *.tmp
 **/__pycache__/
