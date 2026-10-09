@@ -1811,3 +1811,35 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 公开发布前确认技能附带配乐的具体授权；当前只完成本地制作和提交
+
+
+## Session 56: 轻存介绍短片追加4K60帧导出
+<!-- trellis-session: v=2 fp=4a0c32908948e0c1 -->
+
+**Date**: 2026-10-09
+**Task**: 轻存介绍短片追加4K60帧导出
+**Branch**: `dev`
+
+### Summary
+
+按用户追加要求，从原Hyperframes工程重新渲染3840x2160、60fps的22秒介绍短片，保留1080p版本并生成4K封面。
+
+### Main Changes
+
+- 交付brag-4k60.mp4、brag-4k60.jpg及可重复运行的render:4k60导出命令
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ef4a52b` | feat(video): export Roomy introduction in 4K at 60 fps |
+
+### Testing
+
+- [OK] ffprobe确认3840x2160、60/1fps、1320帧、22.000秒及完整AAC音轨
+- [OK] 封面写入首帧后参数不变，音频哈希与原导出一致；封面与首帧已目视检查
+- [OK] Git差异检查通过，仅提交本次导出产物和相关文档
+
+### Status
+
+[OK] **Completed**
