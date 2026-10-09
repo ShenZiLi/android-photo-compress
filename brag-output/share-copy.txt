@@ -1,0 +1,2 @@
+轻存 Roomy，让回忆少占一点空间。实况照片、照片、视频，本地批量压缩，备份有效期内可还原。
+https://github.com/ShenZiLi/android-photo-compress

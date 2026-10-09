@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>轻存 Roomy — 回忆留下，空间腾出来</title>
+<style>
+:root{--bg:#0D1B18;--fg:#E8F3EF;--accent:#5DD4A4;--muted:#B7CCC3}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:system-ui,sans-serif;color:var(--fg)}
+#roomy{width:100%;height:100%;position:relative;overflow:hidden;background:var(--bg)}.clip,.scene{position:absolute;inset:0}.atmo{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.jade-light{position:absolute;left:860px;top:60px;width:950px;height:950px;background:radial-gradient(ellipse,rgba(93,212,164,.23),rgba(93,212,164,.055) 48%,transparent 70%);border-radius:50%}
+.orbital{position:absolute;width:1030px;height:1030px;right:-40px;top:20px;border:2px solid rgba(93,212,164,.14);border-radius:50%}.orbit-inner{position:absolute;width:750px;height:750px;right:100px;top:160px;border:2px solid rgba(183,204,195,.09);border-radius:50%}
+.horizon{position:absolute;left:120px;right:120px;bottom:106px;height:2px;background:rgba(183,204,195,.18);transform-origin:left center}
+.topbrand{position:absolute;top:70px;left:120px;display:flex;align-items:center;gap:18px;font-size:32px;font-weight:650;letter-spacing:.4px}.topbrand img{width:52px;height:52px;border-radius:13px}.top-right{position:absolute;left:510px;top:81px;font-size:24px;color:var(--muted);letter-spacing:4px}
+.footer{position:absolute;left:120px;bottom:48px;font-size:23px;color:var(--muted)}.footer-right{position:absolute;right:120px;bottom:48px;font-size:23px;color:var(--muted)}
+.eyebrow{font-size:27px;font-weight:600;color:var(--accent);letter-spacing:5px;margin:0 0 30px}.copy{position:absolute;left:120px;top:295px;width:860px}.copy h1{font-size:94px;line-height:1.2;letter-spacing:-4px;margin:0;font-weight:740}.line{display:block}.accent{color:var(--accent)}.copy p{font-size:32px;line-height:1.6;color:var(--muted);margin:35px 0 0}
+.phone{position:absolute;padding:9px;background:#192B26;border:2px solid #6B8379;border-radius:38px;box-shadow:0 30px 90px rgba(0,0,0,.32);overflow:hidden}.phone img{display:block;width:100%;height:100%;object-fit:contain;border-radius:28px;background:var(--bg)}
+.phone-main{width:421px;height:923px;left:1267px;top:70px}.phone-label{position:absolute;left:1267px;top:1005px;width:421px;text-align:center;font-size:23px;color:var(--muted)}
+.hook-brand{position:absolute;left:120px;top:722px;display:flex;align-items:center;gap:24px}.hook-brand img{width:92px;height:92px;border-radius:23px}.hook-brand .name{font-size:43px;font-weight:650}.hook-brand .desc{font-size:24px;color:var(--muted);margin-top:6px}
+.photo-piece{position:absolute;width:170px;height:186px;border-radius:21px;border:2px solid rgba(183,204,195,.45);box-shadow:0 20px 35px rgba(0,0,0,.2);background-image:url('assets/ui/03-photo-grid.png');background-size:590px 1312px;background-position:-17px -228px}.piece-a{left:1004px;top:192px}.piece-b{left:1070px;top:427px;background-position:-210px -228px}.piece-c{left:967px;top:667px;background-position:-396px -228px}
+.step-row{display:flex;gap:14px;margin-top:43px}.pill{border:2px solid #47695B;background:#203B30;border-radius:32px;padding:12px 26px;font-size:26px;color:var(--fg)}.choose-copy{top:318px;width:790px}.choose-copy h1{font-size:87px}.choose-copy p{margin-top:24px}
+.phone-live{width:368px;height:810px;left:961px;top:168px;z-index:1}.phone-grid{width:423px;height:929px;left:1364px;top:63px;z-index:2}.phone-live-caption{position:absolute;left:971px;top:1005px;font-size:24px;color:var(--muted)}.phone-grid-caption{position:absolute;left:1430px;top:1005px;font-size:24px;color:var(--muted)}.choose-tap{position:absolute;left:1695px;top:790px;width:88px;height:88px;border:3px solid var(--accent);border-radius:50%;z-index:3}
+.quality-copy{top:312px;width:830px}.quality-copy h1{font-size:88px}.quality-copy p{font-size:33px}.quality-phone{width:454px;height:878px;left:1206px;top:101px}.quality-caption{position:absolute;left:1206px;top:1005px;width:454px;text-align:center;font-size:23px;color:var(--muted)}.quality-detail{display:flex;align-items:center;gap:19px;margin-top:43px;font-size:28px;color:var(--fg)}.dot{width:11px;height:11px;border-radius:50%;background:var(--accent);display:inline-block}.confirm-phone{width:421px;height:923px;left:1273px;top:70px}.confirm-copy{position:absolute;left:120px;top:750px;font-size:30px;color:var(--accent);line-height:1.5}
+.result-copy{top:253px;width:940px}.result-copy h1{font-size:84px}.stat{font-size:166px;line-height:1.2;font-weight:720;letter-spacing:-7px;margin-top:23px}.stat span{font-size:61px;letter-spacing:0;margin-left:14px}.stat-note{font-size:25px;color:var(--muted);margin-top:13px}.result-copy p{font-size:30px;margin-top:36px}.result-phone{width:412px;height:906px;left:1183px;top:87px;z-index:2}.result-secondary{width:280px;height:620px;left:1597px;top:247px;z-index:1;border-radius:29px;opacity:.82}.result-secondary img{border-radius:20px}.saved-rule{position:absolute;left:1255px;top:386px;width:266px;height:2px;background:var(--accent);z-index:3}
+.outro-copy{position:absolute;left:120px;top:278px;width:1010px}.outro-brand{display:flex;align-items:center;gap:24px;font-size:52px;font-weight:650;margin-bottom:44px}.outro-brand img{width:100px;height:100px;border-radius:25px}.outro-copy h1{font-size:94px;line-height:1.22;letter-spacing:-3px;margin:0;font-weight:740}.outro-copy p{font-size:30px;color:var(--muted);margin-top:34px}.github{display:inline-flex;gap:15px;align-items:center;margin-top:31px;padding:15px 23px;border:2px solid #47695B;border-radius:14px;color:var(--fg);font-size:24px;background:#1A3027}.github svg{width:27px;height:27px;fill:var(--fg)}.outro-phone{width:405px;height:890px;left:1325px;top:107px}.outro-caption{position:absolute;left:1325px;top:1010px;width:405px;text-align:center;font-size:23px;color:var(--muted)}
+</style></head><body>
+<div data-hf-id="hf-y5m7" id="roomy" data-composition-id="roomy" data-width="1920" data-height="1080" data-duration="22">
+<div data-hf-id="hf-j4ou" class="atmo" data-layout-ignore=""><div data-hf-id="hf-hp2t" class="jade-light"></div><div data-hf-id="hf-dubb" class="orbital"></div><div data-hf-id="hf-t81v" class="orbit-inner"></div></div>
+<div data-hf-id="hf-vrek" class="topbrand"><img data-hf-id="hf-exu6" src="assets/app-icon.png" alt="轻存图标"><span data-hf-id="hf-fwm4">轻存 Roomy</span></div><div data-hf-id="hf-8o4x" class="top-right">ANDROID / LOCAL</div>
+<div data-hf-id="hf-mxvw" class="horizon" data-layout-ignore=""></div><div data-hf-id="hf-f5dg" class="footer">让回忆少占一点空间</div>
+<section data-hf-id="hf-zjwr" id="hook" class="clip" data-start="0" data-duration="3" data-track-index="1"><div data-hf-id="hf-wua0" class="scene">
+<div data-hf-id="hf-bdx3" class="copy"><div data-hf-id="hf-o7gw" class="eyebrow">照片越拍越多。</div><h1 data-hf-id="hf-m3fm"><span data-hf-id="hf-22hy" class="line">让回忆，</span><span data-hf-id="hf-kr2n" class="line accent">轻一点。</span></h1></div>
+<div data-hf-id="hf-fkuh" class="hook-brand"><img data-hf-id="hf-gcfa" src="assets/app-icon.png" alt=""><div data-hf-id="hf-yeow"><div data-hf-id="hf-qfz0" class="name">轻存 Roomy</div><div data-hf-id="hf-ehqo" class="desc">照片与视频的本地压缩工具</div></div></div>
+<div data-hf-id="hf-y72o" class="photo-piece piece-a" data-layout-ignore=""></div><div data-hf-id="hf-ergb" class="photo-piece piece-b" data-layout-ignore=""></div><div data-hf-id="hf-xsvy" class="photo-piece piece-c" data-layout-ignore=""></div>
+<div data-hf-id="hf-7kcy" class="phone phone-main"><img data-hf-id="hf-6vgu" src="assets/ui/01-home.png" alt="轻存首页，演示媒体数据"></div><div data-hf-id="hf-0wl0" class="phone-label">真实应用界面 · 演示媒体</div>
+</div></section>
+<section data-hf-id="hf-nh1a" id="choose" class="clip" data-start="3" data-duration="5.5" data-track-index="2"><div data-hf-id="hf-md34" class="scene">
+<div data-hf-id="hf-syz0" class="copy choose-copy"><div data-hf-id="hf-3pqz" class="eyebrow">01 / 选好素材</div><h1 data-hf-id="hf-7xza"><span data-hf-id="hf-7jy7" class="line">实况、照片、视频</span><span data-hf-id="hf-gxkz" class="line accent">选好，一起压缩。</span></h1><p data-hf-id="hf-1v5b">按类型筛选，按图集批量压缩。</p><div data-hf-id="hf-8tpd" class="step-row"><span data-hf-id="hf-e1m4" class="pill">筛选</span><span data-hf-id="hf-thgp" class="pill">多选</span><span data-hf-id="hf-mtmk" class="pill">压缩</span></div></div>
+<div data-hf-id="hf-v8yn" class="phone phone-live"><img data-hf-id="hf-ijam" src="assets/ui/11-live-photo.png" alt="真实实况照片筛选界面"></div><div data-hf-id="hf-t6t5" class="phone phone-grid"><img data-hf-id="hf-49g1" src="assets/ui/03-photo-grid.png" alt="真实多选图片和视频界面"></div>
+<div data-hf-id="hf-1wd7" class="phone-live-caption">实况筛选 · 演示媒体</div><div data-hf-id="hf-fwf0" class="phone-grid-caption">批量选择 · 演示媒体</div><div data-hf-id="hf-dllm" class="choose-tap" data-layout-ignore=""></div>
+</div></section>
+<section data-hf-id="hf-c1m4" id="quality" class="clip" data-start="8.5" data-duration="4.5" data-track-index="3"><div data-hf-id="hf-l661" class="scene">
+<div data-hf-id="hf-kcx2" class="copy quality-copy"><div data-hf-id="hf-s20w" class="eyebrow">02 / 选择压缩档位</div><h1 data-hf-id="hf-8cab"><span data-hf-id="hf-6wry" class="line">质量，</span><span data-hf-id="hf-975r" class="line accent">由你决定。</span></h1><p data-hf-id="hf-n90r">图片段 / 视频段，独立设置。</p><div data-hf-id="hf-ehmv" class="quality-detail"><span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-s5q1">高质量 · 平衡 · 更省空间</span></div></div>
+<div data-hf-id="hf-ju9g" class="quality-shot"><div data-hf-id="hf-ob30" class="phone quality-phone"><img data-hf-id="hf-t1mo" src="assets/ui/device-quality.png" alt="真机轻存0.1.39压缩档位页"></div><div data-hf-id="hf-yowb" class="quality-caption">真机画面 · 轻存 0.1.39</div></div>
+<div data-hf-id="hf-gih4" class="confirmation-shot"><div data-hf-id="hf-qdvn" class="phone confirm-phone"><img data-hf-id="hf-mwjv" src="assets/ui/09-compress-confirm.png" alt="批量压缩确认，演示素材"></div><div data-hf-id="hf-egge" class="quality-caption">批量确认 · 演示媒体</div><div data-hf-id="hf-cyun" class="confirm-copy">选好后确认，一起处理。</div></div>
+</div></section>
+<section data-hf-id="hf-n8wo" id="result" class="clip" data-start="13" data-duration="5" data-track-index="4"><div data-hf-id="hf-lkh2" class="scene">
+<div data-hf-id="hf-5rs8" class="copy result-copy"><div data-hf-id="hf-ci6m" class="eyebrow">03 / 空间看得见</div><h1 data-hf-id="hf-r9ts">回忆留下。</h1><div data-hf-id="hf-z69y" class="stat">38.3<span data-hf-id="hf-plpu">MB</span></div><div data-hf-id="hf-78us" class="stat-note">演示媒体实际结果 · 已省空间</div><p data-hf-id="hf-q1an"><span data-hf-id="hf-6zjd" class="line">本地处理</span><span data-hf-id="hf-8itw" class="line">备份有效期内可还原。</span></p></div>
+<div data-hf-id="hf-b7g4" class="phone result-phone"><img data-hf-id="hf-wzp0" src="assets/ui/01-home.png" alt="真实轻存演示结果，已省38.3MB"></div><div data-hf-id="hf-ukuu" class="phone result-secondary"><img data-hf-id="hf-d85e" src="assets/ui/04-compressed.png" alt="真实已压缩列表"></div><div data-hf-id="hf-bn7x" class="saved-rule" data-layout-ignore=""></div>
+</div></section>
+<section data-hf-id="hf-ou55" id="outro" class="clip" data-start="18" data-duration="4" data-track-index="5"><div data-hf-id="hf-kdjz" class="scene">
+<div data-hf-id="hf-0gt5" class="outro-copy"><div data-hf-id="hf-nz55" class="outro-brand"><img data-hf-id="hf-4dsi" src="assets/app-icon.png" alt="轻存图标"><span data-hf-id="hf-55g4">轻存 Roomy</span></div><h1 data-hf-id="hf-8qlc"><span data-hf-id="hf-wenn" class="line">回忆留下。</span><span data-hf-id="hf-am7q" class="line accent">空间腾出来。</span></h1><p data-hf-id="hf-vf28">Android 11+ · 本地压缩</p><div data-hf-id="hf-bkml" class="github"><svg data-hf-id="hf-35ls" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-7ydr" d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.76-.24.76-.54v-2.1c-3.12.68-3.78-1.33-3.78-1.33-.5-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.12.08 1.72 1.15 1.72 1.15 1 .1.74 2.1 3.27 1.48.1-.73.4-1.23.72-1.52-2.5-.28-5.12-1.25-5.12-5.57 0-1.23.44-2.23 1.15-3.02-.12-.28-.5-1.43.11-2.98 0 0 .94-.3 3.08 1.15a10.7 10.7 0 0 1 5.6 0c2.14-1.45 3.08-1.15 3.08-1.15.61 1.55.23 2.7.11 2.98.72.8 1.15 1.8 1.15 3.02 0 4.33-2.62 5.28-5.13 5.56.4.35.76 1.03.76 2.08v3.08c0 .3.2.65.77.54A11.2 11.2 0 0 0 12 .8z" /></svg><span data-hf-id="hf-19vv">ShenZiLi / android-photo-compress</span></div></div>
+<div data-hf-id="hf-ae26" class="phone outro-phone"><img data-hf-id="hf-u62n" src="assets/ui/01-home.png" alt="轻存首页真实演示画面"></div><div data-hf-id="hf-j5mv" class="outro-caption">实际应用界面 · 演示媒体</div>
+</div></section>
+<audio data-hf-id="hf-pscv" id="music-bed" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-start="0" data-duration="22" data-track-index="10" data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0},{&quot;t&quot;:0.3,&quot;v&quot;:0.28},{&quot;t&quot;:20.5,&quot;v&quot;:0.28},{&quot;t&quot;:22,&quot;v&quot;:0}]}]}"></audio>
+<audio data-hf-id="hf-9rgs" id="sfx-intro" src="assets/sfx/bong_001.ogg" data-start="0.2" data-track-index="11" data-volume="0.4"></audio>
+<audio data-hf-id="hf-d2vo" id="sfx-quality" src="assets/sfx/click2.ogg" data-start="8.74" data-track-index="12" data-volume="0.38"></audio>
+<audio data-hf-id="hf-ieel" id="sfx-result" src="assets/sfx/impactSoft_medium_001.ogg" data-start="13.11" data-track-index="13" data-volume="0.42"></audio>
+</div>
+<script src="assets/gsap.min.js"></script><script src="assets/music/audio-data.js"></script>
+<script>
+const tl=gsap.timeline({paused:true});
+tl.addLabel('hook',0).addLabel('choose',3).addLabel('quality',8.5).addLabel('result',13).addLabel('outro',18);
+tl.fromTo('.horizon',{scaleX:0},{scaleX:1,duration:1,ease:'power2.out'},0);
+tl.fromTo('.topbrand',{opacity:0,x:-20},{opacity:1,x:0,duration:.45,ease:'power2.out'},0);
+tl.fromTo('#hook .eyebrow',{opacity:0,y:22},{opacity:1,y:0,duration:.42,ease:'power2.out'},0);
+tl.fromTo('#hook h1 .line',{opacity:0,y:62},{opacity:1,y:0,duration:.7,stagger:.12,ease:'power4.out'},.12);
+tl.fromTo('.hook-brand',{opacity:0,x:-35},{opacity:1,x:0,duration:.6,ease:'power3.out'},.42);
+tl.fromTo('.phone-main',{opacity:0,x:100,rotation:4},{opacity:1,x:0,rotation:0,duration:.8,ease:'expo.out'},.1);
+tl.fromTo('.photo-piece',{opacity:0,y:100,rotation:-8},{opacity:1,y:0,rotation:0,duration:.65,stagger:.09,ease:'back.out(1.1)'},.1);
+tl.to('.photo-piece',{x:230,scale:.35,opacity:0,duration:.48,stagger:.08,ease:'power2.in'},2.08);
+tl.to('#hook .copy, .hook-brand',{y:-25,opacity:0,duration:.25,ease:'power2.in'},2.72);
+tl.fromTo('#choose .eyebrow',{opacity:0,x:-30},{opacity:1,x:0,duration:.4,ease:'power2.out'},3.04);
+tl.fromTo('#choose h1 .line',{opacity:0,y:55},{opacity:1,y:0,duration:.6,stagger:.1,ease:'power4.out'},3.08);
+tl.fromTo('#choose p, #choose .pill',{opacity:0,y:25},{opacity:1,y:0,duration:.45,stagger:.06,ease:'power2.out'},3.48);
+tl.fromTo('.phone-live',{opacity:0,x:110,rotation:-4},{opacity:1,x:0,rotation:0,duration:.65,ease:'expo.out'},3.05);
+tl.fromTo('.phone-grid',{opacity:0,x:140,y:35},{opacity:1,x:0,y:0,duration:.7,ease:'power3.out'},3.34);
+tl.fromTo('.choose-tap',{opacity:0,scale:.7},{opacity:.8,scale:1,duration:.28,ease:'power2.out'},6.08);
+tl.to('.choose-tap',{scale:1.42,opacity:0,duration:.46,ease:'power1.out'},6.38);
+tl.to('#choose .scene',{opacity:0,x:-28,duration:.25,ease:'power2.in'},8.25);
+// Beat-locked quality landing at 8.74s. Product UI holds before an explicit confirmation cut.
+tl.fromTo('#quality .eyebrow',{opacity:0,x:-26},{opacity:1,x:0,duration:.4,ease:'power2.out'},8.5);
+tl.fromTo('#quality h1 .line',{opacity:0,y:55},{opacity:1,y:0,duration:.6,stagger:.1,ease:'power4.out'},8.54);
+tl.fromTo('#quality p, .quality-detail',{opacity:0,y:20},{opacity:1,y:0,duration:.45,stagger:.1,ease:'power2.out'},8.9);
+tl.fromTo('.quality-shot',{opacity:0,x:120},{opacity:1,x:0,duration:.66,ease:'expo.out'},8.5);
+tl.set('.confirmation-shot',{opacity:0},0);
+tl.to('.quality-shot',{opacity:0,x:-40,duration:.22,ease:'power2.in'},10.9);
+tl.fromTo('.confirmation-shot',{opacity:0,x:70},{opacity:1,x:0,duration:.35,ease:'power3.out',immediateRender:false},11.0);
+tl.to('#quality .scene',{opacity:0,y:-15,duration:.25,ease:'power2.in'},12.75);
+// Beat-locked result at 13.11s. Statistic matches the actual public demonstration screenshot.
+tl.fromTo('#result .eyebrow',{opacity:0,x:-30},{opacity:1,x:0,duration:.42,ease:'power2.out'},13);
+tl.fromTo('#result h1',{opacity:0,y:42},{opacity:1,y:0,duration:.5,ease:'power4.out'},13.1);
+tl.fromTo('.stat',{opacity:0,y:75,scale:.95},{opacity:1,y:0,scale:1,duration:.7,ease:'expo.out'},13.11);
+tl.fromTo('.stat-note,#result p',{opacity:0,y:20},{opacity:1,y:0,duration:.5,stagger:.12,ease:'power2.out'},13.52);
+tl.fromTo('.result-phone',{opacity:0,x:110},{opacity:1,x:0,duration:.65,ease:'power3.out'},13);
+tl.fromTo('.result-secondary',{opacity:0,x:80,rotation:4},{opacity:.82,x:0,rotation:0,duration:.65,ease:'power3.out'},13.3);
+tl.fromTo('.saved-rule',{scaleX:0},{scaleX:1,duration:.5,ease:'power2.out'},13.65);
+tl.to('#result .scene',{opacity:0,y:-25,duration:.25,ease:'power2.in'},17.75);
+tl.fromTo('.outro-brand',{opacity:0,y:28},{opacity:1,y:0,duration:.5,ease:'power3.out'},18);
+tl.fromTo('.outro-copy h1 .line',{opacity:0,y:55},{opacity:1,y:0,duration:.65,stagger:.12,ease:'power4.out'},18.17);
+tl.fromTo('.outro-copy p,.github',{opacity:0,y:23},{opacity:1,y:0,duration:.5,stagger:.12,ease:'power2.out'},18.65);
+tl.fromTo('.outro-phone',{opacity:0,x:100,rotation:3},{opacity:1,x:0,rotation:0,duration:.8,ease:'expo.out'},18.03);
+tl.to('.orbital',{rotation:13,scale:1.035,duration:22,ease:'none'},0);
+tl.to('.orbit-inner',{x:-32,y:18,duration:22,ease:'sine.inOut'},0);
+// Only the ambient jade illumination reacts to per-frame pre-extracted audio bands.
+const bands=window.ROOMY_AUDIO_DATA.frames;
+for(let f=0;f<Math.min(bands.length,660);f++){const bass=bands[f].bands[0];tl.to('.jade-light',{opacity:.78+bass*.22,scale:1+bass*.045,duration:1/30,ease:'none'},f/30);}
+window.__timelines=window.__timelines||{};window.__timelines['roomy']=tl;
+</script></body></html>

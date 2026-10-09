@@ -1,0 +1,13 @@
+composition/node_modules/
+composition/.hyperframes/
+composition/.thumbnails/
+composition/.waveform-cache/
+composition/renders/
+composition/.hyperframes-cache/
+composition/snapshots/
+composition/keyframes/
+composition/.preview*
+composition/*.log
+composition/.history/
+*.poster.mp4
+*.raw.mp4
