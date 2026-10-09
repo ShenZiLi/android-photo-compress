@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 56
+- **Total Sessions**: 57
 - **Last Active**: 2026-10-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1845 | Active |
+| `journal-1.md` | ~1872 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 57 | 2026-10-09 | Git排除本地brag-output产物 | `fe3e34c` | `dev` |
 | 56 | 2026-10-09 | 轻存介绍短片追加4K60帧导出 | `ef4a52b` | `dev` |
 | 55 | 2026-10-09 | 轻存 Roomy 22秒介绍短片 | `d27f247`, `519daf1` | `dev` |
 | 54 | 2026-10-08 | PNG大图、重名与透明白底压缩 | `6e02d2a` | `dev` |

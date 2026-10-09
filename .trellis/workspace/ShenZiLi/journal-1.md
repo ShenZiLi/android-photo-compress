@@ -1843,3 +1843,30 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Status
 
 [OK] **Completed**
+
+
+## Session 57: Git排除本地brag-output产物
+<!-- trellis-session: v=2 fp=afd87463bc60dc9e -->
+
+**Date**: 2026-10-09
+**Task**: Git排除本地brag-output产物
+**Branch**: `dev`
+
+### Summary
+
+按用户要求将brag-output加入根忽略规则，并从Git索引移除33个已跟踪产物；全部视频、封面、素材和工程文件继续保留在本地。同步产品视频规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe3e34c` | chore(git): ignore local brag output artifacts |
+
+### Testing
+
+- [OK] 确认33个原跟踪文件全部存在、目录无跟踪项且忽略规则生效
+- [OK] Git差异检查通过
+
+### Status
+
+[OK] **Completed**
