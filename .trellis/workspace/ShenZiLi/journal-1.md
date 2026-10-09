@@ -1773,3 +1773,41 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Status
 
 [OK] **Completed**
+
+
+## Session 55: 轻存 Roomy 22秒介绍短片
+<!-- trellis-session: v=2 fp=85d2de4f0373a998 -->
+
+**Date**: 2026-10-09
+**Task**: 轻存 Roomy 22秒介绍短片
+**Branch**: `dev`
+
+### Summary
+
+使用 brag 和 Hyperframes 制作22秒1080p横版中文介绍片。采集真机0.1.39无个人内容的压缩档位页，结合公开合成演示截图、配乐和音效；交付MP4、最佳帧封面、配文及可编辑工程。
+
+### Main Changes
+
+- 五段分镜：回忆更轻、筛选选择、质量档位与确认、真实演示节省结果、品牌收尾
+- 个人媒体和设备原始数据留在忽略目录；新增产品视频来源与验证规范
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d27f247` | feat(video): add Roomy introduction film and editable composition |
+| `519daf1` | chore(video): normalize bundled runtime whitespace |
+
+### Testing
+
+- [OK] Hyperframes check零错误；49/49对比度通过；6条已审阅结构警告
+- [OK] 最终文件22.000秒、1920x1080、30fps、660帧；首帧写入前后音频哈希一致
+- [OK] 关键画面、结尾、真机底栏与最终封面已目视检查；Git差异检查通过
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 公开发布前确认技能附带配乐的具体授权；当前只完成本地制作和提交
