@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/logo.svg" width="112" height="112" alt="轻存 Roomy">
+  <img src="docs/assets/app-icon.png" width="140" height="140" alt="轻存 Roomy">
 </p>
 
 <h1 align="center">轻存 · Roomy</h1>
