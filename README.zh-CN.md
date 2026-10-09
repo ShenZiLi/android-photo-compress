@@ -1,8 +1,4 @@
 <p align="center">
-  <a href="README.md">English</a> · <b>简体中文</b>
-</p>
-
-<p align="center">
   <img src="docs/assets/app-icon.png" width="140" height="140" alt="轻存 Roomy">
 </p>
 
@@ -23,6 +19,10 @@
   <a href="#核心页面">核心页面</a> ·
   <a href="#格式与兼容性">格式与兼容性</a> ·
   <a href="#构建与发布">构建与发布</a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <b>简体中文</b>
 </p>
 
 轻存（Roomy）是一款安卓实况图片压缩 APP，主打实况照片的本地压缩，也支持普通图片与视频。支持图集浏览、筛选、批量压缩与备份还原，用液态玻璃界面展示媒体占用与已省空间。

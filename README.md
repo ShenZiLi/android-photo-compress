@@ -1,8 +1,4 @@
 <p align="center">
-  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
-</p>
-
-<p align="center">
   <img src="docs/assets/app-icon.png" width="140" height="140" alt="Roomy 轻存">
 </p>
 
@@ -23,6 +19,10 @@
   <a href="#screenshots">Screenshots</a> ·
   <a href="#formats-and-compatibility">Compatibility</a> ·
   <a href="#build-and-release">Build &amp; release</a>
+</p>
+
+<p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 Roomy (轻存) is an Android app focused on compressing motion photos locally, with support for regular photos and videos. Browse albums, filter media, compress in batches, and restore originals from backups. Its liquid glass interface shows media storage usage and space saved.
