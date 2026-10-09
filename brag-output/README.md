@@ -6,6 +6,8 @@
 
 - `brag.mp4`：最终成片。
 - `brag.jpg`：稳定品牌画面封面，也写入 MP4 的第一帧。
+- `brag-4k60.mp4`：3840 × 2160 / 60 fps 的 22 秒成片。
+- `brag-4k60.jpg`：4K 版本封面，写入该版本的第一帧。
 - `brag-plan.md`：产品主张、素材来源及分镜。
 - `composition-brief.md`：制作约束。
 - `share-copy.txt`：发布配文。
@@ -25,5 +27,7 @@
 需要 Node.js 22+、FFmpeg 和可运行的 Chromium。默认 macOS 中文系统字体可用；其他平台需安装可显示中文的系统字体。
 
 在 `composition/` 中运行 `npm run check` 完成检查，再运行 `npx --yes hyperframes@0.8.143 preview --background` 打开时间线。最终导出使用 `npx --yes hyperframes@0.8.143 render --quality delivery --output ../brag.mp4`。
+
+4K / 60 fps 导出运行 `npm run render:4k60`。它从同一可编辑合成工程以两倍像素密度、每秒 60 次采样重新渲染动画；照片和应用界面仍保持原截图的素材细节。原 1080p 版本保留。
 
 选择稳定画面作为封面后，按 brag 技能交付规则替换首帧像素，保留其余帧、时长和音频。检查过程截图、缓存、设备原始截图及原始 UI 层级不进入版本管理。

@@ -46,3 +46,6 @@
 
 ## Delivery
 brag.mp4、brag.jpg（选最佳稳定品牌画面并写入第零帧）、share-copy.txt、可编辑 Hyperframes composition、来源说明和检查记录。
+
+## Additional export requested 2026-10-09
+用户要求 4K、60 帧；从同一 22 秒工程以 3840 × 2160、60 fps 重新渲染，输出 brag-4k60.mp4 与同尺寸封面 brag-4k60.jpg，保留原 1080p / 30 fps 版本。每帧按新的时间步长采样动画，UI 截图不虚构额外细节。
