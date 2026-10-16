@@ -1899,3 +1899,38 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Status
 
 [OK] **Completed**
+
+
+## Session 59: 修复恢复日期同步并更新首次压缩默认值
+<!-- trellis-session: v=2 fp=66505ae58f435316 -->
+
+**Date**: 2026-10-16
+**Task**: 修复恢复日期同步并更新首次压缩默认值
+**Branch**: `dev`
+
+### Summary
+
+处理 API37 上原片已恢复但 MediaStore 日期/发布状态不同步的问题；新安装默认启用 PNG 与快速压缩，保留旧设置。
+
+### Main Changes
+
+- 恢复时校验原片、同路径条目身份及本应用 pending 文件名，保留备份保护并增加显式接受当前加入时间的入口。
+- SettingsEntity 首次构造默认启用 PNG 压缩与快速压缩，Room schema、迁移和既有设置不变。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `955fd18` | 修复原片恢复日期同步并启用首次默认压缩 |
+
+### Testing
+
+- [OK] assembleDebug、assembleDebugAndroidTest、lintDebug 成功；0.1.42 已覆盖安装到 RMX5010。按用户要求未运行测试。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 手机原片/媒体行/恢复日志已消失；本机备份保留。用户同意按当前时间重新加入相册，后续仍需接续该单项恢复。
