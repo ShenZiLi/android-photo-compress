@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 59
+- **Total Sessions**: 60
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1936 | Active |
+| `journal-1.md` | ~1968 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 60 | 2026-10-16 | 将原片备份补回手机原路径 | - | `dev` |
 | 59 | 2026-10-16 | 修复恢复日期同步并更新首次压缩默认值 | `955fd18` | `dev` |
 | 58 | 2026-10-09 | 轻存B站4比3视频封面 | - | `dev` |
 | 57 | 2026-10-09 | Git排除本地brag-output产物 | `fe3e34c` | `dev` |

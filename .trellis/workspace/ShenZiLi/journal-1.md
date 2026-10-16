@@ -1934,3 +1934,35 @@ RMX5010上已安装本机从当前源码构建的0.1.32/code33调试APK，用户
 ### Next Steps
 
 - 手机原片/媒体行/恢复日志已消失；本机备份保留。用户同意按当前时间重新加入相册，后续仍需接续该单项恢复。
+
+
+## Session 60: 将原片备份补回手机原路径
+<!-- trellis-session: v=2 fp=c49712d44d7a7b02 -->
+
+**Date**: 2026-10-16
+**Task**: 将原片备份补回手机原路径
+**Branch**: `dev`
+
+### Summary
+
+按用户同意使用当前加入时间，从本机保留的原片备份写回手机原路径并恢复文件修改时间，随后启动 0.1.42 触发媒体扫描。
+
+### Main Changes
+
+- 将 13.2 MB 原片写回 DCIM/MyAlbums/1/IMG20261013212535.jpg；本机原片与安全副本继续保留。
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] 未运行测试或读取媒体行/截图；用户要求不要验证。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 如需确认相册显示与加入时间，后续由用户查看设备。
