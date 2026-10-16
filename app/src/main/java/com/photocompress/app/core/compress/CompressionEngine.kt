@@ -56,6 +56,7 @@ sealed interface CompressOutcome {
 
 sealed interface RestoreOutcome {
     data class Success(val deletedRecordId: String) : RestoreOutcome
+    data class DatesPending(val reason: String) : RestoreOutcome
     data class Failed(val reason: String) : RestoreOutcome
 }
 
@@ -809,40 +810,39 @@ class CompressionEngine(private val context: Context) {
                 }
             }
             // 还原写入失败时，仍能回退到操作前的可用压缩图片/视频。
-            if (target.isFile) safety = recycle.backupWithDigest("SAFE-${UUID.randomUUID()}", target)
+            val alreadyOriginal = target.isFile && FileUtils.sha256(target) == originalSha
+            if (target.isFile && !alreadyOriginal) safety = recycle.backupWithDigest("SAFE-${UUID.randomUUID()}", target)
+            // 旧账本可能保存 UI 的加入相册日期回退值；同路径原始 null/0 不能写成真实拍摄时间。
+            val rawTaken = MediaStoreUpdater.captureExistingDates(context, mediaUriOf(record), originalPath)
+            val originalTaken = rawTaken?.getAsLong(android.provider.MediaStore.Images.Media.DATE_TAKEN)
+            val preserveEmptyTaken = rawTaken != null && (originalTaken == null || originalTaken <= 0) &&
+                (record.originalDateTakenMs == 0L || record.originalDateTakenMs == record.originalDateAddedSec * 1000L)
             val entry = RecoveryJournal.Entry(
                 journalId, originalPath, rel, originalSha,
                 restoreTime.toString(),
-                mediaUriOf(record).toString(), record.originalDateTakenMs, record.originalDateAddedSec,
+                mediaUriOf(record).toString(), if (preserveEmptyTaken) originalTaken ?: 0L else record.originalDateTakenMs, record.originalDateAddedSec,
                 record.originalDateModifiedSec, safety?.relativePath, record.id,
+                dateTakenWasNull = preserveEmptyTaken && originalTaken == null,
             )
             recovery.begin(entry)
             withContext(NonCancellable) {
-                wrote = true
+                wrote = !alreadyOriginal
                 target.parentFile?.let { check(it.isDirectory || it.mkdirs()) { "无法恢复原目录" } }
-                recycle.restore(rel, target, 0)
+                if (!alreadyOriginal) recycle.restore(rel, target, 0)
                 check(FileUtils.sha256(target) == originalSha) { "还原校验失败" }
                 originalRestored = true
                 restoreMtime(target, java.nio.file.attribute.FileTime.from(java.time.Instant.parse(entry.modifiedTime)))
-                if (converted || !MediaStoreUpdater.pointsTo(context, mediaUriOf(record), originalPath)) {
-                    val uri = MediaStoreUpdater.scanExisting(context, originalPath)
-                    MediaStoreUpdater.restoreDates(context, uri, android.content.ContentValues().apply {
-                        put(android.provider.MediaStore.Images.Media.DATE_TAKEN, record.originalDateTakenMs)
-                        put(android.provider.MediaStore.MediaColumns.DATE_ADDED, record.originalDateAddedSec)
-                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, record.originalDateModifiedSec)
-                    })
-                } else {
-                    MediaStoreUpdater.refresh(context, mediaUriOf(record), originalPath,
-                        record.originalDateTakenMs, record.originalDateAddedSec, record.originalDateModifiedSec)
-                }
+                val differences = MediaStoreUpdater.syncRestored(context, mediaUriOf(record), originalPath, recoveryDates(entry), originalSha)
+                check(FileUtils.sha256(target) == originalSha) { "相册同步后原片摘要未通过" }
+                if (differences.isNotEmpty()) return@withContext datesPending(entry, differences)
                 // 先登记还原结果；失败时两份文件和恢复入口都留下。
                 onRestored(record.id)
                 recovery.finish(journalId)
                 // 历史 HEIC 转换产物保留，避免旧 URI 别名或时间恢复失败造成再次丢图。
                 recycle.delete(rel)
                 safety?.let { recycle.delete(it.relativePath) }
+                RestoreOutcome.Success(record.id)
             }
-            RestoreOutcome.Success(record.id)
         } catch (failure: Throwable) {
             val rollback = withContext(NonCancellable) {
                 runCatching {
@@ -853,7 +853,7 @@ class CompressionEngine(private val context: Context) {
                     }
                 }
             }
-            if (!wrote) {
+            if (!wrote && !originalRestored) {
                 runCatching { recovery.finish(journalId) }
                 safety?.let { recycle.delete(it.relativePath) }
             }
@@ -866,6 +866,19 @@ class CompressionEngine(private val context: Context) {
             }
             RestoreOutcome.Failed("$state：${failure.message}")
         }
+    }
+
+    private fun recoveryDates(entry: RecoveryJournal.Entry) = android.content.ContentValues().apply {
+        if (entry.dateTakenWasNull) putNull(android.provider.MediaStore.Images.Media.DATE_TAKEN)
+        else put(android.provider.MediaStore.Images.Media.DATE_TAKEN, entry.dateTakenMs)
+        put(android.provider.MediaStore.MediaColumns.DATE_ADDED, entry.dateAddedSec)
+        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, entry.dateModifiedSec)
+    }
+
+    private fun datesPending(entry: RecoveryJournal.Entry, differences: List<String>): RestoreOutcome.DatesPending {
+        val detail = differences.joinToString("；")
+        recovery.begin(entry.copy(dateRestorePendingReason = detail))
+        return RestoreOutcome.DatesPending("原片已恢复，日期未恢复；$detail。备份继续保护，可在详情中重试同步日期")
     }
 
     fun pendingRecovery(): List<RecoveryJournal.Entry> = recovery.entries()
@@ -901,7 +914,17 @@ class CompressionEngine(private val context: Context) {
 
     /** 自动重试持久事务或从未压缩页重试；源文件、时间及账本完整后才清理本次备份。 */
     suspend fun recover(entry: RecoveryJournal.Entry, onRecovered: suspend (String) -> Unit): RestoreOutcome =
+        recoverInternal(entry, false, onRecovered)
+
+    /** 仅用户明确确认的单项操作可接受当前加入相册时间；其他日期与完整性要求不变。 */
+    suspend fun recoverAcceptingDateAdded(entry: RecoveryJournal.Entry, onRecovered: suspend (String) -> Unit): RestoreOutcome =
+        recoverInternal(entry, true, onRecovered)
+
+    private suspend fun recoverInternal(entry: RecoveryJournal.Entry, keepCurrentDateAdded: Boolean,
+        onRecovered: suspend (String) -> Unit): RestoreOutcome =
         withMediaLock(Dispatchers.IO + NonCancellable) {
+            if (keepCurrentDateAdded && entry.convertedPath != null) return@withMediaLock RestoreOutcome.Failed(
+                "格式转换恢复需先完成原始日期校验，备份继续保护")
             if (entry.convertedPath != null) return@withMediaLock recoverPngEntry(entry, onRecovered)
             var bytesRestored = false
             var safety: RecycleBin.Backup? = null
@@ -909,8 +932,11 @@ class CompressionEngine(private val context: Context) {
             var target: File? = null
             var wrote = false
             try {
-                val known = recovery.entries().firstOrNull { it.id == entry.id }
+                val saved = recovery.entries().firstOrNull { it.id == entry.id }
                     ?: return@withMediaLock RestoreOutcome.Failed("恢复记录已处理，请刷新")
+                // 重试先撤销旧部分状态，后续任何完整性/权限/索引错误不能继续声称仅日期未恢复。
+                val known = saved.copy(dateRestorePendingReason = null)
+                if (saved.dateRestorePendingReason != null) recovery.begin(known)
                 val file = File(known.path)
                 target = file
                 val alreadyOriginal = file.isFile && FileUtils.sha256(file) == known.sha256
@@ -932,21 +958,11 @@ class CompressionEngine(private val context: Context) {
                 check(FileUtils.sha256(file) == known.sha256) { "原片恢复校验失败" }
                 bytesRestored = true
                 restoreMtime(file, java.nio.file.attribute.FileTime.from(java.time.Instant.parse(known.modifiedTime)))
-                val oldUri = android.net.Uri.parse(known.mediaUri)
-                val dates = android.content.ContentValues().apply {
-                    if (known.dateTakenWasNull) putNull(android.provider.MediaStore.Images.Media.DATE_TAKEN)
-                    else put(android.provider.MediaStore.Images.Media.DATE_TAKEN, known.dateTakenMs)
-                    put(android.provider.MediaStore.MediaColumns.DATE_ADDED, known.dateAddedSec)
-                    put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, known.dateModifiedSec)
-                }
-                if (MediaStoreUpdater.pointsTo(context, oldUri, known.path)) {
-                    MediaStoreUpdater.restoreDates(context, oldUri, dates)
-                    MediaStoreUpdater.refresh(context, oldUri, known.path, known.dateTakenMs,
-                        known.dateAddedSec, known.dateModifiedSec)
-                } else {
-                    val uri = MediaStoreUpdater.scanExisting(context, known.path)
-                    MediaStoreUpdater.restoreDates(context, uri, dates)
-                }
+                val differences = MediaStoreUpdater.syncRestored(context, android.net.Uri.parse(known.mediaUri),
+                    known.path, recoveryDates(known), known.sha256, keepCurrentDateAdded)
+                check(FileUtils.sha256(file) == known.sha256) { "相册同步后原片摘要未通过" }
+                if (differences.isNotEmpty()) return@withMediaLock datesPending(
+                    known.copy(safetyBackupRelPath = safety?.relativePath ?: known.safetyBackupRelPath), differences)
                 onRecovered(known.ledgerId)
                 // 缺失备份但原片已完整恢复时允许收尾；未知/损坏副本仍不删除。
                 if (backup.isFile && FileUtils.sha256(backup) == known.sha256) recycle.deleteBackupChecked(known.backupRelPath)
@@ -1100,7 +1116,7 @@ class CompressionEngine(private val context: Context) {
 
     /** 当前事务直接保留系统提供的时间精度，不在取消回退时截断为秒或毫秒。 */
     private fun restoreMtime(file: File, time: FileTime) {
-        Files.setLastModifiedTime(file.toPath(), time)
+        if (Files.getLastModifiedTime(file.toPath()) != time) Files.setLastModifiedTime(file.toPath(), time)
         check(Files.getLastModifiedTime(file.toPath()) == time) { "文件修改时间恢复未通过" }
     }
 

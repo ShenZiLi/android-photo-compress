@@ -360,11 +360,20 @@ fun AppRoot(vm: AppViewModel) {
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         ) {
             GlassScene(modifier = Modifier.fillMaxWidth()) {
-                InfoSheetContent(data) {
+                InfoSheetContent(data, onKeepDateAdded = {
+                    data.recovery?.takeIf { it.canKeepCurrentDateAdded }?.let { entry ->
+                        sheet = null
+                        dialog = DialogData("保留当前加入相册时间", "拍摄时间和文件修改时间不变，保留当前加入相册时间。校验通过后完成恢复并清理本次备份。",
+                            "校验并完成", onConfirm = { vm.recoverOriginal(entry, keepCurrentDateAdded = true) })
+                    }
+                }) {
                     data.recovery?.let { entry ->
                         sheet = null
-                        dialog = DialogData("重试恢复原片", "将原片写回原位置并校验时间和相册记录。完整回滚后清理本次临时备份。",
-                            "恢复", onConfirm = { vm.recoverOriginal(entry) })
+                        val datesPending = entry.dateRestorePendingReason != null
+                        dialog = DialogData(if (datesPending) "重试同步日期" else "重试恢复原片",
+                            if (datesPending) "原片已恢复。将重新校验原片并尝试同步相册日期，全部通过后才清理备份。"
+                            else "将原片恢复到原位置并校验日期和相册记录，全部通过后才清理备份。",
+                            if (datesPending) "重试同步" else "恢复", onConfirm = { vm.recoverOriginal(entry) })
                     }
                 }
             }
@@ -581,7 +590,7 @@ private fun ToastOverlay(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun InfoSheetContent(data: SheetData, onRecover: () -> Unit) {
+private fun InfoSheetContent(data: SheetData, onKeepDateAdded: () -> Unit, onRecover: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.8f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Text(data.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -596,7 +605,11 @@ private fun InfoSheetContent(data: SheetData, onRecover: () -> Unit) {
         data.rows.forEach { (k, v) -> KeyValueRow(k, v) }
         if (data.recovery != null) {
             Spacer(Modifier.height(12.dp))
-            GlassButton(onClick = onRecover) { Text("重试恢复原片") }
+            GlassButton(onClick = onRecover) { Text(if (data.recovery.dateRestorePendingReason != null) "重试同步日期" else "重试恢复原片") }
+            if (data.recovery.canKeepCurrentDateAdded) {
+                Spacer(Modifier.height(8.dp))
+                GlassButton(onClick = onKeepDateAdded) { Text("保留当前加入时间并完成") }
+            }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -616,7 +629,7 @@ private fun todoSheet(item: MediaItem, recovery: com.photocompress.app.core.rewr
         add("拍摄时间" to formatDateTime(item.dateTakenMs))
         add("尺寸" to "${item.width} × ${item.height}")
         add("可压缩" to if (item.compressible) "是（按当前质量档位）" else "否")
-        item.skipReason?.let { add("跳过原因" to it) }
+        item.skipReason?.let { add((if (recovery != null) "恢复状态" else "跳过原因") to it) }
     },
 )
 

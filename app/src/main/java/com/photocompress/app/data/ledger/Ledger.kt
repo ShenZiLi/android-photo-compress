@@ -69,13 +69,13 @@ data class CompressedItemEntity(
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val photoTier: String = "BALANCED",
-    /** PNG 原格式压缩开关；关闭时仅识别，不进入压缩候选。 */
-    @ColumnInfo(defaultValue = "0") val compressPng: Boolean = false,
+    /** 首次使用默认开启 PNG 转 JPEG；数据库旧值与历史迁移的默认值保持不变。 */
+    @ColumnInfo(defaultValue = "0") val compressPng: Boolean = true,
     /**
      * 加速压缩开关。关闭时同一批次逐项串行处理；
-     * 开启后多张并行，质量档位与产物完全不变，代价是发热与内存占用上升。
+     * 首次使用默认开启；开启后多张并行，质量档位与产物完全不变，代价是发热与内存占用上升。
      */
-    @ColumnInfo(defaultValue = "0") val fastCompress: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val fastCompress: Boolean = true,
     /** 实况照片「图片段」（主图）质量档位。 */
     val liveTier: String = "BALANCED",
     /** 实况照片「视频段」（内嵌视频）质量档位，与普通视频的 [videoTier] 解耦。 */

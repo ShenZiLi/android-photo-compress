@@ -56,7 +56,8 @@ class LibrarySnapshotTest {
 
     @Test fun pngSettingUpdatesCompressionCandidatesWithoutRescanning() {
         val items = listOf(media(1, "Screenshots").copy(format = ContainerFormat.PNG, mimeType = "image/png"))
-        val disabled = consistent(UiState(items = items))
+        val disabled = consistent(UiState(items = items,
+            settings = com.photocompress.app.data.ledger.SettingsEntity(compressPng = false)))
         assertFalse(disabled.library.todoItems.single().compressible)
 
         val enabled = publish(disabled.copy(settings = disabled.settings.copy(compressPng = true)))
@@ -142,6 +143,21 @@ class LibrarySnapshotTest {
         )
 
         assertTrue(guarded.successfulBackups().isEmpty())
+    }
+
+    @Test fun dateOnlyRecoveryStaysProtectedAndCountsAsPendingWithSpecificReason() {
+        val item = media(1, "Camera")
+        val state = consistent(UiState(items = listOf(item), ledger = listOf(ledgerRecord()),
+            recoveryEntries = listOf(recoveryEntry(item.dataPath).copy(
+                dateRestorePendingReason = "加入相册时间：应为旧日期，现为新日期"))))
+
+        val pending = state.library.todoItems.single()
+        assertFalse(pending.compressible)
+        assertTrue(pending.skipReason.orEmpty().startsWith("原片已恢复，日期未恢复"))
+        assertTrue(pending.skipReason.orEmpty().contains("加入相册时间"))
+        assertEquals(1, state.albumTodoAll().single().pendingCount)
+        assertTrue(state.successfulBackups().isEmpty())
+        assertTrue(state.albumDoneAll().isEmpty())
     }
 
     private fun ledgerRecord() = CompressedItemEntity(

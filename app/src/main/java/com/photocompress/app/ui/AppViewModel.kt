@@ -455,6 +455,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 var done = 0
                 var addedBytes = 0L
                 var failed = 0
+                var datesPending = 0
                 _batch.value = BatchState("正在还原", 0f, 0, targets.size)
                 for ((index, dm) in targets.withIndex()) {
                     touched += dm.record.dataPath
@@ -465,6 +466,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             if (dm.record.originalPath.isNotBlank()) touched += dm.record.originalPath
                             done++
                             addedBytes += (dm.record.originalSize - dm.compressedSize).coerceAtLeast(0L)
+                        }
+                        is RestoreOutcome.DatesPending -> {
+                            datesPending++
+                            _messages.trySend("${dm.displayName}：${outcome.reason}")
+                            break
                         }
                         is RestoreOutcome.Failed -> {
                             failed++
@@ -479,6 +485,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     buildString {
                         append("还原${done}项")
                         if (addedBytes > 0) append("，新增${formatSize(addedBytes).replace(" ", "")}")
+                        if (datesPending > 0) append("，原片已恢复但日期未恢复${datesPending}项")
                         if (failed > 0) append("，失败${failed}项")
                     }
                 )
@@ -643,14 +650,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- 设置
 
-    fun recoverOriginal(entry: RecoveryJournal.Entry) {
+    fun recoverOriginal(entry: RecoveryJournal.Entry, keepCurrentDateAdded: Boolean = false) {
         if (writing || _batch.value != null || _ui.value.scanning) return
         writing = true
         _batch.value = BatchState("正在恢复原片", 0f, 0, 1)
         viewModelScope.launch {
             try {
-                when (val result = engine.recover(entry, ledgerDao::deleteById)) {
+                val outcome = if (keepCurrentDateAdded) engine.recoverAcceptingDateAdded(entry, ledgerDao::deleteById)
+                    else engine.recover(entry, ledgerDao::deleteById)
+                when (val result = outcome) {
                     is RestoreOutcome.Success -> _messages.trySend("原片已恢复，回滚完成")
+                    is RestoreOutcome.DatesPending -> _messages.trySend(result.reason)
                     is RestoreOutcome.Failed -> _messages.trySend(result.reason)
                 }
             } finally {

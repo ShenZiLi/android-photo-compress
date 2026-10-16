@@ -25,8 +25,13 @@ class RecoveryJournal(context: Context) {
         val dateTakenWasNull: Boolean = false,
         val convertedPath: String? = null,
         val sourceInode: Long? = null,
+        val dateRestorePendingReason: String? = null,
     ) {
         val displayName: String get() = File(path).name
+        /** 仅用于展示明确的日期例外确认入口；引擎仍重新校验所有实际字段。 */
+        val canKeepCurrentDateAdded: Boolean get() = dateRestorePendingReason?.let {
+            it.startsWith("加入相册时间：") && !it.contains("拍摄时间：") && !it.contains("修改时间：")
+        } == true
         /**
          * 本条目涉及的原片路径。
          *
@@ -49,6 +54,7 @@ class RecoveryJournal(context: Context) {
             put("takenNull", entry.dateTakenWasNull)
             put("convertedPath", entry.convertedPath ?: JSONObject.NULL)
             put("sourceInode", entry.sourceInode ?: JSONObject.NULL)
+            put("dateRestorePendingReason", entry.dateRestorePendingReason ?: JSONObject.NULL)
         }
         val atomic = file(entry.id)
         val stream = atomic.startWrite()
@@ -61,7 +67,8 @@ class RecoveryJournal(context: Context) {
                 "恢复记录保存校验失败，原文件未改动"
             }
             check(saved.optString("convertedPath") == json.optString("convertedPath") &&
-                saved.optString("sourceInode") == json.optString("sourceInode")) { "转换恢复记录未完整保存，原片未改动" }
+                saved.optString("sourceInode") == json.optString("sourceInode") &&
+                saved.optString("dateRestorePendingReason") == json.optString("dateRestorePendingReason")) { "恢复状态未完整保存，备份继续保护" }
         } catch (failure: Throwable) {
             atomic.failWrite(stream)
             throw failure
@@ -84,6 +91,7 @@ class RecoveryJournal(context: Context) {
                     json.optBoolean("takenNull", false),
                     if (json.isNull("convertedPath")) null else json.getString("convertedPath"),
                     if (json.isNull("sourceInode")) null else json.getLong("sourceInode"),
+                    if (json.isNull("dateRestorePendingReason")) null else json.getString("dateRestorePendingReason"),
                 )
             }
     }

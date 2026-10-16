@@ -184,7 +184,8 @@ class MediaSafetyTest {
         val time = Files.getLastModifiedTime(source.toPath())
         val backup = recycle.backupWithDigest(UUID.randomUUID().toString(), source)
         val entry = RecoveryJournal.Entry(UUID.randomUUID().toString(), source.path, backup.relativePath,
-            sha, time.toString(), item.uri.toString(), item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec)
+            sha, time.toString(), item.uri.toString(), item.dateTakenMs, item.dateAddedSec, item.dateModifiedSec,
+            dateTakenWasNull = MediaStoreUpdater.captureDates(context, item.uri).getAsLong("datetaken") == null)
         journal.begin(entry)
         source.writeBytes(byteArrayOf(1, 2, 3)) // 模拟进程在写入中断后留下半成品。
         val engine = CompressionEngine(context)
@@ -209,7 +210,7 @@ class MediaSafetyTest {
             val result = CompressionEngine(context).restore(record, onRestored = {
                 throw IOException("Injected date/ledger failure")
             })
-            assertTrue(result.toString(), result is RestoreOutcome.Failed)
+            assertTrue(result.toString(), result is RestoreOutcome.DatesPending)
             assertTrue(original.isFile); assertEquals(backup.sha256, FileUtils.sha256(original))
             assertTrue(converted.isFile); assertEquals(convertedSha, FileUtils.sha256(converted))
             assertTrue(recycle.fileOf(backup.relativePath).isFile)

@@ -329,14 +329,15 @@ fun TodoLevel2(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(filtered, key = { it.id }) { item ->
-                val pending = state.recoveryEntries.any { it.path == item.dataPath }
+                val recovery = state.recoveryEntries.firstOrNull { it.matches(item.dataPath, item.uri.toString()) }
                 MediaTile(
                     modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motionTween()),
                     uri = item.uri,
                     picked = item.id in level.pickedItems,
                     selectable = item.compressible,
                     badge = when {
-                        pending -> "处理失败" to Color(0xB8000000)
+                        recovery?.dateRestorePendingReason != null -> "日期未恢复" to Color(0xB8000000)
+                        recovery != null -> "处理失败" to Color(0xB8000000)
                         !item.compressible -> "不支持" to Color(0xB8000000)
                         item.kind == MediaKind.LIVE_PHOTO -> "实况" to Color(0x9E000000)
                         item.kind == MediaKind.VIDEO -> "视频" to Color(0x9E000000)

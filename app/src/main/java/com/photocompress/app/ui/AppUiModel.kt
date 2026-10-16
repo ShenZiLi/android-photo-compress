@@ -99,8 +99,13 @@ data class AlbumTodoUi(val name: String, val items: List<MediaItem>) {
     val compressibleItems: List<MediaItem> = items.filter { it.compressible }
     val compressibleCount: Int = compressibleItems.size
     val compressibleBytes: Long = compressibleItems.sumOf { it.size }
-    val pendingCount: Int = items.count { it.skipReason == RECOVERY_REASON }
+    val pendingCount: Int = items.count { it.skipReason == RECOVERY_REASON || it.skipReason?.startsWith(DATE_RECOVERY_REASON) == true }
 }
+
+private const val DATE_RECOVERY_REASON = "原片已恢复，日期未恢复"
+private fun RecoveryJournal.Entry.recoveryReason(): String = dateRestorePendingReason?.let {
+    "$DATE_RECOVERY_REASON；$it。备份继续保护，可在详情中重试同步日期"
+} ?: RECOVERY_REASON
 
 private const val RECOVERY_REASON = "处理失败，原片恢复未完成，可在详情中重试恢复"
 
@@ -392,7 +397,7 @@ class LibrarySnapshot(
         val available = items.filter { it.dataPath !in compressedPaths && it.bucketName !in excludedAlbums }
             .map {
                 when {
-                    it.dataPath in pending -> it.copy(support = SupportDecision.Skipped(RECOVERY_REASON))
+                    it.dataPath in pending -> it.copy(support = SupportDecision.Skipped(checkNotNull(pending[it.dataPath]).recoveryReason()))
                     // PNG 开关决定列表候选，不能复用扫描缓存的转换预检结果。
                     // 安全转换检查仍由引擎在写入原片前完成；待恢复事务优先禁止重试压缩。
                     it.format == ContainerFormat.PNG -> it.copy(support = if (settings.compressPng) {
@@ -416,7 +421,7 @@ class LibrarySnapshot(
                 dateTakenMs = entry.dateTakenMs, dateAddedSec = entry.dateAddedSec, dateModifiedSec = entry.dateModifiedSec,
                 width = 0, height = 0, kind = if (video) MediaKind.VIDEO else MediaKind.PHOTO,
                 format = if (video) ContainerFormat.MP4 else ContainerFormat.UNKNOWN,
-                support = SupportDecision.Skipped(RECOVERY_REASON),
+                support = SupportDecision.Skipped(entry.recoveryReason()),
             )
         }.filter { it.bucketName !in excludedAlbums }
         return available + missing

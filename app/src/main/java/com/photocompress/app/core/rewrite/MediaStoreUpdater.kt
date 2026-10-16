@@ -2,6 +2,7 @@ package com.photocompress.app.core.rewrite
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.ContentUris
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.provider.MediaStore
@@ -17,8 +18,18 @@ import kotlin.coroutines.resume
 object MediaStoreUpdater {
 
     /** 格式转换前保存数据库原始日期（含 null），取消时随原文件恢复。 */
-    fun captureDates(context: Context, uri: Uri): ContentValues {
+    fun captureDates(context: Context, uri: Uri): ContentValues = datesOf(readRow(context, uri))
+
+    /** 只读取同路径已发布行或本应用待发布行；缺失不扫描，不在读取日期时发布。 */
+    fun captureExistingDates(context: Context, oldUri: Uri, path: String): ContentValues? {
+        val uri = resolveRecoveryRow(context, oldUri, path) ?: return null
         val row = readRow(context, uri)
+        check(row.path == path) { "读取原始日期时相册路径改变" }
+        requireRecoveryRowState(context.packageName, row.pending, row.trashed, row.ownerPackage)
+        return datesOf(row)
+    }
+
+    private fun datesOf(row: Row): ContentValues {
         return ContentValues().apply {
             fun keep(column: String, value: Long?) {
                 if (value == null) putNull(column) else put(column, value)
@@ -30,13 +41,123 @@ object MediaStoreUpdater {
     }
 
     fun restoreDates(context: Context, uri: Uri, dates: ContentValues) {
-        fun matches(row: Row): Boolean = row.dateTaken == dates.getAsLong(MediaStore.Images.Media.DATE_TAKEN) &&
-            row.dateAdded == dates.getAsLong(MediaStore.MediaColumns.DATE_ADDED) &&
-            row.dateModified == dates.getAsLong(MediaStore.MediaColumns.DATE_MODIFIED)
-        if (matches(readRow(context, uri))) return
-        context.contentResolver.update(uri, dates, null, null)
-        val row = readRow(context, uri)
-        check(matches(row)) { "无法恢复相册日期；文件已保留" }
+        val differences = restoreDateDifferences(context, uri, dates)
+        check(differences.isEmpty()) { "无法恢复相册日期；${differences.joinToString("；")}" }
+    }
+
+    private fun dateDifferences(row: Row, dates: ContentValues): List<String> = buildList {
+        fun compare(column: String, label: String, actual: Long?, milliseconds: Boolean = false) {
+            val expected = dates.getAsLong(column)
+            if (actual == expected) return
+            android.util.Log.w("MediaStoreUpdater", "$column expected=$expected actual=$actual")
+            fun display(value: Long?): String = value?.let {
+                val instant = if (milliseconds) java.time.Instant.ofEpochMilli(it) else java.time.Instant.ofEpochSecond(it)
+                java.time.format.DateTimeFormatter.ofPattern(if (milliseconds) "yyyy-MM-dd HH:mm:ss.SSS" else "yyyy-MM-dd HH:mm:ss")
+                    .withZone(java.time.ZoneId.systemDefault()).format(instant)
+            } ?: "无"
+            add("$label：应为${display(expected)}，现为${display(actual)}")
+        }
+        compare(MediaStore.Images.Media.DATE_TAKEN, "拍摄时间", row.dateTaken, true)
+        compare(MediaStore.MediaColumns.DATE_ADDED, "加入相册时间", row.dateAdded)
+        compare(MediaStore.MediaColumns.DATE_MODIFIED, "修改时间", row.dateModified)
+    }
+
+    private fun restoreDateDifferences(context: Context, uri: Uri, dates: ContentValues,
+        keepCurrentDateAdded: Boolean = false): List<String> {
+        val before = readRow(context, uri)
+        // 仅显式完成入口可接受当前加入相册时间；不修改持久记录中的原始期望值。
+        val targets = ContentValues(dates).apply {
+            if (keepCurrentDateAdded) put(MediaStore.MediaColumns.DATE_ADDED,
+                checkNotNull(before.dateAdded) { "当前加入相册时间不可读，备份继续保护" })
+        }
+        if (dateDifferences(before, targets).isEmpty()) return emptyList()
+        // 权限/索引异常继续抛出；只有成功读回的日期差异才可归为部分恢复。
+        context.contentResolver.update(uri, targets, null, null)
+        val after = readRow(context, uri)
+        check(after.id == before.id && after.path == before.path && after.pending == 0) { "日期同步时相册条目身份已变化" }
+        return dateDifferences(after, targets)
+    }
+
+    /** 恢复允许旧 URI 已失效；现有已发布行优先，避免反复扫描改变加入相册时间。 */
+    suspend fun syncRestored(context: Context, oldUri: Uri, path: String, dates: ContentValues, expectedSha256: String,
+        keepCurrentDateAdded: Boolean = false): List<String> =
+        withContext(Dispatchers.IO) {
+            val file = File(path)
+            check(file.isFile && file.length() > 0) { "待恢复原片不存在" }
+            val size = file.length()
+            val mtime = Files.getLastModifiedTime(file.toPath())
+            val inode = android.system.Os.stat(path).st_ino
+            fun verifyOriginal() {
+                check(file.isFile && file.length() == size && Files.getLastModifiedTime(file.toPath()) == mtime &&
+                    android.system.Os.stat(path).st_ino == inode && FileUtils.sha256(file) == expectedSha256) {
+                    "原片内容或文件身份已变化，未完成发布；备份继续保护"
+                }
+            }
+            verifyOriginal()
+            val uri = resolveRecoveryRow(context, oldUri, path) ?: scanExisting(context, path)
+            val before = readRow(context, uri)
+            check(before.path == path) { "恢复时相册路径已变化" }
+            requireRecoveryRowState(context.packageName, before.pending, before.trashed, before.ownerPackage)
+            if (before.pending == 1) {
+                check(before.displayName != null && file.name == before.displayName) {
+                    "待发布文件名与相册名称不一致，发布可能移动文件；未发布，备份继续保护"
+                }
+            }
+            val motionSize = LivePhotoDetector.detect(file)?.motionPhotoLength
+            if (before.pending == 1 || before.size != size || before.dateModified != mtime.toInstant().epochSecond ||
+                (motionSize != null && before.hasOemVideoSize && before.oemVideoSize != motionSize)) {
+                // 当前行仅作身份基线；恢复后的文件会使派生日期重新计算，随后核对原始日期。
+                // 普通压缩的 refresh 日期稳定性要求保持不变。
+                verifyOriginal()
+                // 仅恢复已校验原片的本应用待发布行；绝不接管其他应用或未知来源的写入。
+                check(context.contentResolver.update(uri, ContentValues().apply {
+                    put(MediaStore.MediaColumns.IS_PENDING, 0)
+                }, null, null) == 1) { "相册未接受恢复刷新" }
+            }
+            val refreshed = readRow(context, uri)
+            check(refreshed.id == before.id && refreshed.path == path && refreshed.pending == 0 && refreshed.trashed == 0) {
+                "恢复刷新改变了相册条目编号、路径或发布状态"
+            }
+            val differences = restoreDateDifferences(context, uri, dates, keepCurrentDateAdded)
+            val after = readRow(context, uri)
+            check(after.id == before.id && after.path == path && after.pending == 0 && after.trashed == 0 && after.size == size) {
+                "原片已保留，相册索引校验失败"
+            }
+            if (motionSize != null && before.hasOemVideoSize) {
+                check(after.hasOemVideoSize && after.oemVideoSize == motionSize) { "系统相册实况视频长度未同步" }
+            }
+            verifyOriginal()
+            differences
+        }
+
+    /** 待发布内容只可由本应用继续发布；其他来源、未知状态与回收站一律保护。 */
+    internal fun requireRecoveryRowState(packageName: String, pending: Int, trashed: Int, ownerPackage: String?) {
+        check(trashed == 0) { "相册条目在回收站或状态未知，备份继续保护" }
+        check(pending == 0 || (pending == 1 && ownerPackage == packageName)) {
+            "相册条目尚未发布且来源不属于本应用，未改动；备份继续保护"
+        }
+    }
+
+    private fun resolveRecoveryRow(context: Context, oldUri: Uri, path: String): Uri? {
+        // 显式包含待发布/回收站行，不能把隐藏的现存行当作不存在后重新扫描。
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL).buildUpon()
+            .appendQueryParameter("includePending", "1").appendQueryParameter("includeTrashed", "1").build()
+        val id = checkNotNull(context.contentResolver.query(collection,
+            arrayOf(MediaStore.MediaColumns._ID), "${MediaStore.MediaColumns.DATA} = ?", arrayOf(path), null)) {
+            "无法按路径读取相册条目"
+        }.use { cursor ->
+            if (!cursor.moveToFirst()) null else {
+                val found = cursor.getLong(0)
+                check(!cursor.moveToNext()) { "同路径存在多个相册条目，备份继续保护" }
+                found
+            }
+        } ?: return null
+        val resolved = ContentUris.withAppendedId(collection, id)
+        val row = readRow(context, resolved)
+        check(row.path == path) { "恢复时相册路径已变化" }
+        requireRecoveryRowState(context.packageName, row.pending, row.trashed, row.ownerPackage)
+        // 旧 URI 仍指向此编号时复用；否则保持已有行，用文件集合 URI 接续。
+        return if (oldUri.lastPathSegment?.toLongOrNull() == id && pointsTo(context, oldUri, path)) oldUri else resolved
     }
 
     private data class Row(
@@ -44,6 +165,9 @@ object MediaStoreUpdater {
         val path: String,
         val size: Long,
         val pending: Int,
+        val trashed: Int,
+        val ownerPackage: String?,
+        val displayName: String?,
         val dateTaken: Long?,
         val dateAdded: Long?,
         val dateModified: Long?,
@@ -86,6 +210,11 @@ object MediaStoreUpdater {
                 path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)),
                 size = number(MediaStore.MediaColumns.SIZE) ?: -1L,
                 pending = number(MediaStore.MediaColumns.IS_PENDING)?.toInt() ?: -1,
+                trashed = number(MediaStore.MediaColumns.IS_TRASHED)?.toInt() ?: -1,
+                ownerPackage = cursor.getColumnIndex(MediaStore.MediaColumns.OWNER_PACKAGE_NAME).takeIf { it >= 0 }
+                    ?.let { if (cursor.isNull(it)) null else cursor.getString(it) },
+                displayName = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME).takeIf { it >= 0 }
+                    ?.let { if (cursor.isNull(it)) null else cursor.getString(it) },
                 dateTaken = number(MediaStore.Images.Media.DATE_TAKEN),
                 dateAdded = number(MediaStore.MediaColumns.DATE_ADDED),
                 dateModified = number(MediaStore.MediaColumns.DATE_MODIFIED),

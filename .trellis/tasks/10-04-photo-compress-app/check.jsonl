@@ -1,6 +1,4 @@
-{"file": ".trellis/spec/android/index.md", "reason": "按项目安卓规范与检查项复核实现质量"}
-{"file": ".trellis/spec/android/git-workflow.md", "reason": "复核变更已按要求提交到本地 git"}
-{"file": ".trellis/spec/android/mpf-photo.md", "reason": "复核有限主图解码、元数据与完整后缀保持"}
-{"file": ".trellis/spec/android/media-recovery.md", "reason": "复核写前检查、取消、串行事务与回滚保持"}
-{"file": ".trellis/spec/android/compression-performance.md", "reason": "复核范围编码、数据保留、音频标记与实际性能证据"}
-{"file": ".trellis/tasks/10-04-photo-compress-app/research/2026-10-08-compression-performance.md", "reason": "复核实际性能开销变化与已验证范围"}
+{"file": ".trellis/spec/android/index.md", "reason": "安卓实现入口"}
+{"file": ".trellis/spec/android/media-recovery.md", "reason": "原片完整性和持久备份保护"}
+{"file": ".trellis/spec/android/media-store-refresh.md", "reason": "媒体行身份、日期及实况索引同步"}
+{"file": ".trellis/spec/android/git-workflow.md", "reason": "本地提交与设备验收边界"}
